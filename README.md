@@ -40,6 +40,37 @@ Supplier → SavedInsight
 
 Key facts: UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and `revenue`. `Product` carries a `sku` and current `unit_price`. `SavedInsight` stores the natural-language question, answer, optional `chart_payload` (JSONB), and `data_quality` score.
 
+## Dashboard API
+
+FastAPI serves the frontend with eight endpoints under `/api/`. It never queries the database directly — every endpoint calls the same parameterised query functions used by the MCP server (`mcp_server/query_helpers.py`), routed through `backend/app/services/analytics.py`.
+
+**Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Service health |
+| GET | `/api/suppliers` | List demo suppliers (id + name) |
+| GET | `/api/dashboard/overview` | KPIs: revenue, orders, units, AOV |
+| GET | `/api/dashboard/sales-over-time` | Time series (day/week/month) |
+| GET | `/api/dashboard/top-products` | Top products by revenue (optional region filter) |
+| GET | `/api/dashboard/regions` | Revenue breakdown by region |
+| GET | `/api/dashboard/market-share` | Supplier share within a category |
+| GET | `/api/dashboard/declining-products` | Products declining vs prior period |
+
+**Run the API:**
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload
+```
+
+Interactive docs: http://localhost:8000/docs
+
+**Smoke test** (requires server running):
+```bash
+python -m scripts.api_smoke_test
+```
+
 ## MCP analytics server
 
 The MCP server (`mcp_server/`) exposes six supplier-scoped analytics tools backed by Neon PostgreSQL. The LLM is never given a database connection and never generates SQL — it calls named tools that return structured JSON.
