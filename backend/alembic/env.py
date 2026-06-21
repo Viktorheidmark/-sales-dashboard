@@ -18,8 +18,9 @@ config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import Base so autogenerate can detect model changes
+# Import Base and all models so autogenerate detects every table
 from app.database import Base  # noqa: E402
+import app.models  # noqa: F401 — registers all models on Base.metadata
 
 target_metadata = Base.metadata
 

@@ -26,6 +26,20 @@ The LLM never accesses the database directly and never generates free-form SQL. 
 - Saved insights
 - Natural-language Q&A with chart/card responses
 
+## Data model
+
+```
+Supplier → Brand → Product ← Category
+                       ↓
+Customer ← Region   OrderItem
+    ↓                  ↑
+  Order ──────────────┘
+
+Supplier → SavedInsight
+```
+
+Key facts: UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and `revenue`. `Product` carries a `sku` and current `unit_price`. `SavedInsight` stores the natural-language question, answer, optional `chart_payload` (JSONB), and `data_quality` score.
+
 ## Out of scope (MVP)
 
 Real authentication, deployment, PDF export, admin panels, RAG/vector databases, free-form SQL chat, background jobs.
