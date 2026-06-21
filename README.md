@@ -40,6 +40,19 @@ Supplier → SavedInsight
 
 Key facts: UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and `revenue`. `Product` carries a `sku` and current `unit_price`. `SavedInsight` stores the natural-language question, answer, optional `chart_payload` (JSONB), and `data_quality` score.
 
+## MCP analytics server
+
+The MCP server (`mcp_server/`) exposes six supplier-scoped analytics tools backed by Neon PostgreSQL. The LLM is never given a database connection and never generates SQL — it calls named tools that return structured JSON.
+
+**Why typed, supplier-scoped tools?**
+Free-form SQL access would let the LLM query any supplier's data, expose competitor details, and produce answers not grounded in controlled results. By enforcing supplier scope inside each tool (via the `brands → supplier_id` join) and returning aggregate-only competitor data, the backend guarantees what the LLM can and cannot see.
+
+**Tools:** `get_supplier_kpis` · `get_sales_over_time` · `get_top_products` · `get_sales_by_region` · `get_market_share` · `get_declining_products`
+
+Run the server: `python -m mcp_server.server` (stdio transport for MCP clients)
+Interactive inspector: `fastmcp dev mcp_server/server.py`
+Smoke test: `python -m mcp_server.smoke_test`
+
 ## Demo data
 
 The database is seeded with realistic but synthetic retail data via `backend/scripts/seed_demo_data.py`. The script is safe to rerun (it clears and recreates demo tables).
