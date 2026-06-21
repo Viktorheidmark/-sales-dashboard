@@ -40,6 +40,21 @@ Supplier → SavedInsight
 
 Key facts: UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and `revenue`. `Product` carries a `sku` and current `unit_price`. `SavedInsight` stores the natural-language question, answer, optional `chart_payload` (JSONB), and `data_quality` score.
 
+## Demo data
+
+The database is seeded with realistic but synthetic retail data via `backend/scripts/seed_demo_data.py`. The script is safe to rerun (it clears and recreates demo tables).
+
+The seed contains **intentional patterns** used to validate dashboard charts and natural-language Q&A:
+
+- Nordic Coffee AB has the highest revenue in Stockholm and an upward trend over the last 90 days.
+- Espresso Dark Roast 500g is Nordic Coffee's top product.
+- Cold Brew Can shows a material revenue decline in the most recent 30 days.
+- Fresh Snacks Ltd is relatively stronger in Malmö.
+- Clean Home Co shows stable, lower growth across all regions.
+- Competitor brands (Sparkling North, Nordic Sips) share categories with supplier brands to enable market-share queries.
+
+To seed: `cd backend && python -m scripts.seed_demo_data`
+
 ## Out of scope (MVP)
 
 Real authentication, deployment, PDF export, admin panels, RAG/vector databases, free-form SQL chat, background jobs.
