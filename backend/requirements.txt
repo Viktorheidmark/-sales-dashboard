@@ -7,3 +7,4 @@ pydantic-settings
 python-dotenv
 mcp[cli]
 httpx
+openai

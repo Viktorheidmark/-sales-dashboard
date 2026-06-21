@@ -16,6 +16,41 @@ React/Vite frontend
 
 The LLM never accesses the database directly and never generates free-form SQL. All quantitative answers are grounded in results returned by controlled MCP tools. The FastAPI backend enforces supplier scope — the LLM cannot choose or override the active `supplier_id`. Competitor data is only exposed in aggregated form.
 
+## AI Analytics Copilot (Phase 7)
+
+The dashboard includes a grounded AI chat panel that answers natural-language questions in Swedish using only MCP tool results.
+
+**Why the LLM has no direct database access:**
+Free-form database access would allow the LLM to query any supplier's data, generate arbitrary SQL, and produce answers not grounded in controlled results. Instead, all quantitative claims flow through six whitelisted MCP tools. The `supplier_id` is injected server-side after the LLM decides which tool to call — the model never sees or influences it.
+
+**Chat request flow:**
+```
+Frontend ChatPanel
+  → POST /api/chat  (FastAPI, locks supplier_id)
+  → app/services/chat.py
+  → OpenAI tool-calling loop
+  → MCP stdio transport (subprocess: python -m mcp_server.server)
+  → ClientSession.call_tool()
+  → query_helpers.py (parameterised SQL)
+  → Neon PostgreSQL
+  → structured JSON result injected back into OpenAI context
+  → final Swedish answer + optional chart payload
+  → ChatResponse returned to frontend
+```
+
+**Example questions:**
+- "Vad är vår totala omsättning de senaste 90 dagarna?"
+- "Vilka produkter tappar mest i försäljning just nu?"
+- "Hur stor är vår marknadsandel i kategorin Kaffe?"
+- "Vilka är våra bästsäljande produkter i Stockholm?"
+- "Hur ser vår försäljningstrend ut den senaste månaden?"
+
+**Run the chat smoke test** (requires server + seeded DB):
+```bash
+cd backend
+python -m scripts.chat_smoke_test
+```
+
 ## Planned scope
 
 - Revenue and sales KPIs per supplier

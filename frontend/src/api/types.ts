@@ -3,6 +3,41 @@ export interface DateRange {
   end: string
 }
 
+// --- /api/chat ---
+
+export interface SourceMeta {
+  tool: string
+  source: string
+  generated_at: string
+  row_count?: number
+  date_range?: DateRange
+}
+
+export interface ChartPayload {
+  type: 'line_chart' | 'bar_chart' | 'pie_chart'
+  title: string
+  data: Record<string, unknown>[]
+  x_key: string
+  y_key: string
+}
+
+export interface ChatRequest {
+  message: string
+  supplier_id: string
+  start_date?: string
+  end_date?: string
+}
+
+export interface ChatResponse {
+  answer: string
+  tool_calls: string[]
+  sources: SourceMeta[]
+  chart?: ChartPayload | null
+  limitations: string[]
+  supplier_id: string
+  generated_at: string
+}
+
 export interface SupplierItem {
   id: string
   name: string

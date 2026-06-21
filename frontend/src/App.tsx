@@ -13,6 +13,7 @@ import { daysAgo, today } from './utils/format'
 import { Header, type DatePreset } from './components/layout/Header'
 import { KpiCards } from './components/sections/KpiCards'
 import { SalesTrend } from './components/sections/SalesTrend'
+import { ChatPanel } from './components/sections/ChatPanel'
 import { TopProducts } from './components/sections/TopProducts'
 import { RegionalSales } from './components/sections/RegionalSales'
 import { MarketShare } from './components/sections/MarketShare'
@@ -215,6 +216,14 @@ export default function App() {
             onRetry={handleRefresh}
           />
         </div>
+
+        {/* Analytics Copilot — full width below dashboard */}
+        <ChatPanel
+          supplierId={selectedSupplierId}
+          startDate={presetToDates(datePreset).startDate}
+          endDate={presetToDates(datePreset).endDate}
+          supplierName={suppliers.find(s => s.id === selectedSupplierId)?.name}
+        />
       </main>
 
       <footer className="max-w-screen-xl mx-auto px-6 py-6 mt-4 border-t border-zinc-200">

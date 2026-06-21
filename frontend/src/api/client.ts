@@ -1,4 +1,6 @@
 import type {
+  ChatRequest,
+  ChatResponse,
   DecliningProductsResponse,
   MarketShareResponse,
   OverviewResponse,
@@ -88,5 +90,18 @@ export const api = {
       supplier_id: supplierId,
       days,
       limit: 5,
+    }),
+
+  chat: (req: ChatRequest): Promise<ChatResponse> =>
+    fetch(`${BASE}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }).then(async res => {
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}))
+        throw new Error(detail?.detail ?? `HTTP ${res.status}`)
+      }
+      return res.json() as Promise<ChatResponse>
     }),
 }
