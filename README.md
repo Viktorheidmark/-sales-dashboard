@@ -103,10 +103,48 @@ To seed: `cd backend && python -m scripts.seed_demo_data`
 
 Real authentication, deployment, PDF export, admin panels, RAG/vector databases, free-form SQL chat, background jobs.
 
+## Frontend dashboard
+
+React + Vite + TypeScript + Tailwind CSS + Recharts. Consumes the FastAPI dashboard API — no mock data.
+
+**Sections:** KPI cards · Sales trend (line chart) · Top products (with region filter) · Regional sales (bar chart) · Market share (donut chart) · Declining products
+
+**Start the frontend:**
+```bash
+cd frontend
+cp .env.example .env       # edit VITE_API_BASE_URL if backend runs elsewhere
+npm install
+npm run dev                # http://localhost:5173
+```
+
+The supplier selector defaults to Nordic Coffee AB. Date range presets (30d / 90d / 180d / all time) control granularity automatically.
+
 ## Setup
 
-1. Copy `.env.example` to `.env` and fill in credentials.
-2. Install backend dependencies: `cd backend && pip install -r requirements.txt`
-3. Install frontend dependencies: `cd frontend && npm install`
-4. Run backend: `uvicorn app.main:app --reload`
-5. Run frontend: `npm run dev`
+### 1 — Backend
+
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp ../.env.example ../.env   # fill in DATABASE_URL and OPENAI_API_KEY
+alembic upgrade head
+python -m scripts.seed_demo_data
+uvicorn app.main:app --reload   # http://localhost:8000
+```
+
+### 2 — Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev   # http://localhost:5173
+```
+
+### 3 — MCP server (standalone)
+
+```bash
+# From project root, with backend/.venv active
+python -m mcp_server.server        # stdio transport
+fastmcp dev mcp_server/server.py   # browser inspector
+```
