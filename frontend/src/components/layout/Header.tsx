@@ -1,14 +1,11 @@
-import type { SupplierItem } from '../../api/types'
-
 export type DatePreset = '30d' | '90d' | '180d' | 'all'
 
 interface HeaderProps {
-  suppliers: SupplierItem[]
-  selectedSupplierId: string
-  onSupplierChange: (id: string) => void
+  supplierName: string
   datePreset: DatePreset
   onDatePresetChange: (p: DatePreset) => void
   onRefresh: () => void
+  onLogout: () => void
   loading: boolean
 }
 
@@ -20,12 +17,11 @@ const DATE_PRESETS: { value: DatePreset; label: string }[] = [
 ]
 
 export function Header({
-  suppliers,
-  selectedSupplierId,
-  onSupplierChange,
+  supplierName,
   datePreset,
   onDatePresetChange,
   onRefresh,
+  onLogout,
   loading,
 }: HeaderProps) {
   return (
@@ -38,35 +34,35 @@ export function Header({
               <span className="text-brand-500 text-lg font-bold tracking-tight">◈</span>
               <span className="text-lg font-semibold tracking-tight">Solvigo Sales Intelligence</span>
             </div>
-            <p className="text-slate-400 text-xs mt-0.5">Supplier performance overview</p>
+            <p className="text-slate-400 text-xs mt-0.5">
+              {supplierName ? (
+                <>Signed in as <span className="text-slate-200 font-medium">{supplierName}</span></>
+              ) : (
+                'Supplier performance overview'
+              )}
+            </p>
           </div>
 
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            <span className={loading ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              <span className={loading ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
+              Refresh
+            </button>
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-red-900 text-slate-300 hover:text-red-200 text-sm font-medium transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
 
         {/* Controls row */}
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          {/* Supplier selector */}
-          <div className="flex items-center gap-2">
-            <label className="text-slate-400 text-xs font-medium whitespace-nowrap">Supplier</label>
-            <select
-              value={selectedSupplierId}
-              onChange={e => onSupplierChange(e.target.value)}
-              className="bg-slate-800 border border-slate-700 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 min-w-[180px]"
-            >
-              {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Date preset tabs */}
           <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
             {DATE_PRESETS.map(p => (

@@ -8,3 +8,5 @@ python-dotenv
 mcp[cli]
 httpx
 openai
+python-jose[cryptography]
+bcrypt

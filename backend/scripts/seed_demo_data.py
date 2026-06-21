@@ -27,7 +27,9 @@ from app.models import (
     Product,
     Region,
     Supplier,
+    User,
 )
+from app.services.auth import hash_password
 
 # ---------------------------------------------------------------------------
 # Deterministic randomness
@@ -242,6 +244,7 @@ def seed(db):
     db.query(Customer).delete()
     db.query(Product).delete()
     db.query(Brand).delete()
+    db.query(User).delete()
     db.query(Supplier).delete()
     db.query(Region).delete()
     db.query(Category).delete()
@@ -428,6 +431,28 @@ def seed(db):
 
     db.commit()
     print(f"  ✓ {total_orders} orders, {total_items} order items inserted")
+
+    # ------------------------------------------------------------------
+    # Demo users — one per supplier, all with password "demo1234"
+    # ------------------------------------------------------------------
+    print("Inserting demo users...")
+    DEMO_PASSWORD_HASH = hash_password("demo1234")
+    demo_users = [
+        {"email": "nordic@demo.solvigo",  "supplier": "Nordic Coffee AB"},
+        {"email": "snacks@demo.solvigo",  "supplier": "Fresh Snacks Ltd"},
+        {"email": "home@demo.solvigo",    "supplier": "Clean Home Co"},
+        {"email": "baltic@demo.solvigo",  "supplier": "Baltic Roasters AB"},
+    ]
+    for u in demo_users:
+        obj = User(
+            id=uuid.uuid4(),
+            email=u["email"],
+            password_hash=DEMO_PASSWORD_HASH,
+            supplier_id=supplier_map[u["supplier"]].id,
+        )
+        db.add(obj)
+    db.commit()
+    print(f"  ✓ {len(demo_users)} demo users created (password: demo1234)")
     print("Seed complete.")
 
 

@@ -18,3 +18,4 @@ class Supplier(Base):
 
     brands: Mapped[list["Brand"]] = relationship(back_populates="supplier")
     saved_insights: Mapped[list["SavedInsight"]] = relationship(back_populates="supplier")
+    users: Mapped[list["User"]] = relationship(back_populates="supplier")

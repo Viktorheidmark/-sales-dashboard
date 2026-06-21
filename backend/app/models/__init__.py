@@ -7,6 +7,7 @@ from app.models.customer import Customer
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.saved_insight import SavedInsight
+from app.models.user import User
 
 __all__ = [
     "Supplier",
@@ -18,4 +19,5 @@ __all__ = [
     "Order",
     "OrderItem",
     "SavedInsight",
+    "User",
 ]

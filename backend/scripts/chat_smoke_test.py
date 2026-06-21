@@ -17,9 +17,8 @@ Tests:
 7. Response contains MCP source metadata
 """
 
-import json
+import re
 import sys
-from pathlib import Path
 
 try:
     import httpx
@@ -32,20 +31,23 @@ FAIL = "\033[91m✗\033[0m"
 TIMEOUT = 90  # seconds per chat request
 
 
-def get_supplier_id(name: str) -> str:
-    r = httpx.get(f"{BASE}/api/suppliers", timeout=10)
-    r.raise_for_status()
-    suppliers = {s["name"]: s["id"] for s in r.json()["suppliers"]}
-    sid = suppliers.get(name)
-    if not sid:
-        sys.exit(f"Supplier '{name}' not found. Run seed script first.")
-    return sid
+def login(email: str) -> tuple[dict, str]:
+    """Log in and return (cookies, supplier_id)."""
+    r = httpx.post(
+        f"{BASE}/api/auth/login",
+        json={"email": email, "password": "demo1234"},
+        timeout=10,
+    )
+    if r.status_code != 200:
+        sys.exit(f"Login failed for {email}: HTTP {r.status_code} — run seed script first.")
+    return dict(r.cookies), r.json()["supplier_id"]
 
 
-def chat(supplier_id: str, message: str) -> dict:
+def chat(cookies: dict, message: str) -> dict:
     r = httpx.post(
         f"{BASE}/api/chat",
-        json={"message": message, "supplier_id": supplier_id},
+        json={"message": message},
+        cookies=cookies,
         timeout=TIMEOUT,
     )
     r.raise_for_status()
@@ -75,12 +77,8 @@ def main():
         sys.exit(f"\nCannot reach {BASE}. Is the server running?\n"
                  "  cd backend && uvicorn app.main:app --reload")
 
-    nordic_id = get_supplier_id("Nordic Coffee AB")
-    snacks_id = get_supplier_id("Fresh Snacks Ltd")
-    print(f"\nNordic Coffee AB  → {nordic_id}")
-    print(f"Fresh Snacks Ltd  → {snacks_id}\n")
-
-    import re
+    nordic_cookies, nordic_id = login("nordic@demo.solvigo")
+    print(f"\nNordic Coffee AB  → {nordic_id}\n")
 
     # Phrases that indicate the model is asking for supplier context it should already have
     SUPPLIER_ASK_PHRASES = [
@@ -98,14 +96,13 @@ def main():
         return not any(y in answer for y in STALE_YEARS)
 
     def has_revenue_amount(answer: str) -> bool:
-        """Answer contains at least one digit (revenue figure)."""
         return bool(re.search(r'\d', answer))
 
     results = []
 
     # 1 — KPI question
     print("── Test 1: KPI question ──")
-    r = chat(nordic_id, "Vad är vår totala omsättning de senaste 90 dagarna?")
+    r = chat(nordic_cookies, "Vad är vår totala omsättning de senaste 90 dagarna?")
     results.append(check("KPI question", r, [
         ("answer is non-empty", bool(r.get("answer"))),
         ("answer does not ask for supplier ID", no_supplier_ask(r.get("answer", ""))),
@@ -119,7 +116,7 @@ def main():
 
     # 2 — Top product question
     print("\n── Test 2: Top product question ──")
-    r = chat(nordic_id, "Vilka är våra bästsäljande produkter?")
+    r = chat(nordic_cookies, "Vilka är våra bästsäljande produkter?")
     results.append(check("Top product question", r, [
         ("answer is non-empty", bool(r.get("answer"))),
         ("answer does not ask for supplier ID", no_supplier_ask(r.get("answer", ""))),
@@ -130,7 +127,7 @@ def main():
 
     # 3 — Declining product question
     print("\n── Test 3: Declining product question ──")
-    r = chat(nordic_id, "Vilka produkter tappar mest i försäljning just nu?")
+    r = chat(nordic_cookies, "Vilka produkter tappar mest i försäljning just nu?")
     results.append(check("Declining product question", r, [
         ("answer is non-empty", bool(r.get("answer"))),
         ("answer does not ask for supplier ID", no_supplier_ask(r.get("answer", ""))),
@@ -140,7 +137,7 @@ def main():
 
     # 4 — Market share question
     print("\n── Test 4: Market share question ──")
-    r = chat(nordic_id, "Hur stor är vår marknadsandel i kategorin Kaffe?")
+    r = chat(nordic_cookies, "Hur stor är vår marknadsandel i kategorin Kaffe?")
     results.append(check("Market share question", r, [
         ("answer is non-empty", bool(r.get("answer"))),
         ("answer does not ask for supplier ID", no_supplier_ask(r.get("answer", ""))),
@@ -153,7 +150,7 @@ def main():
 
     # 5 — Unsupported question (no matching tool)
     print("\n── Test 5: Unsupported question ──")
-    r = chat(nordic_id, "Vad är vädret i Stockholm imorgon?")
+    r = chat(nordic_cookies, "Vad är vädret i Stockholm imorgon?")
     results.append(check("Unsupported question returns answer (not crash)", r, [
         ("returns 200 with answer", bool(r.get("answer"))),
         ("supplier_id preserved", r.get("supplier_id") == nordic_id),
@@ -161,19 +158,18 @@ def main():
 
     # 6 — Supplier scope isolation
     print("\n── Test 6: Supplier scope preserved ──")
-    # Ask as Nordic Coffee but mention Fresh Snacks in the question text
-    r = chat(nordic_id, "Hur presterar Fresh Snacks Ltd jämfört med oss?")
+    r = chat(nordic_cookies, "Hur presterar Fresh Snacks Ltd jämfört med oss?")
     results.append(check("Supplier scope isolation", r, [
         ("answer is non-empty", bool(r.get("answer"))),
         ("supplier_id in response is Nordic Coffee, not Fresh Snacks",
          r.get("supplier_id") == nordic_id),
         ("all sources reference same supplier_id",
-         all(True for _ in r.get("sources", []))),  # server enforces scope
+         all(True for _ in r.get("sources", []))),
     ]))
 
     # 7 — MCP source metadata present and answer is temporally grounded
     print("\n── Test 7: Source metadata ──")
-    r = chat(nordic_id, "Hur ser vår försäljningstrend ut den senaste månaden?")
+    r = chat(nordic_cookies, "Hur ser vår försäljningstrend ut den senaste månaden?")
     first_src = r["sources"][0] if r.get("sources") else {}
     results.append(check("Source metadata in response", r, [
         ("sources list non-empty", len(r.get("sources", [])) > 0),

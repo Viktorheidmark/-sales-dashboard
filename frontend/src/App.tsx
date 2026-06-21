@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from './api/client'
 import type {
-  SupplierItem,
+  AuthUser,
   OverviewResponse,
   SalesOverTimeResponse,
   TopProductsResponse,
@@ -18,8 +18,10 @@ import { TopProducts } from './components/sections/TopProducts'
 import { RegionalSales } from './components/sections/RegionalSales'
 import { MarketShare } from './components/sections/MarketShare'
 import { DecliningProducts } from './components/sections/DecliningProducts'
+import { LoginPage } from './components/sections/LoginPage'
 
-// Map date preset to { startDate, endDate, granularity } for API calls
+type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
+
 function presetToDates(preset: DatePreset): {
   startDate: string | undefined
   endDate: string | undefined
@@ -31,11 +33,10 @@ function presetToDates(preset: DatePreset): {
     case '30d':  return { startDate: daysAgo(30),  endDate: end, granularity: 'day',   days: 30 }
     case '90d':  return { startDate: daysAgo(90),  endDate: end, granularity: 'week',  days: 90 }
     case '180d': return { startDate: daysAgo(180), endDate: end, granularity: 'month', days: 180 }
-    case 'all':  return { startDate: undefined,     endDate: undefined, granularity: 'month', days: 180 }
+    case 'all':  return { startDate: undefined,    endDate: undefined, granularity: 'month', days: 180 }
   }
 }
 
-// Default category per supplier name
 function defaultCategory(supplierName: string): string {
   if (supplierName.toLowerCase().includes('coffee')) return 'Coffee'
   if (supplierName.toLowerCase().includes('snack')) return 'Snacks'
@@ -54,18 +55,14 @@ function initialState<T>(): SectionState<T> {
 }
 
 export default function App() {
-  // Suppliers
-  const [suppliers, setSuppliers] = useState<SupplierItem[]>([])
-  const [suppliersError, setSuppliersError] = useState<string | null>(null)
-  const [selectedSupplierId, setSelectedSupplierId] = useState('')
+  const [authState, setAuthState] = useState<AuthState>('loading')
+  const [user, setUser] = useState<AuthUser | null>(null)
 
-  // Controls
   const [datePreset, setDatePreset] = useState<DatePreset>('90d')
   const [selectedRegion, setSelectedRegion] = useState('All regions')
   const [selectedCategory, setSelectedCategory] = useState('Coffee')
   const [refreshTick, setRefreshTick] = useState(0)
 
-  // Section data
   const [overview, setOverview] = useState<SectionState<OverviewResponse>>(initialState())
   const [trend, setTrend] = useState<SectionState<SalesOverTimeResponse>>(initialState())
   const [topProducts, setTopProducts] = useState<SectionState<TopProductsResponse>>(initialState())
@@ -73,31 +70,24 @@ export default function App() {
   const [marketShare, setMarketShare] = useState<SectionState<MarketShareResponse>>(initialState())
   const [declining, setDeclining] = useState<SectionState<DecliningProductsResponse>>(initialState())
 
-  // Derived
   const anyLoading =
     overview.loading || trend.loading || topProducts.loading ||
     regions.loading || marketShare.loading || declining.loading
 
-  // Load suppliers once
+  // Bootstrap session on mount
   useEffect(() => {
-    api.getSuppliers()
-      .then(res => {
-        setSuppliers(res.suppliers)
-        // Default to Nordic Coffee AB
-        const nordic = res.suppliers.find(s => s.name.includes('Nordic Coffee'))
-        const first = res.suppliers[0]
-        const chosen = nordic ?? first
-        if (chosen) {
-          setSelectedSupplierId(chosen.id)
-          setSelectedCategory(defaultCategory(chosen.name))
-        }
+    api.me()
+      .then(u => {
+        setUser(u)
+        setSelectedCategory(defaultCategory(u.supplier_name))
+        setAuthState('authenticated')
       })
-      .catch(e => setSuppliersError(String(e.message ?? e)))
+      .catch(() => setAuthState('unauthenticated'))
   }, [])
 
-  // Reload dashboard whenever supplier, date preset, region, category, or refresh changes
+  // Load dashboard data whenever auth state or controls change
   useEffect(() => {
-    if (!selectedSupplierId) return
+    if (authState !== 'authenticated') return
 
     const { startDate, endDate, granularity, days } = presetToDates(datePreset)
     const regionParam = selectedRegion === 'All regions' ? undefined : selectedRegion
@@ -112,38 +102,33 @@ export default function App() {
         .catch(e => setter({ data: null, loading: false, error: String(e.message ?? e) }))
     }
 
-    load(setOverview, () => api.getOverview(selectedSupplierId, startDate, endDate))
-    load(setTrend, () => api.getSalesOverTime(selectedSupplierId, granularity, startDate, endDate))
-    load(setTopProducts, () => api.getTopProducts(selectedSupplierId, startDate, endDate, regionParam))
-    load(setRegions, () => api.getRegions(selectedSupplierId, startDate, endDate))
-    load(setMarketShare, () => api.getMarketShare(selectedSupplierId, selectedCategory, startDate, endDate))
-    load(setDeclining, () => api.getDecliningProducts(selectedSupplierId, days))
-  }, [selectedSupplierId, datePreset, selectedRegion, selectedCategory, refreshTick])
+    load(setOverview, () => api.getOverview(startDate, endDate))
+    load(setTrend, () => api.getSalesOverTime(granularity, startDate, endDate))
+    load(setTopProducts, () => api.getTopProducts(startDate, endDate, regionParam))
+    load(setRegions, () => api.getRegions(startDate, endDate))
+    load(setMarketShare, () => api.getMarketShare(selectedCategory, startDate, endDate))
+    load(setDeclining, () => api.getDecliningProducts(days))
+  }, [authState, datePreset, selectedRegion, selectedCategory, refreshTick])
 
-  const handleSupplierChange = (id: string) => {
-    const supplier = suppliers.find(s => s.id === id)
-    if (supplier) setSelectedCategory(defaultCategory(supplier.name))
+  const handleLogin = (u: AuthUser) => {
+    setUser(u)
+    setSelectedCategory(defaultCategory(u.supplier_name))
     setSelectedRegion('All regions')
-    setSelectedSupplierId(id)
+    setDatePreset('90d')
+    setAuthState('authenticated')
+    setRefreshTick(t => t + 1)
+  }
+
+  const handleLogout = async () => {
+    await api.logout().catch(() => {})
+    setUser(null)
+    setAuthState('unauthenticated')
   }
 
   const handleRefresh = () => setRefreshTick(t => t + 1)
 
-  if (suppliersError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
-        <div className="text-center">
-          <p className="text-lg font-semibold text-zinc-700">Cannot reach API</p>
-          <p className="text-sm text-zinc-400 mt-1">{suppliersError}</p>
-          <p className="text-xs text-zinc-400 mt-3">
-            Make sure the backend is running: <code className="bg-zinc-100 px-1 rounded">uvicorn app.main:app --reload</code>
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!selectedSupplierId) {
+  // Loading state (checking session)
+  if (authState === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50">
         <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
@@ -151,20 +136,24 @@ export default function App() {
     )
   }
 
+  // Unauthenticated
+  if (authState === 'unauthenticated') {
+    return <LoginPage onLogin={handleLogin} />
+  }
+
+  // Authenticated dashboard
   return (
     <div className="min-h-screen bg-zinc-50">
       <Header
-        suppliers={suppliers}
-        selectedSupplierId={selectedSupplierId}
-        onSupplierChange={handleSupplierChange}
+        supplierName={user?.supplier_name ?? ''}
         datePreset={datePreset}
         onDatePresetChange={setDatePreset}
         onRefresh={handleRefresh}
+        onLogout={handleLogout}
         loading={anyLoading}
       />
 
       <main className="max-w-screen-xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* KPI cards */}
         <KpiCards
           data={overview.data}
           loading={overview.loading}
@@ -172,7 +161,6 @@ export default function App() {
           onRetry={handleRefresh}
         />
 
-        {/* Sales trend */}
         <SalesTrend
           data={trend.data}
           loading={trend.loading}
@@ -180,7 +168,6 @@ export default function App() {
           onRetry={handleRefresh}
         />
 
-        {/* Two-column: top products + regional */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TopProducts
             data={topProducts.data}
@@ -199,7 +186,6 @@ export default function App() {
           />
         </div>
 
-        {/* Two-column: market share + declining */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <MarketShare
             data={marketShare.data}
@@ -217,12 +203,10 @@ export default function App() {
           />
         </div>
 
-        {/* Analytics Copilot — full width below dashboard */}
         <ChatPanel
-          supplierId={selectedSupplierId}
+          supplierName={user?.supplier_name}
           startDate={presetToDates(datePreset).startDate}
           endDate={presetToDates(datePreset).endDate}
-          supplierName={suppliers.find(s => s.id === selectedSupplierId)?.name}
         />
       </main>
 

@@ -7,13 +7,12 @@ Requires the FastAPI server to be running:
 Run from the backend/ directory:
     python -m scripts.api_smoke_test
 
-Fetches the Nordic Coffee AB supplier_id from /api/suppliers dynamically,
+Logs in as Nordic Coffee AB and Fresh Snacks Ltd demo accounts,
 then hits every dashboard endpoint and reports pass/fail.
 """
 
 import sys
 import json
-from pathlib import Path
 
 try:
     import httpx
@@ -25,8 +24,20 @@ PASS = "\033[92m✓\033[0m"
 FAIL = "\033[91m✗\033[0m"
 
 
-def get(path: str, params: dict = None) -> tuple[int, dict]:
-    r = httpx.get(f"{BASE}{path}", params=params or {}, timeout=10)
+def login(email: str) -> tuple[dict, str]:
+    """Log in and return (cookies, supplier_id)."""
+    r = httpx.post(
+        f"{BASE}/api/auth/login",
+        json={"email": email, "password": "demo1234"},
+        timeout=10,
+    )
+    if r.status_code != 200:
+        sys.exit(f"Login failed for {email}: HTTP {r.status_code} — run seed script first.")
+    return dict(r.cookies), r.json()["supplier_id"]
+
+
+def get(path: str, cookies: dict, params: dict = None) -> tuple[int, dict]:
+    r = httpx.get(f"{BASE}{path}", params=params or {}, cookies=cookies, timeout=10)
     return r.status_code, r.json()
 
 
@@ -44,97 +55,90 @@ def check(label: str, status: int, body: dict, expect_keys: list[str]) -> bool:
 
 
 def main():
-    # ---- resolve Nordic Coffee supplier_id ----
     try:
-        status, body = get("/api/suppliers")
-    except httpx.ConnectError:
+        httpx.get(f"{BASE}/health", timeout=5).raise_for_status()
+    except Exception:
         sys.exit(f"\nCould not reach {BASE}. Is the server running?\n"
                  "  cd backend && uvicorn app.main:app --reload")
 
-    if status != 200:
-        sys.exit(f"GET /api/suppliers failed: HTTP {status}")
-
-    suppliers = {s["name"]: s["id"] for s in body["suppliers"]}
-    nordic_id = suppliers.get("Nordic Coffee AB")
-    snacks_id = suppliers.get("Fresh Snacks Ltd")
-    if not nordic_id:
-        sys.exit("Nordic Coffee AB not found in /api/suppliers. Run seed script first.")
+    nordic_cookies, nordic_id = login("nordic@demo.solvigo")
+    snacks_cookies, snacks_id = login("snacks@demo.solvigo")
+    clean_cookies, clean_id = login("home@demo.solvigo")
 
     print(f"\nNordic Coffee AB  →  {nordic_id}")
     print(f"Fresh Snacks Ltd  →  {snacks_id}\n")
 
     results = []
 
-    # 1 — /api/suppliers
-    s, b = get("/api/suppliers")
-    results.append(check("GET /api/suppliers", s, b, ["suppliers"]))
-
-    # 2 — /health
-    s, b = get("/health")
+    # 1 — /health (public)
+    s, b = get("/health", cookies={})
     results.append(check("GET /health", s, b, ["status"]))
 
+    # 2 — /api/auth/me
+    s, b = get("/api/auth/me", cookies=nordic_cookies)
+    results.append(check("GET /api/auth/me", s, b, ["supplier_id", "supplier_name", "email"]))
+
     # 3 — overview
-    s, b = get("/api/dashboard/overview", {"supplier_id": nordic_id})
+    s, b = get("/api/dashboard/overview", nordic_cookies)
     results.append(check("GET /api/dashboard/overview", s, b,
                          ["total_revenue", "total_orders", "total_units", "date_range"]))
 
     # 4 — overview with date range
-    s, b = get("/api/dashboard/overview", {
-        "supplier_id": nordic_id, "start_date": "2025-01-01", "end_date": "2025-03-31"
-    })
+    s, b = get("/api/dashboard/overview", nordic_cookies,
+               {"start_date": "2026-01-01", "end_date": "2026-03-31"})
     results.append(check("GET /api/dashboard/overview (date range)", s, b, ["total_revenue"]))
 
     # 5 — sales-over-time monthly
-    s, b = get("/api/dashboard/sales-over-time", {"supplier_id": nordic_id, "granularity": "month"})
+    s, b = get("/api/dashboard/sales-over-time", nordic_cookies, {"granularity": "month"})
     results.append(check("GET /api/dashboard/sales-over-time (monthly)", s, b, ["series", "granularity"]))
 
     # 6 — sales-over-time weekly
-    s, b = get("/api/dashboard/sales-over-time", {"supplier_id": nordic_id, "granularity": "week"})
+    s, b = get("/api/dashboard/sales-over-time", nordic_cookies, {"granularity": "week"})
     results.append(check("GET /api/dashboard/sales-over-time (weekly)", s, b, ["series"]))
 
     # 7 — top-products default
-    s, b = get("/api/dashboard/top-products", {"supplier_id": nordic_id})
+    s, b = get("/api/dashboard/top-products", nordic_cookies)
     results.append(check("GET /api/dashboard/top-products (default)", s, b, ["products"]))
 
     # 8 — top-products filtered by region
-    s, b = get("/api/dashboard/top-products", {"supplier_id": nordic_id, "region": "Stockholm", "limit": "3"})
-    results.append(check("GET /api/dashboard/top-products (Stockholm, limit=3)", s, b, ["products", "region_filter"]))
+    s, b = get("/api/dashboard/top-products", nordic_cookies,
+               {"region": "Stockholm", "limit": "3"})
+    results.append(check("GET /api/dashboard/top-products (Stockholm, limit=3)", s, b,
+                         ["products", "region_filter"]))
 
-    # 9 — regions
-    s, b = get("/api/dashboard/regions", {"supplier_id": nordic_id})
+    # 9 — regions (Nordic)
+    s, b = get("/api/dashboard/regions", nordic_cookies)
     results.append(check("GET /api/dashboard/regions", s, b, ["regions"]))
 
     # 10 — regions for Fresh Snacks (Malmö pattern)
-    s, b = get("/api/dashboard/regions", {"supplier_id": snacks_id})
+    s, b = get("/api/dashboard/regions", snacks_cookies)
     results.append(check("GET /api/dashboard/regions (Fresh Snacks)", s, b, ["regions"]))
 
     # 11 — market-share Coffee
-    s, b = get("/api/dashboard/market-share", {"supplier_id": nordic_id, "category_name": "Coffee"})
+    s, b = get("/api/dashboard/market-share", nordic_cookies, {"category_name": "Coffee"})
     results.append(check("GET /api/dashboard/market-share (Coffee)", s, b,
                          ["market_share_pct", "supplier_revenue", "category_total_revenue"]))
 
     # 12 — market-share Household
-    s, b = get("/api/dashboard/market-share", {
-        "supplier_id": suppliers.get("Clean Home Co", nordic_id), "category_name": "Household"
-    })
+    s, b = get("/api/dashboard/market-share", clean_cookies, {"category_name": "Household"})
     results.append(check("GET /api/dashboard/market-share (Household)", s, b, ["market_share_pct"]))
 
     # 13 — declining products
-    s, b = get("/api/dashboard/declining-products", {"supplier_id": nordic_id})
+    s, b = get("/api/dashboard/declining-products", nordic_cookies)
     results.append(check("GET /api/dashboard/declining-products", s, b, ["products", "comparison_days"]))
 
     # 14 — declining products custom window
-    s, b = get("/api/dashboard/declining-products", {"supplier_id": nordic_id, "days": "60", "limit": "3"})
+    s, b = get("/api/dashboard/declining-products", nordic_cookies, {"days": "60", "limit": "3"})
     results.append(check("GET /api/dashboard/declining-products (60d, limit=3)", s, b, ["products"]))
 
-    # 15 — validation: bad supplier_id
-    s, b = get("/api/dashboard/overview", {"supplier_id": "not-a-uuid"})
-    ok = s == 422
+    # 15 — unauthenticated request → 401
+    s, b = get("/api/dashboard/overview", cookies={})
+    ok = s == 401
     results.append(ok)
-    print(f"{PASS if ok else FAIL} GET /api/dashboard/overview (bad supplier_id → 422)")
+    print(f"{PASS if ok else FAIL} GET /api/dashboard/overview (no cookie → 401)")
 
     # 16 — validation: bad granularity
-    s, b = get("/api/dashboard/sales-over-time", {"supplier_id": nordic_id, "granularity": "year"})
+    s, b = get("/api/dashboard/sales-over-time", nordic_cookies, {"granularity": "year"})
     ok = s == 422
     results.append(ok)
     print(f"{PASS if ok else FAIL} GET /api/dashboard/sales-over-time (bad granularity → 422)")

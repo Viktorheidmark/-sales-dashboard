@@ -26,7 +26,6 @@ interface Message {
 }
 
 interface ChatPanelProps {
-  supplierId: string
   startDate?: string
   endDate?: string
   supplierName?: string
@@ -173,7 +172,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
   )
 }
 
-export function ChatPanel({ supplierId, startDate, endDate, supplierName }: ChatPanelProps) {
+export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -207,7 +206,6 @@ export function ChatPanel({ supplierId, startDate, endDate, supplierName }: Chat
     try {
       const response = await api.chat({
         message: trimmed,
-        supplier_id: supplierId,
         start_date: startDate,
         end_date: endDate,
       })

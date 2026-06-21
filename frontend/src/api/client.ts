@@ -1,4 +1,5 @@
 import type {
+  AuthUser,
   ChatRequest,
   ChatResponse,
   DecliningProductsResponse,
@@ -6,7 +7,6 @@ import type {
   OverviewResponse,
   RegionsResponse,
   SalesOverTimeResponse,
-  SuppliersResponse,
   TopProductsResponse,
 } from './types'
 
@@ -19,7 +19,21 @@ async function get<T>(path: string, params: Record<string, string | number | und
       url.searchParams.set(k, String(v))
     }
   }
-  const res = await fetch(url.toString())
+  const res = await fetch(url.toString(), { credentials: 'include' })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail?.detail ?? `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<T>
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}))
     throw new Error(detail?.detail ?? `HTTP ${res.status}`)
@@ -28,80 +42,57 @@ async function get<T>(path: string, params: Record<string, string | number | und
 }
 
 export const api = {
-  getSuppliers: () =>
-    get<SuppliersResponse>('/api/suppliers'),
+  // --- Auth ---
+  login: (email: string, password: string) =>
+    post<AuthUser>('/api/auth/login', { email, password }),
 
-  getOverview: (supplierId: string, startDate?: string, endDate?: string) =>
+  logout: () =>
+    post<{ ok: boolean }>('/api/auth/logout', {}),
+
+  me: () =>
+    get<AuthUser>('/api/auth/me'),
+
+  // --- Dashboard (supplier_id derived from session cookie) ---
+  getOverview: (startDate?: string, endDate?: string) =>
     get<OverviewResponse>('/api/dashboard/overview', {
-      supplier_id: supplierId,
       start_date: startDate,
       end_date: endDate,
     }),
 
-  getSalesOverTime: (
-    supplierId: string,
-    granularity: string,
-    startDate?: string,
-    endDate?: string
-  ) =>
+  getSalesOverTime: (granularity: string, startDate?: string, endDate?: string) =>
     get<SalesOverTimeResponse>('/api/dashboard/sales-over-time', {
-      supplier_id: supplierId,
       granularity,
       start_date: startDate,
       end_date: endDate,
     }),
 
-  getTopProducts: (
-    supplierId: string,
-    startDate?: string,
-    endDate?: string,
-    region?: string
-  ) =>
+  getTopProducts: (startDate?: string, endDate?: string, region?: string) =>
     get<TopProductsResponse>('/api/dashboard/top-products', {
-      supplier_id: supplierId,
       start_date: startDate,
       end_date: endDate,
       limit: 5,
       region,
     }),
 
-  getRegions: (supplierId: string, startDate?: string, endDate?: string) =>
+  getRegions: (startDate?: string, endDate?: string) =>
     get<RegionsResponse>('/api/dashboard/regions', {
-      supplier_id: supplierId,
       start_date: startDate,
       end_date: endDate,
     }),
 
-  getMarketShare: (
-    supplierId: string,
-    categoryName: string,
-    startDate?: string,
-    endDate?: string
-  ) =>
+  getMarketShare: (categoryName: string, startDate?: string, endDate?: string) =>
     get<MarketShareResponse>('/api/dashboard/market-share', {
-      supplier_id: supplierId,
       category_name: categoryName,
       start_date: startDate,
       end_date: endDate,
     }),
 
-  getDecliningProducts: (supplierId: string, days: number) =>
+  getDecliningProducts: (days: number) =>
     get<DecliningProductsResponse>('/api/dashboard/declining-products', {
-      supplier_id: supplierId,
       days,
       limit: 5,
     }),
 
   chat: (req: ChatRequest): Promise<ChatResponse> =>
-    fetch(`${BASE}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-    }).then(async res => {
-      if (!res.ok) {
-        const detail = await res.json().catch(() => ({}))
-        throw new Error(detail?.detail ?? `HTTP ${res.status}`)
-      }
-      return res.json() as Promise<ChatResponse>
-    }),
+    post<ChatResponse>('/api/chat', req),
 }

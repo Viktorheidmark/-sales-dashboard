@@ -1,6 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.dependencies import get_current_supplier_id
 from app.schemas.dashboard import (
     DecliningProductsResponse,
     MarketShareResponse,
@@ -16,20 +17,20 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/overview", response_model=OverviewResponse)
 def overview(
-    supplier_id: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    supplier_id: str = Depends(get_current_supplier_id),
 ):
-    """Aggregate KPIs for a supplier: revenue, orders, units, AOV."""
+    """Aggregate KPIs for the authenticated supplier: revenue, orders, units, AOV."""
     return analytics.get_overview(supplier_id, start_date, end_date)
 
 
 @router.get("/sales-over-time", response_model=SalesOverTimeResponse)
 def sales_over_time(
-    supplier_id: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     granularity: str = "month",
+    supplier_id: str = Depends(get_current_supplier_id),
 ):
     """Revenue time series bucketed by day, week, or month."""
     return analytics.get_sales_over_time(supplier_id, start_date, end_date, granularity)
@@ -37,11 +38,11 @@ def sales_over_time(
 
 @router.get("/top-products", response_model=TopProductsResponse)
 def top_products(
-    supplier_id: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     limit: int = 5,
     region: Optional[str] = None,
+    supplier_id: str = Depends(get_current_supplier_id),
 ):
     """Top products by revenue, optionally filtered by region."""
     return analytics.get_top_products(supplier_id, start_date, end_date, limit, region)
@@ -49,9 +50,9 @@ def top_products(
 
 @router.get("/regions", response_model=RegionsResponse)
 def regions(
-    supplier_id: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    supplier_id: str = Depends(get_current_supplier_id),
 ):
     """Revenue, orders, and units broken down by region."""
     return analytics.get_sales_by_region(supplier_id, start_date, end_date)
@@ -59,10 +60,10 @@ def regions(
 
 @router.get("/market-share", response_model=MarketShareResponse)
 def market_share(
-    supplier_id: str,
     category_name: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    supplier_id: str = Depends(get_current_supplier_id),
 ):
     """Supplier revenue share within a product category. Competitor data is aggregate-only."""
     return analytics.get_market_share(supplier_id, category_name, start_date, end_date)
@@ -70,9 +71,9 @@ def market_share(
 
 @router.get("/declining-products", response_model=DecliningProductsResponse)
 def declining_products(
-    supplier_id: str,
     days: int = 30,
     limit: int = 5,
+    supplier_id: str = Depends(get_current_supplier_id),
 ):
     """Products with the largest revenue decline vs the prior equal-length period."""
     return analytics.get_declining_products(supplier_id, days, limit)

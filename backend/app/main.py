@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import dashboard, suppliers, chat
+from app.routers import auth, dashboard, suppliers, chat
 
 app = FastAPI(
     title="Solvigo Sales Dashboard API",
@@ -17,6 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(suppliers.router)
 app.include_router(dashboard.router)
 app.include_router(chat.router)

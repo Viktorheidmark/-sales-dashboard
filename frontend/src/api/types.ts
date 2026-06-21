@@ -3,14 +3,24 @@ export interface DateRange {
   end: string
 }
 
+// --- /api/auth ---
+
+export interface AuthUser {
+  supplier_id: string
+  supplier_name: string
+  email: string
+}
+
 // --- /api/chat ---
 
 export interface SourceMeta {
   tool: string
   source: string
+  supplier_id: string
   generated_at: string
   row_count?: number
   date_range?: DateRange
+  limitations?: string[]
 }
 
 export interface ChartPayload {
@@ -23,7 +33,6 @@ export interface ChartPayload {
 
 export interface ChatRequest {
   message: string
-  supplier_id: string
   start_date?: string
   end_date?: string
 }
