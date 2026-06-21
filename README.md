@@ -1,65 +1,96 @@
-# Solvigo Sales Dashboard
+# Solvigo Sales Intelligence
 
-A supplier-facing AI sales dashboard that allows suppliers (e.g. Nordic Coffee AB, Fresh Snacks Ltd, Clean Home Co) to explore how their own products perform across regions, categories, and time periods. The retailer owns all sales data; the dashboard surfaces it through a controlled, LLM-assisted interface that answers natural-language questions and renders charts grounded in real database results.
+A supplier-facing AI sales dashboard. Suppliers log in and see how their products perform across regions, time periods, and categories — and can ask natural-language questions answered by a grounded AI copilot.
 
-## Target architecture
+Built as a developer-case MVP demonstrating MCP-based LLM grounding, supplier scope isolation, and controlled competitor data exposure.
+
+---
+
+## Problem solved
+
+Retailers own all sales data. Suppliers historically had no self-serve analytics — they relied on slow, expensive reporting cycles. This dashboard gives each supplier a live window into their own performance without exposing competitor order-level detail or other suppliers' data.
+
+The AI copilot is grounded through the Model Context Protocol (MCP): the LLM calls structured analytics tools rather than generating SQL or reasoning from memory. Every quantitative claim in a chat answer is backed by a real tool result.
+
+---
+
+## Architecture
+
+```mermaid
+graph LR
+    A[React / Vite<br/>frontend] -->|REST JSON| B[FastAPI<br/>backend]
+    B -->|OpenAI tool-calling loop| C[OpenAI API<br/>gpt-4o]
+    C -->|tool call| B
+    B -->|MCP stdio transport| D[FastMCP server<br/>mcp_server/]
+    D -->|parameterised SQL<br/>SQLAlchemy| E[(Neon PostgreSQL)]
+    B -->|direct import<br/>dashboard endpoints only| D
+```
+
+**Request flow for the AI copilot:**
 
 ```
-React/Vite frontend
-  → FastAPI backend
-  → OpenAI API (LLM orchestration)
-  → Custom Python MCP server
-  → Neon Postgres (SQLAlchemy + Alembic)
-```
-
-## Core grounding principle
-
-The LLM never accesses the database directly and never generates free-form SQL. All quantitative answers are grounded in results returned by controlled MCP tools. The FastAPI backend enforces supplier scope — the LLM cannot choose or override the active `supplier_id`. Competitor data is only exposed in aggregated form.
-
-## AI Analytics Copilot (Phase 7)
-
-The dashboard includes a grounded AI chat panel that answers natural-language questions in Swedish using only MCP tool results.
-
-**Why the LLM has no direct database access:**
-Free-form database access would allow the LLM to query any supplier's data, generate arbitrary SQL, and produce answers not grounded in controlled results. Instead, all quantitative claims flow through six whitelisted MCP tools. The `supplier_id` is injected server-side after the LLM decides which tool to call — the model never sees or influences it.
-
-**Chat request flow:**
-```
-Frontend ChatPanel
-  → POST /api/chat  (FastAPI, locks supplier_id)
+ChatPanel (React)
+  → POST /api/chat   (FastAPI locks supplier_id)
   → app/services/chat.py
-  → OpenAI tool-calling loop
-  → MCP stdio transport (subprocess: python -m mcp_server.server)
-  → ClientSession.call_tool()
-  → query_helpers.py (parameterised SQL)
+  → OpenAI tool-calling loop (max 5 rounds)
+  → MCP stdio transport  ← supplier_id injected here, LLM never sees it
+  → mcp_server/server.py
+  → query_helpers.py  (parameterised SQL, supplier-scoped)
   → Neon PostgreSQL
-  → structured JSON result injected back into OpenAI context
-  → final Swedish answer + optional chart payload
-  → ChatResponse returned to frontend
+  → structured JSON result → Swedish answer + optional chart payload
 ```
 
-**Example questions:**
-- "Vad är vår totala omsättning de senaste 90 dagarna?"
-- "Vilka produkter tappar mest i försäljning just nu?"
-- "Hur stor är vår marknadsandel i kategorin Kaffe?"
-- "Vilka är våra bästsäljande produkter i Stockholm?"
-- "Hur ser vår försäljningstrend ut den senaste månaden?"
+---
 
-**Run the chat smoke test** (requires server + seeded DB):
-```bash
-cd backend
-python -m scripts.chat_smoke_test
+## Why MCP
+
+The Model Context Protocol lets the backend expose typed, supplier-scoped analytics tools that the LLM calls by name — `get_supplier_kpis`, `get_top_products`, etc. This means:
+
+- The LLM never generates SQL or touches the database directly.
+- The backend injects `supplier_id` into every tool call after the LLM decides which tool to call. The model cannot choose or override it.
+- Tool schemas presented to the LLM have `supplier_id` stripped — the model never even sees the field.
+- Competitor data is enforced aggregate-only inside each tool query, regardless of what the LLM requests.
+
+Dashboard endpoints (non-chat) call the same `query_helpers` functions directly for performance — only the chat flow uses MCP stdio transport.
+
+---
+
+## Supplier scope and competitor guardrails
+
+| Concern | Enforcement point |
+|---|---|
+| LLM choosing wrong supplier | `supplier_id` stripped from OpenAI schema; backend always overwrites |
+| Cross-supplier data leakage | All queries join through `brands.supplier_id` |
+| Competitor product/order detail | `query_market_share` returns aggregate revenue only; no product names or order rows |
+| SQL injection | All queries use SQLAlchemy `text()` with named bind params |
+
+---
+
+## Grounding and source metadata
+
+Every chat response includes:
+
+```json
+{
+  "tool_calls": ["get_supplier_kpis"],
+  "sources": [{
+    "tool": "get_supplier_kpis",
+    "source": "MCP:get_supplier_kpis",
+    "supplier_id": "...",
+    "generated_at": "2026-06-21T14:32:00Z",
+    "date_range": { "start": "2026-03-23", "end": "2026-06-21" },
+    "row_count": 1,
+    "limitations": []
+  }],
+  "limitations": [],
+  "supplier_id": "...",
+  "generated_at": "2026-06-21T14:32:01Z"
+}
 ```
 
-## Planned scope
+The system prompt injects today's date at call time and instructs the model to quote the `date_range` returned by the tool — not to infer calendar periods from its training data.
 
-- Revenue and sales KPIs per supplier
-- Sales trends over time
-- Top products
-- Regional performance
-- Market share within a category
-- Saved insights
-- Natural-language Q&A with chart/card responses
+---
 
 ## Data model
 
@@ -73,113 +104,174 @@ Customer ← Region   OrderItem
 Supplier → SavedInsight
 ```
 
-Key facts: UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and `revenue`. `Product` carries a `sku` and current `unit_price`. `SavedInsight` stores the natural-language question, answer, optional `chart_payload` (JSONB), and `data_quality` score.
+UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and pre-computed `revenue`. `SavedInsight` is scaffolded but not used in the MVP UI.
 
-## Dashboard API
+---
 
-FastAPI serves the frontend with eight endpoints under `/api/`. It never queries the database directly — every endpoint calls the same parameterised query functions used by the MCP server (`mcp_server/query_helpers.py`), routed through `backend/app/services/analytics.py`.
+## Demo suppliers
 
-**Endpoints:**
+| Supplier | Key pattern |
+|---|---|
+| **Nordic Coffee AB** | Highest Stockholm revenue; upward trend last 90 days; Cold Brew declining |
+| **Fresh Snacks Ltd** | Relatively stronger in Malmö |
+| **Clean Home Co** | Stable lower-growth across all regions |
+| **Baltic Roasters AB** | Coffee competitor (~35% Coffee share); cross-sells Nordic Coffee SKUs |
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Service health |
-| GET | `/api/suppliers` | List demo suppliers (id + name) |
-| GET | `/api/dashboard/overview` | KPIs: revenue, orders, units, AOV |
-| GET | `/api/dashboard/sales-over-time` | Time series (day/week/month) |
-| GET | `/api/dashboard/top-products` | Top products by revenue (optional region filter) |
-| GET | `/api/dashboard/regions` | Revenue breakdown by region |
-| GET | `/api/dashboard/market-share` | Supplier share within a category |
-| GET | `/api/dashboard/declining-products` | Products declining vs prior period |
+---
 
-**Run the API:**
+## Local setup
+
+### Prerequisites
+
+- Python 3.11+
+- Node 18+
+- A Neon PostgreSQL database (or any PostgreSQL 14+)
+- An OpenAI API key with access to `gpt-4o`
+
+### 1 — Environment
+
 ```bash
-cd backend
-source .venv/bin/activate
-uvicorn app.main:app --reload
+# Copy and fill in root .env (used by backend and MCP server)
+cp .env.example .env
+# Edit DATABASE_URL and OPENAI_API_KEY
 ```
 
-Interactive docs: http://localhost:8000/docs
+Root `.env` format:
 
-**Smoke test** (requires server running):
-```bash
-python -m scripts.api_smoke_test
+```
+DATABASE_URL=postgresql+psycopg://user:password@host:5432/dbname
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o
 ```
 
-## MCP analytics server
+> **Note:** Use the `postgresql+psycopg://` scheme (sync psycopg driver). `asyncpg` is not used.
 
-The MCP server (`mcp_server/`) exposes six supplier-scoped analytics tools backed by Neon PostgreSQL. The LLM is never given a database connection and never generates SQL — it calls named tools that return structured JSON.
-
-**Why typed, supplier-scoped tools?**
-Free-form SQL access would let the LLM query any supplier's data, expose competitor details, and produce answers not grounded in controlled results. By enforcing supplier scope inside each tool (via the `brands → supplier_id` join) and returning aggregate-only competitor data, the backend guarantees what the LLM can and cannot see.
-
-**Tools:** `get_supplier_kpis` · `get_sales_over_time` · `get_top_products` · `get_sales_by_region` · `get_market_share` · `get_declining_products`
-
-Run the server: `python -m mcp_server.server` (stdio transport for MCP clients)
-Interactive inspector: `fastmcp dev mcp_server/server.py`
-Smoke test: `python -m mcp_server.smoke_test`
-
-## Demo data
-
-The database is seeded with realistic but synthetic retail data via `backend/scripts/seed_demo_data.py`. The script is safe to rerun (it clears and recreates demo tables).
-
-The seed contains **intentional patterns** used to validate dashboard charts and natural-language Q&A:
-
-- Nordic Coffee AB has the highest revenue in Stockholm and an upward trend over the last 90 days.
-- Espresso Dark Roast 500g is Nordic Coffee's top product.
-- Cold Brew Can shows a material revenue decline in the most recent 30 days.
-- Fresh Snacks Ltd is relatively stronger in Malmö.
-- Clean Home Co shows stable, lower growth across all regions.
-- Competitor brands (Sparkling North, Nordic Sips) share categories with supplier brands to enable market-share queries.
-
-To seed: `cd backend && python -m scripts.seed_demo_data`
-
-## Out of scope (MVP)
-
-Real authentication, deployment, PDF export, admin panels, RAG/vector databases, free-form SQL chat, background jobs.
-
-## Frontend dashboard
-
-React + Vite + TypeScript + Tailwind CSS + Recharts. Consumes the FastAPI dashboard API — no mock data.
-
-**Sections:** KPI cards · Sales trend (line chart) · Top products (with region filter) · Regional sales (bar chart) · Market share (donut chart) · Declining products
-
-**Start the frontend:**
 ```bash
-cd frontend
-cp .env.example .env       # edit VITE_API_BASE_URL if backend runs elsewhere
-npm install
-npm run dev                # http://localhost:5173
+# Frontend environment (defaults work for local dev)
+cp frontend/.env.example frontend/.env
 ```
 
-The supplier selector defaults to Nordic Coffee AB. Date range presets (30d / 90d / 180d / all time) control granularity automatically.
-
-## Setup
-
-### 1 — Backend
+### 2 — Backend
 
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp ../.env.example ../.env   # fill in DATABASE_URL and OPENAI_API_KEY
+
+# Run database migrations
 alembic upgrade head
+
+# Seed demo data (~2 000 orders across 4 suppliers)
 python -m scripts.seed_demo_data
-uvicorn app.main:app --reload   # http://localhost:8000
+
+# Start API server
+uvicorn app.main:app --reload      # http://localhost:8000
 ```
 
-### 2 — Frontend
+### 3 — Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev   # http://localhost:5173
+npm run dev                        # http://localhost:5173
 ```
 
-### 3 — MCP server (standalone)
+### 4 — MCP server (standalone, optional)
+
+The MCP server runs as a subprocess of the FastAPI backend automatically. To inspect it standalone:
 
 ```bash
 # From project root, with backend/.venv active
 python -m mcp_server.server        # stdio transport
-fastmcp dev mcp_server/server.py   # browser inspector
+fastmcp dev mcp_server/server.py   # browser inspector (requires fastmcp CLI)
 ```
+
+---
+
+## Verification commands
+
+All smoke tests require the backend to be running (`uvicorn app.main:app --reload`) unless noted.
+
+```bash
+# MCP query layer — no server needed, runs against DB directly
+cd /path/to/project
+source backend/.venv/bin/activate
+python -m mcp_server.smoke_test
+
+# Dashboard API endpoints
+cd backend
+python -m scripts.api_smoke_test
+
+# AI chat grounding (slower — each test calls OpenAI)
+cd backend
+python -m scripts.chat_smoke_test
+```
+
+Expected results when demo data is seeded:
+
+```
+MCP smoke test:   6/6 passed
+API smoke test:  16/16 passed
+Chat smoke test:  7/7 passed
+```
+
+### Frontend build
+
+```bash
+cd frontend
+npm run build
+```
+
+---
+
+## Interactive API docs
+
+With the backend running: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
+## Suggested demo questions (Swedish)
+
+Ask these in the Analytics Copilot panel as Nordic Coffee AB:
+
+```
+Vad är vår totala omsättning de senaste 90 dagarna?
+Vilka är våra bästsäljande produkter?
+Vilka produkter tappar mest i försäljning just nu?
+Hur stor är vår marknadsandel i kategorin Kaffe?
+Hur ser vår försäljningstrend ut den senaste månaden?
+Vilka är våra bästsäljande produkter i Stockholm?
+Hur presterar vi i Göteborg jämfört med Stockholm?
+```
+
+---
+
+## API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Service health |
+| `GET` | `/api/suppliers` | List suppliers (id + name) |
+| `GET` | `/api/dashboard/overview` | KPIs: revenue, orders, units, AOV |
+| `GET` | `/api/dashboard/sales-over-time` | Time series (day / week / month) |
+| `GET` | `/api/dashboard/top-products` | Top products by revenue, optional region filter |
+| `GET` | `/api/dashboard/regions` | Revenue by region |
+| `GET` | `/api/dashboard/market-share` | Supplier share within a category |
+| `GET` | `/api/dashboard/declining-products` | Products declining vs prior period |
+| `POST` | `/api/chat` | Grounded AI chat |
+
+---
+
+## Tradeoffs and known limitations
+
+| Area | Current approach | Alternative |
+|---|---|---|
+| Auth | None (demo only) | Auth0 / Supabase Auth per supplier |
+| MCP transport | stdio subprocess per chat request | HTTP/SSE transport for lower latency |
+| LLM context | Single-turn with tool results | Multi-turn conversation history |
+| Competitor scope | Enforced in SQL | Could also be enforced at MCP layer |
+| Date handling | Tool default window when no dates passed | Explicit date required from frontend |
+| Seed data | Synthetic, deterministic | Real anonymised retailer export |
+
+**Out of scope for MVP:** authentication, saved insights export, PDF reports, background jobs, multi-turn chat memory, real-time streaming responses, admin panels.
