@@ -11,10 +11,10 @@ interface HeaderProps {
 }
 
 const DATE_PRESETS: { value: DatePreset; label: string }[] = [
-  { value: '30d',  label: 'Last 30 days' },
-  { value: '90d',  label: 'Last 90 days' },
-  { value: '180d', label: 'Last 180 days' },
-  { value: 'all',  label: 'All time' },
+  { value: '30d',  label: '30 dagar' },
+  { value: '90d',  label: '90 dagar' },
+  { value: '180d', label: '180 dagar' },
+  { value: 'all',  label: 'All tid' },
 ]
 
 export function Header({
@@ -30,7 +30,7 @@ export function Header({
     <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-30">
       <div className="max-w-screen-xl mx-auto px-6 py-4">
         {/* Top row */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-brand-500 text-lg font-bold tracking-tight">◈</span>
@@ -58,13 +58,13 @@ export function Header({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors disabled:opacity-50"
             >
               <span className={loading ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
-              Refresh
+              Uppdatera
             </button>
             <button
               onClick={onLogout}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-red-900 text-slate-300 hover:text-red-200 text-sm font-medium transition-colors"
             >
-              Sign out
+              Logga ut
             </button>
           </div>
         </div>

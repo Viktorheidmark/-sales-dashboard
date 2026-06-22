@@ -37,8 +37,8 @@ export function SalesTrend({ data, loading, error, onRetry }: SalesTrendProps) {
   if (error || !data) {
     return (
       <Card>
-        <CardHeader><h2 className="text-sm font-semibold text-zinc-700">Sales trend</h2></CardHeader>
-        <CardBody><ErrorState message={error ?? 'No data'} onRetry={onRetry} /></CardBody>
+        <CardHeader><h2 className="text-sm font-semibold text-zinc-700">Försäljningstrend</h2></CardHeader>
+        <CardBody><ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} /></CardBody>
       </Card>
     )
   }
@@ -58,14 +58,14 @@ export function SalesTrend({ data, loading, error, onRetry }: SalesTrendProps) {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-700">Sales trend</h2>
-          <span className="text-xs text-zinc-400 capitalize">{gran} granularity</span>
+          <h2 className="text-sm font-semibold text-zinc-700">Försäljningstrend</h2>
+          <span className="text-xs text-zinc-400 capitalize">{gran === 'day' ? 'Dag' : gran === 'week' ? 'Vecka' : 'Månad'}</span>
         </div>
       </CardHeader>
       <CardBody>
         {chartData.length === 0 ? (
           <div className="flex items-center justify-center h-40 text-sm text-zinc-400">
-            No sales data for selected period
+            Inga försäljningsdata för vald period
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={280}>
@@ -91,7 +91,7 @@ export function SalesTrend({ data, loading, error, onRetry }: SalesTrendProps) {
                 y={avgRevenue}
                 stroke="#d4d4d8"
                 strokeDasharray="4 2"
-                label={{ value: 'avg', position: 'right', fontSize: 10, fill: '#a1a1aa' }}
+                label={{ value: 'snitt', position: 'right', fontSize: 10, fill: '#a1a1aa' }}
               />
               <Line
                 type="monotone"

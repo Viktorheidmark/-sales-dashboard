@@ -29,8 +29,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     try {
       const user = await api.login(email.trim(), password)
       onLogin(user)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+    } catch {
+      setError('Felaktiga inloggningsuppgifter. Kontrollera e-post och lösenord.')
     } finally {
       setLoading(false)
     }
@@ -54,7 +54,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               Solvigo Sales Intelligence
             </span>
           </div>
-          <p className="text-sm text-zinc-500">Sign in to access your supplier dashboard</p>
+          <p className="text-sm text-zinc-500">Logga in för att se er leverantörsdashboard</p>
         </div>
 
         {/* Login card */}
@@ -104,7 +104,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               {loading && (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               )}
-              {loading ? 'Signing in…' : 'Sign in'}
+              {loading ? 'Loggar in…' : 'Logga in'}
             </button>
           </form>
         </div>

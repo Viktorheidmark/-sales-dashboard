@@ -287,6 +287,30 @@ fastmcp dev mcp_server/server.py   # browser inspector (requires fastmcp CLI)
 
 ---
 
+## Demo flow
+
+A suggested walkthrough for a live evaluator demo. Takes approximately 5 minutes.
+
+1. **Log in as Nordic Coffee AB** — open `http://localhost:5173`, click the "Nordic Coffee AB" demo account card, then click "Logga in". The dashboard loads with KPIs, trend, top products, regions, market share, and declining products for the last 90 days.
+
+2. **Inspect the dashboard** — note that "Omsättning" (revenue), region rankings, and "Marknadsandel" (market share) panels all update from live MCP data. Change the date range to "30 dagar" and observe all panels refresh. The green live-data indicator confirms real database queries.
+
+3. **Ask a grounded trend question** — scroll to "Analytics Copilot" and type or click:
+   > *Hur ser vår försäljningstrend ut den senaste månaden?*
+   The copilot calls `get_sales_over_time` via MCP (the "Hämtar data via MCP…" indicator appears), then returns a Swedish answer with a deterministic line chart. The chart is built from raw tool output — never from AI prose.
+
+4. **Ask a guarded competitor question** — type:
+   > *Vilka produkter säljer våra konkurrenter?*
+   The guardrail intercepts this deterministically (no OpenAI call is made) and returns a Swedish explanation of the aggregate-only competitor policy.
+
+5. **Save a chart insight** — on the grounded trend answer (which has the "via" source badges), click "Spara insikt". The button shows "✓ Sparad" when saved. Click "☆ Insikter" in the header to open the insights drawer and confirm the saved entry appears.
+
+6. **Export a PDF report** — open the saved insight and click "↓ Exportera rapport som PDF". A polished A4 PDF downloads with the branded header, answer text, embedded chart, and data sources. The PDF is generated server-side from the saved chart payload — not from AI text.
+
+7. **Demonstrate tenant isolation** — click "Logga ut", then log in as "Fresh Snacks Ltd". Confirm that the dashboard shows different KPIs and that the "☆ Insikter" drawer is empty (Nordic Coffee's insights are not visible).
+
+---
+
 ## Verification commands
 
 All smoke tests require the backend to be running (`uvicorn app.main:app --reload`) unless noted.

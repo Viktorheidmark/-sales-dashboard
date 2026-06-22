@@ -33,7 +33,7 @@ export function KpiCards({ data, loading, error, onRetry }: KpiCardsProps) {
   if (error || !data) {
     return (
       <div className="bg-white rounded-xl border border-zinc-200 p-6">
-        <ErrorState message={error ?? 'No data available'} onRetry={onRetry} />
+        <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
       </div>
     )
   }
@@ -44,22 +44,22 @@ export function KpiCards({ data, loading, error, onRetry }: KpiCardsProps) {
     <div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Revenue"
+          label="Omsättning"
           value={formatSEK(data.total_revenue)}
           sub={dateLabel}
         />
         <KpiCard
-          label="Orders"
+          label="Beställningar"
           value={formatNumber(data.total_orders)}
           sub={dateLabel}
         />
         <KpiCard
-          label="Units sold"
+          label="Sålda enheter"
           value={formatNumber(data.total_units)}
           sub={dateLabel}
         />
         <KpiCard
-          label="Avg order value"
+          label="Snitt ordervärde"
           value={formatSEK(data.average_order_value)}
           sub={dateLabel}
         />

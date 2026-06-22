@@ -23,8 +23,8 @@ export function MarketShare({
 }: MarketShareProps) {
   const pieData = data
     ? [
-        { name: 'Your share', value: data.supplier_revenue, color: '#4169e1' },
-        { name: 'Competitors (aggregate)', value: data.competitor_aggregate_revenue ?? 0, color: '#e2e8f0' },
+        { name: 'Vår andel', value: data.supplier_revenue, color: '#4169e1' },
+        { name: 'Konkurrenter (aggregat)', value: data.competitor_aggregate_revenue ?? 0, color: '#e2e8f0' },
       ]
     : []
 
@@ -32,7 +32,7 @@ export function MarketShare({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-zinc-700">Market share</h2>
+          <h2 className="text-sm font-semibold text-zinc-700">Marknadsandel</h2>
           <select
             value={selectedCategory}
             onChange={e => onCategoryChange(e.target.value)}
@@ -53,7 +53,7 @@ export function MarketShare({
             <Skeleton className="h-4 w-1/2 mx-auto" />
           </div>
         ) : error || !data ? (
-          <ErrorState message={error ?? 'No data'} onRetry={onRetry} />
+          <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
         ) : (
           <>
             <div className="flex items-center gap-6">
@@ -85,23 +85,23 @@ export function MarketShare({
                 <p className="text-center -mt-2 text-2xl font-bold text-zinc-900 tabular-nums">
                   {formatPct(data.market_share_pct)}
                 </p>
-                <p className="text-center text-xs text-zinc-400 mt-0.5">your share</p>
+                <p className="text-center text-xs text-zinc-400 mt-0.5">er andel</p>
               </div>
 
               {/* Stats */}
               <div className="flex-1 space-y-3">
                 <div>
-                  <p className="text-xs text-zinc-400 uppercase tracking-wider">Your revenue</p>
+                  <p className="text-xs text-zinc-400 uppercase tracking-wider">Vår omsättning</p>
                   <p className="text-lg font-bold text-zinc-900 tabular-nums">{formatSEK(data.supplier_revenue)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-400 uppercase tracking-wider">Category total</p>
+                  <p className="text-xs text-zinc-400 uppercase tracking-wider">Kategoritotal</p>
                   <p className="text-lg font-bold text-zinc-900 tabular-nums">{formatSEK(data.category_total_revenue)}</p>
                 </div>
                 <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-3 py-2">
                   <p className="text-xs text-zinc-500 font-medium">
-                    Competitors ({data.competitor_count})
-                    <span className="ml-1 text-zinc-400 font-normal">— aggregate only</span>
+                    Konkurrenter ({data.competitor_count})
+                    <span className="ml-1 text-zinc-400 font-normal">— enbart aggregat</span>
                   </p>
                   <p className="text-sm font-semibold text-zinc-700 tabular-nums mt-0.5">
                     {formatSEK(data.competitor_aggregate_revenue)}

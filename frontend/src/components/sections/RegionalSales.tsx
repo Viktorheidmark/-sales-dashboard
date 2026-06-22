@@ -23,7 +23,7 @@ function RegionTooltip({ active, payload }: { active?: boolean; payload?: { payl
     <div className="bg-white border border-zinc-200 shadow-lg rounded-lg px-3 py-2 text-sm">
       <p className="font-semibold text-zinc-800">{d.region}</p>
       <p className="text-brand-600">{formatSEK(d.revenue)}</p>
-      <p className="text-zinc-500 text-xs">{formatNumber(d.orders)} orders</p>
+      <p className="text-zinc-500 text-xs">{formatNumber(d.orders)} ordrar</p>
     </div>
   )
 }
@@ -34,8 +34,8 @@ export function RegionalSales({ data, loading, error, onRetry }: RegionalSalesPr
   if (error || !data) {
     return (
       <Card>
-        <CardHeader><h2 className="text-sm font-semibold text-zinc-700">Sales by region</h2></CardHeader>
-        <CardBody><ErrorState message={error ?? 'No data'} onRetry={onRetry} /></CardBody>
+        <CardHeader><h2 className="text-sm font-semibold text-zinc-700">Försäljning per region</h2></CardHeader>
+        <CardBody><ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} /></CardBody>
       </Card>
     )
   }
@@ -51,7 +51,7 @@ export function RegionalSales({ data, loading, error, onRetry }: RegionalSalesPr
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-700">Sales by region</h2>
+          <h2 className="text-sm font-semibold text-zinc-700">Försäljning per region</h2>
           {data.regions[0] && (
             <span className="text-xs bg-brand-50 text-brand-600 font-medium px-2 py-0.5 rounded-full">
               #{1} {data.regions[0].region}
@@ -61,7 +61,7 @@ export function RegionalSales({ data, loading, error, onRetry }: RegionalSalesPr
       </CardHeader>
       <CardBody>
         {chartData.length === 0 ? (
-          <p className="text-sm text-zinc-400 text-center py-6">No regional data</p>
+          <p className="text-sm text-zinc-400 text-center py-6">Inga regionala försäljningsdata för vald period</p>
         ) : (
           <>
             <ResponsiveContainer width="100%" height={200}>
@@ -98,7 +98,7 @@ export function RegionalSales({ data, loading, error, onRetry }: RegionalSalesPr
                 <div key={r.region} className="flex items-center gap-3 text-sm">
                   <span className="text-xs text-zinc-400 w-5 shrink-0">#{i + 1}</span>
                   <span className="font-medium text-zinc-800 flex-1">{r.region}</span>
-                  <span className="text-xs text-zinc-400">{formatNumber(r.orders)} orders</span>
+                  <span className="text-xs text-zinc-400">{formatNumber(r.orders)} ordrar</span>
                   <span className="font-semibold text-zinc-900 tabular-nums">{formatSEK(r.revenue)}</span>
                 </div>
               ))}

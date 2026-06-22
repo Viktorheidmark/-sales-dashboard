@@ -61,7 +61,7 @@ export default function App() {
   const [showInsights, setShowInsights] = useState(false)
 
   const [datePreset, setDatePreset] = useState<DatePreset>('90d')
-  const [selectedRegion, setSelectedRegion] = useState('All regions')
+  const [selectedRegion, setSelectedRegion] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('Coffee')
   const [refreshTick, setRefreshTick] = useState(0)
 
@@ -87,12 +87,22 @@ export default function App() {
       .catch(() => setAuthState('unauthenticated'))
   }, [])
 
+  // Return to login on session expiry from any API call
+  useEffect(() => {
+    const handler = () => {
+      setUser(null)
+      setAuthState('unauthenticated')
+    }
+    window.addEventListener('auth:expired', handler)
+    return () => window.removeEventListener('auth:expired', handler)
+  }, [])
+
   // Load dashboard data whenever auth state or controls change
   useEffect(() => {
     if (authState !== 'authenticated') return
 
     const { startDate, endDate, granularity, days } = presetToDates(datePreset)
-    const regionParam = selectedRegion === 'All regions' ? undefined : selectedRegion
+    const regionParam = selectedRegion === 'all' ? undefined : selectedRegion
 
     const load = <T,>(
       setter: React.Dispatch<React.SetStateAction<SectionState<T>>>,
@@ -115,7 +125,7 @@ export default function App() {
   const handleLogin = (u: AuthUser) => {
     setUser(u)
     setSelectedCategory(defaultCategory(u.supplier_name))
-    setSelectedRegion('All regions')
+    setSelectedRegion('all')
     setDatePreset('90d')
     setAuthState('authenticated')
     setRefreshTick(t => t + 1)

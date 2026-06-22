@@ -103,6 +103,7 @@ export function InsightsPanel({ isOpen, onClose }: InsightsPanelProps) {
     setDetailLoading(true)
     setExportError(null)
     setDeleteConfirm(null)
+    setPdfLoading(false)
     api.getInsight(id)
       .then(setDetail)
       .catch(e => setError(e.message))
@@ -168,7 +169,7 @@ export function InsightsPanel({ isOpen, onClose }: InsightsPanelProps) {
           {detail ? (
             <div className="p-5 space-y-4">
               <button
-                onClick={() => { setDetail(null); setExportError(null); setDeleteConfirm(null) }}
+                onClick={() => { setDetail(null); setExportError(null); setDeleteConfirm(null); setPdfLoading(false) }}
                 className="text-xs text-brand-600 hover:underline flex items-center gap-1"
               >
                 ← Alla insikter

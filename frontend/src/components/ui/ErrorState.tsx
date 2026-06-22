@@ -13,7 +13,7 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
           onClick={onRetry}
           className="text-xs text-brand-600 hover:text-brand-700 font-medium underline underline-offset-2"
         >
-          Try again
+          Försök igen
         </button>
       )}
     </div>

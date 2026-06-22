@@ -19,7 +19,10 @@ export function TopProducts({
   data, regionsData, loading, error, onRetry,
   selectedRegion, onRegionChange,
 }: TopProductsProps) {
-  const regionOptions = ['All regions', ...(regionsData?.regions.map(r => r.region) ?? [])]
+  const regionOptions = [
+    { value: 'all', label: 'Alla regioner' },
+    ...(regionsData?.regions.map(r => ({ value: r.region, label: r.region })) ?? []),
+  ]
 
   const maxRevenue = data?.products[0]?.revenue ?? 1
 
@@ -27,14 +30,14 @@ export function TopProducts({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-zinc-700">Top products</h2>
+          <h2 className="text-sm font-semibold text-zinc-700">Topprodukter</h2>
           <select
             value={selectedRegion}
             onChange={e => onRegionChange(e.target.value)}
             className="text-xs border border-zinc-200 rounded-md px-2 py-1 text-zinc-600 bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             {regionOptions.map(r => (
-              <option key={r} value={r}>{r}</option>
+              <option key={r.value} value={r.value}>{r.label}</option>
             ))}
           </select>
         </div>
@@ -45,9 +48,9 @@ export function TopProducts({
             {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
           </div>
         ) : error || !data ? (
-          <ErrorState message={error ?? 'No data'} onRetry={onRetry} />
+          <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
         ) : data.products.length === 0 ? (
-          <p className="text-sm text-zinc-400 text-center py-6">No products found</p>
+          <p className="text-sm text-zinc-400 text-center py-6">Inga produkter hittades för vald period</p>
         ) : (
           <div className="space-y-3">
             {data.products.map(p => {
@@ -61,7 +64,7 @@ export function TopProducts({
                       <span className="text-xs text-zinc-400 shrink-0 hidden sm:inline">{p.sku}</span>
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-2">
-                      <span className="text-xs text-zinc-400">{formatNumber(p.units)} units</span>
+                      <span className="text-xs text-zinc-400">{formatNumber(p.units)} enheter</span>
                       <span className="font-semibold text-zinc-900 tabular-nums">{formatSEK(p.revenue)}</span>
                     </div>
                   </div>

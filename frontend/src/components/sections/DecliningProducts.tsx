@@ -19,10 +19,10 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-700">Declining products</h2>
+          <h2 className="text-sm font-semibold text-zinc-700">Nedgående produkter</h2>
           {data && (
             <span className="text-xs text-zinc-400">
-              vs prior {data.comparison_days} days
+              vs föregående {data.comparison_days} dagar
             </span>
           )}
         </div>
@@ -33,20 +33,20 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
             {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
           </div>
         ) : error || !data ? (
-          <ErrorState message={error ?? 'No data'} onRetry={onRetry} />
+          <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
         ) : data.products.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <span className="text-2xl">✅</span>
-            <p className="text-sm text-zinc-500">No products declining in this period</p>
+            <p className="text-sm text-zinc-500">Inga nedgående produkter under perioden</p>
           </div>
         ) : (
           <div className="space-y-2">
             {/* Period labels */}
             <div className="flex text-xs text-zinc-400 px-1 mb-3 gap-2">
               <span className="flex-1" />
-              <span className="w-24 text-right">Prior</span>
-              <span className="w-24 text-right">Latest</span>
-              <span className="w-16 text-right">Change</span>
+              <span className="w-24 text-right">Föregående</span>
+              <span className="w-24 text-right">Senaste</span>
+              <span className="w-16 text-right">Förändring</span>
             </div>
 
             {data.products.map(p => {
@@ -69,7 +69,7 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
                         <span className="text-sm font-medium text-zinc-800 truncate">{p.product_name}</span>
                         {isColdBrew && (
                           <span className="shrink-0 text-xs bg-amber-100 text-amber-700 font-medium px-1.5 py-0.5 rounded">
-                            Watch
+                            Bevakning
                           </span>
                         )}
                       </div>

@@ -16,6 +16,14 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
+function handleHttpError(status: number): never {
+  if (status === 401) {
+    window.dispatchEvent(new CustomEvent('auth:expired'))
+    throw new Error('Sessionen har gått ut. Logga in igen.')
+  }
+  throw new Error(`HTTP ${status}`)
+}
+
 async function get<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
   const url = new URL(`${BASE}${path}`)
   for (const [k, v] of Object.entries(params)) {
@@ -25,6 +33,7 @@ async function get<T>(path: string, params: Record<string, string | number | und
   }
   const res = await fetch(url.toString(), { credentials: 'include' })
   if (!res.ok) {
+    if (res.status === 401) handleHttpError(res.status)
     const detail = await res.json().catch(() => ({}))
     throw new Error(detail?.detail ?? `HTTP ${res.status}`)
   }
@@ -39,6 +48,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   })
   if (!res.ok) {
+    if (res.status === 401) handleHttpError(res.status)
     const detail = await res.json().catch(() => ({}))
     throw new Error(detail?.detail ?? `HTTP ${res.status}`)
   }
@@ -51,6 +61,7 @@ async function del(path: string): Promise<void> {
     credentials: 'include',
   })
   if (!res.ok) {
+    if (res.status === 401) handleHttpError(res.status)
     const detail = await res.json().catch(() => ({}))
     throw new Error(detail?.detail ?? `HTTP ${res.status}`)
   }
@@ -59,6 +70,7 @@ async function del(path: string): Promise<void> {
 async function getBlob(path: string): Promise<Blob> {
   const res = await fetch(`${BASE}${path}`, { credentials: 'include' })
   if (!res.ok) {
+    if (res.status === 401) handleHttpError(res.status)
     const detail = await res.json().catch(() => ({}))
     throw new Error(detail?.detail ?? `HTTP ${res.status}`)
   }
