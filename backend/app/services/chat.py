@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -316,3 +316,221 @@ async def run_chat(
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Streaming chat — Server-Sent Events
+# ---------------------------------------------------------------------------
+async def stream_chat(
+    message: str,
+    supplier_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    """
+    Async generator that yields SSE-formatted strings.
+
+    Event types:
+      status   {"text": "…"}           — truthful progress stage label
+      delta    {"text": "…"}           — answer text chunk (real-time from OpenAI)
+      complete {answer, chart, sources, tool_calls, limitations, supplier_id, generated_at}
+      error    {"message": "…"}        — safe user-facing error; no internals exposed
+
+    Guardrail-blocked questions emit a single `complete` event immediately
+    (no MCP subprocess, no status/delta events).
+    """
+
+    def sse(event: str, data: dict) -> str:
+        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    # --- Guardrail check (deterministic, no LLM / MCP) ---
+    guard = classify(message)
+    if not guard.should_call_llm:
+        yield sse("complete", {
+            "answer": guard.answer,
+            "tool_calls": [],
+            "sources": [],
+            "chart": None,
+            "limitations": guard.limitations,
+            "supplier_id": supplier_id,
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        })
+        return
+
+    try:
+        yield sse("status", {"text": "Tolkar frågan…"})
+
+        # Use AsyncOpenAI so all completions calls are awaitable and the
+        # streaming iteration is async — this prevents blocking the event loop
+        # inside FastAPI's StreamingResponse.
+        async_client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+        current_date = datetime.now(tz=timezone.utc).date().isoformat()
+
+        if start_date or end_date:
+            date_hint = (
+                f"\n[Datumfilter aktivt: {start_date or 'äldsta data'} → {end_date or current_date}]"
+            )
+        else:
+            date_hint = (
+                "\n[Inget datumfilter — verktyget använder sitt standardfönster. "
+                "Rapportera den faktiska perioden från date_range i svaret.]"
+            )
+
+        user_message = f"{message}{date_hint}"
+
+        tools_used: list[str] = []
+        sources: list[dict] = []
+        limitations: list[str] = []
+        raw_tool_results: list[tuple[str, dict]] = []
+
+        params = _server_params()
+
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+
+                yield sse("status", {"text": "Hämtar relevanta analysdata…"})
+
+                tools_result = await session.list_tools()
+                openai_tools = [
+                    _to_openai_tool(t)
+                    for t in tools_result.tools
+                    if t.name in ALLOWED_TOOLS
+                ]
+
+                messages: list[dict] = [
+                    {"role": "system", "content": _build_system_prompt(current_date)},
+                    {"role": "user", "content": user_message},
+                ]
+
+                # --- Tool-calling rounds (non-streaming; up to 4 rounds) ---
+                # The final text synthesis is always a separate streaming call below.
+                for _ in range(4):
+                    # await: AsyncOpenAI.chat.completions.create returns a coroutine
+                    response = await async_client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        tools=openai_tools,
+                        tool_choice="auto",
+                        temperature=0.2,
+                        max_tokens=1024,
+                    )
+
+                    choice = response.choices[0]
+                    msg = choice.message
+
+                    # No tool calls → LLM wants to give final text answer.
+                    # Do NOT add this message — the streaming call below re-generates it.
+                    if choice.finish_reason == "stop" or not msg.tool_calls:
+                        break
+
+                    # Tool-calling round: add assistant message + process each tool
+                    messages.append(msg.model_dump(exclude_none=True))
+
+                    tool_results_messages = []
+                    for tc in msg.tool_calls:
+                        tool_name = tc.function.name
+
+                        if tool_name not in ALLOWED_TOOLS:
+                            tool_results_messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": json.dumps({"error": f"Tool '{tool_name}' is not permitted."}),
+                            })
+                            continue
+
+                        try:
+                            raw_args = json.loads(tc.function.arguments or "{}")
+                        except json.JSONDecodeError:
+                            raw_args = {}
+
+                        args = _inject_supplier_scope(tool_name, raw_args, supplier_id)
+                        if start_date and "start_date" not in args:
+                            args["start_date"] = start_date
+                        if end_date and "end_date" not in args:
+                            args["end_date"] = end_date
+
+                        try:
+                            result = await session.call_tool(tool_name, args)
+                        except Exception as exc:
+                            tool_results_messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": json.dumps({"error": str(exc)}),
+                            })
+                            continue
+
+                        if result.content and hasattr(result.content[0], "text"):
+                            raw_text = result.content[0].text
+                            try:
+                                parsed = json.loads(raw_text)
+                            except json.JSONDecodeError:
+                                parsed = {"raw": raw_text}
+                        else:
+                            parsed = {}
+
+                        tools_used.append(tool_name)
+                        if isinstance(parsed, dict):
+                            raw_source = parsed.get("source", "")
+                            sources.append({
+                                "tool": tool_name,
+                                "source": raw_source if raw_source.startswith("MCP:") else f"MCP:{tool_name}",
+                                "supplier_id": supplier_id,
+                                "generated_at": parsed.get("generated_at", datetime.now(tz=timezone.utc).isoformat()),
+                                "row_count": parsed.get("row_count"),
+                                "date_range": parsed.get("date_range"),
+                                "limitations": parsed.get("limitations", []),
+                            })
+                            if parsed.get("limitations"):
+                                limitations.extend(parsed["limitations"])
+                            raw_tool_results.append((tool_name, parsed))
+
+                        tool_results_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(parsed, ensure_ascii=False),
+                        })
+
+                    messages.extend(tool_results_messages)
+
+                # --- Final synthesis (truly async streaming) ---
+                yield sse("status", {"text": "Sammanställer svaret…"})
+
+                # Build chart deterministically from MCP results — never from LLM text
+                chart = pick_chart(raw_tool_results)
+
+                full_answer_parts: list[str] = []
+                # stream=True with AsyncOpenAI returns an AsyncStream; iterate with async for
+                final_stream = await async_client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.2,
+                    max_tokens=1024,
+                    stream=True,
+                    # No `tools` param — synthesis only; tool results already in context
+                )
+
+                async for chunk in final_stream:
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        full_answer_parts.append(delta.content)
+                        yield sse("delta", {"text": delta.content})
+
+                full_answer = "".join(full_answer_parts) or "Jag kunde inte generera ett svar. Försök igen."
+
+                yield sse("complete", {
+                    "answer": full_answer,
+                    "tool_calls": list(dict.fromkeys(tools_used)),
+                    "sources": sources,
+                    "chart": chart,
+                    "limitations": list(set(limitations)),
+                    "supplier_id": supplier_id,
+                    "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+                })
+
+    except Exception:
+        # Emit a safe error message — never expose internals, stack traces, or secrets
+        yield sse("error", {"message": "Analyssystemet stötte på ett fel. Försök igen om en stund."})

@@ -396,4 +396,40 @@ Hur presterar vi i Göteborg jämfört med Stockholm?
 | Date handling | Tool default window when no dates passed | Explicit date required from frontend |
 | Seed data | Synthetic, deterministic | Real anonymised retailer export |
 
-**Out of scope for MVP:** authentication, background jobs, multi-turn chat memory, real-time streaming responses, admin panels.
+**Out of scope for MVP:** authentication, background jobs, multi-turn chat memory, admin panels.
+
+---
+
+## Streaming chat (Phase 15)
+
+The Analytics Assistant uses Server-Sent Events (`POST /api/chat/stream`) to give truthful, live progress before the final answer appears.
+
+### Event flow
+
+```
+event: status   {"text": "Tolkar frågan…"}
+event: status   {"text": "Hämtar relevanta analysdata…"}
+   ← MCP subprocess opens; tool calls execute here →
+event: status   {"text": "Sammanställer svaret…"}
+event: delta    {"text": "Försäljningen under…"}   ← real OpenAI token stream
+event: delta    {"text": " perioden uppgick…"}
+…
+event: complete {answer, chart, sources, tool_calls, limitations, supplier_id, generated_at}
+```
+
+### Design principles
+
+- **Progress events are truthful stages, not simulated reasoning.** Each status label corresponds to a real step: guardrail check, MCP connection + tool execution, final LLM synthesis.
+- **No numbers are emitted before MCP data is available.** Status and delta events carry only labels or answer text — never invented figures. The `complete` event is the only place where chart data and source metadata appear.
+- **Answer text streams only after all tool results are collected.** OpenAI streaming is enabled only for the final synthesis call, after the tool-calling loop has fully completed.
+- **Charts remain deterministic from MCP results.** The `chart` field in `complete` is built by `chart_builder.py` from validated MCP tool output, exactly as in the non-streaming endpoint. The LLM response text is never parsed for numbers.
+- **Guardrail-blocked questions return a single `complete` event immediately** — no MCP subprocess is opened, no status/delta events are emitted.
+
+### Smoke test
+
+```bash
+cd backend
+python -m scripts.stream_smoke_test
+```
+
+The non-streaming endpoint (`POST /api/chat`) is preserved unchanged for backwards compatibility.

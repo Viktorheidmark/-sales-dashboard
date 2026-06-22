@@ -17,7 +17,6 @@ const EXAMPLE_PROMPTS = [
   'Hur ser vår försäljningstrend ut den senaste månaden?',
 ]
 
-// 2×2 prompt cards — visible labels + supporting lines, send full EXAMPLE_PROMPTS text
 const PROMPT_CARDS = [
   {
     label: 'Försäljningstrend',
@@ -66,14 +65,16 @@ const PROMPT_CARDS = [
   },
 ]
 
-// Prompts not covered by cards, shown via "Visa fler exempel"
 const EXTRA_PROMPTS = [EXAMPLE_PROMPTS[0], EXAMPLE_PROMPTS[1]]
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
-  response?: ChatResponse
+  // Streaming-specific fields — only set on assistant messages during/after stream
+  statusText?: string        // current progress label (shown before first delta)
+  streamingContent?: string  // accumulated delta text (shown during streaming)
+  response?: ChatResponse    // set from `complete` event
   error?: string
   loading?: boolean
   question?: string
@@ -87,7 +88,6 @@ interface ChatPanelProps {
 
 function MiniChart({ chart }: { chart: ChartPayload }) {
   const COLORS = ['#4169e1', '#a5b4fc', '#c7d2fe', '#e0e7ff']
-
   if (chart.chart_type === 'line_chart') {
     return (
       <ResponsiveContainer width="100%" height={160}>
@@ -130,10 +130,9 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
 }
 
 function ToolBadge({ name }: { name: string }) {
-  const label = name.replace('get_', '').replace(/_/g, ' ')
   return (
     <span className="inline-flex items-center gap-1 text-xs bg-zinc-100 text-zinc-500 rounded px-1.5 py-0.5">
-      {label}
+      {name.replace('get_', '').replace(/_/g, ' ')}
     </span>
   )
 }
@@ -171,11 +170,12 @@ function AssistantBubble({ msg }: { msg: Message }) {
     }
   }
 
-  if (msg.loading) {
+  // ── Loading: show status text + bouncing dots (before any delta arrives) ──
+  if (msg.loading && !msg.streamingContent) {
     return (
       <div className="flex gap-3 items-start">
         <span className="shrink-0 w-7 h-7 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
-        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-1">
+        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-1.5">
           <div className="flex items-center gap-2 text-sm text-zinc-500">
             <span className="flex gap-0.5">
               {[0, 1, 2].map(i => (
@@ -186,14 +186,46 @@ function AssistantBubble({ msg }: { msg: Message }) {
                 />
               ))}
             </span>
-            Analyserar försäljningsdata…
+            {msg.statusText ?? 'Analyserar försäljningsdata…'}
           </div>
-          <p className="text-xs text-zinc-400">Hämtar relevanta signaler från analyslagret</p>
+          {msg.statusText === 'Hämtar relevanta analysdata…' && (
+            <p className="text-xs text-zinc-400">Hämtar relevanta signaler från analyslagret</p>
+          )}
         </div>
       </div>
     )
   }
 
+  // ── Streaming: show partial answer as it arrives ──
+  if (msg.loading && msg.streamingContent) {
+    return (
+      <div className="flex gap-3 items-start">
+        <span className="shrink-0 w-7 h-7 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
+        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-100 mb-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+            <span className="text-xs text-zinc-500">Svar baserat på live-data</span>
+          </div>
+          <div className="text-sm text-zinc-800 leading-relaxed">
+            <ReactMarkdown
+              components={{
+                p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                strong: ({ children }) => <strong className="font-semibold text-zinc-900">{children}</strong>,
+                ul: ({ children }) => <ul className="list-disc list-inside mt-1 mb-1 space-y-0.5">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal list-inside mt-1 mb-1 space-y-0.5">{children}</ol>,
+                li: ({ children }) => <li className="text-zinc-700">{children}</li>,
+              }}
+            >
+              {msg.streamingContent}
+            </ReactMarkdown>
+            <span className="inline-block w-0.5 h-4 bg-brand-400 animate-pulse align-text-bottom ml-0.5" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Error state ──
   if (msg.error) {
     return (
       <div className="flex gap-3 items-start">
@@ -205,6 +237,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
     )
   }
 
+  // ── Complete response ──
   const r = msg.response!
   const isGrounded = r.tool_calls.length > 0
 
@@ -213,14 +246,12 @@ function AssistantBubble({ msg }: { msg: Message }) {
       <span className="shrink-0 w-7 h-7 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
       <div className="flex-1 min-w-0 space-y-2">
         <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-3">
-          {/* Grounded indicator */}
           {isGrounded && (
             <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-100">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
               <span className="text-xs text-zinc-500">Svar baserat på live-data</span>
             </div>
           )}
-
           <div className="text-sm text-zinc-800 leading-relaxed">
             <ReactMarkdown
               components={{
@@ -234,8 +265,6 @@ function AssistantBubble({ msg }: { msg: Message }) {
               {msg.content}
             </ReactMarkdown>
           </div>
-
-          {/* Chart */}
           {r.chart && (
             <div className="mt-1 pt-3 border-t border-zinc-100">
               <p className="text-xs font-semibold text-zinc-700 mb-0.5">{r.chart.title}</p>
@@ -248,8 +277,6 @@ function AssistantBubble({ msg }: { msg: Message }) {
               </p>
             </div>
           )}
-
-          {/* Limitations */}
           {r.limitations.length > 0 && (
             <div className="pt-2 border-t border-zinc-100 space-y-0.5">
               {r.limitations.map((l, i) => (
@@ -259,7 +286,6 @@ function AssistantBubble({ msg }: { msg: Message }) {
           )}
         </div>
 
-        {/* Tool pills + timestamp + save */}
         {isGrounded && (
           <div className="flex flex-wrap items-center gap-1.5 px-1">
             {r.tool_calls.map(t => <ToolBadge key={t} name={t} />)}
@@ -280,13 +306,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
               }`}
             >
               <BookmarkIcon filled={saveState === 'saved'} />
-              {saveState === 'saved'
-                ? 'Sparad i Insikter'
-                : saveState === 'error'
-                ? 'Misslyckades'
-                : saveState === 'saving'
-                ? '…'
-                : 'Spara'}
+              {saveState === 'saved' ? 'Sparad i Insikter' : saveState === 'error' ? 'Misslyckades' : saveState === 'saving' ? '…' : 'Spara'}
             </button>
           </div>
         )}
@@ -302,6 +322,16 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
   const [showExtra, setShowExtra] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      abortRef.current?.abort()
+    }
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -311,26 +341,88 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
+    // Abort any in-flight stream
+    abortRef.current?.abort()
+    const abort = new AbortController()
+    abortRef.current = abort
+
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: trimmed }
-    const loadingMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', loading: true, question: trimmed }
+    const assistantId = crypto.randomUUID()
+    const loadingMsg: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      loading: true,
+      statusText: 'Analyserar försäljningsdata…',
+      question: trimmed,
+    }
 
     setMessages(prev => [...prev, userMsg, loadingMsg])
     setInput('')
     setLoading(true)
 
+    const update = (patch: Partial<Message>) => {
+      if (!mountedRef.current) return
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, ...patch } : m))
+    }
+
     try {
-      const response = await api.chat({ message: trimmed, start_date: startDate, end_date: endDate })
-      setMessages(prev => prev.map(m =>
-        m.id === loadingMsg.id ? { ...m, loading: false, content: response.answer, response } : m
-      ))
+      const stream = api.chatStream(
+        { message: trimmed, start_date: startDate, end_date: endDate },
+        abort.signal,
+      )
+
+      for await (const event of stream) {
+        if (!mountedRef.current || abort.signal.aborted) break
+
+        if (event.type === 'status') {
+          update({ statusText: event.text })
+        } else if (event.type === 'delta') {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId
+              ? { ...m, streamingContent: (m.streamingContent ?? '') + event.text }
+              : m
+          ))
+        } else if (event.type === 'complete') {
+          const response: ChatResponse = {
+            answer: event.answer,
+            tool_calls: event.tool_calls,
+            sources: event.sources,
+            chart: event.chart,
+            limitations: event.limitations,
+            supplier_id: event.supplier_id,
+            generated_at: event.generated_at,
+          }
+          update({
+            loading: false,
+            content: event.answer,
+            streamingContent: undefined,
+            statusText: undefined,
+            response,
+          })
+        } else if (event.type === 'error') {
+          update({
+            loading: false,
+            streamingContent: undefined,
+            statusText: undefined,
+            error: event.message,
+          })
+        }
+      }
     } catch (err) {
-      const errorText = err instanceof Error ? err.message : 'Något gick fel. Försök igen.'
-      setMessages(prev => prev.map(m =>
-        m.id === loadingMsg.id ? { ...m, loading: false, content: '', error: errorText } : m
-      ))
+      if (!mountedRef.current) return
+      if (err instanceof Error && err.name === 'AbortError') return
+      update({
+        loading: false,
+        streamingContent: undefined,
+        statusText: undefined,
+        error: 'Anslutningen avbröts. Försök igen.',
+      })
     } finally {
-      setLoading(false)
-      inputRef.current?.focus()
+      if (mountedRef.current) {
+        setLoading(false)
+        inputRef.current?.focus()
+      }
     }
   }
 
@@ -368,14 +460,11 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 scrollbar-thin">
         {isEmpty ? (
           <div className="space-y-4">
-            {/* Headline */}
             <div>
               <p className="text-sm font-semibold text-zinc-800">Vad vill du förstå bättre?</p>
               <p className="text-xs text-zinc-400 mt-0.5">Välj ett område nedan eller skriv en egen fråga.</p>
               <p className="text-xs text-zinc-400 mt-2">Trender · Produkter · Regioner · Marknadsandel</p>
             </div>
-
-            {/* 2×2 prompt card grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {PROMPT_CARDS.map(card => (
                 <button
@@ -392,8 +481,6 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
                 </button>
               ))}
             </div>
-
-            {/* Extra prompts */}
             {showExtra && (
               <div className="flex flex-col gap-1.5">
                 {EXTRA_PROMPTS.map(p => (
@@ -408,7 +495,6 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
                 ))}
               </div>
             )}
-
             {!showExtra && (
               <button
                 onClick={() => setShowExtra(true)}

@@ -86,6 +86,14 @@ export interface ChatResponse {
   generated_at: string
 }
 
+// --- /api/chat/stream SSE events ---
+
+export type StreamEvent =
+  | { type: 'status'; text: string }
+  | { type: 'delta'; text: string }
+  | { type: 'complete' } & ChatResponse
+  | { type: 'error'; message: string }
+
 export interface SupplierItem {
   id: string
   name: string

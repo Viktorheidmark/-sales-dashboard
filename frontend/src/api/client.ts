@@ -11,6 +11,7 @@ import type {
   SalesOverTimeResponse,
   SaveInsightRequest,
   SaveInsightResponse,
+  StreamEvent,
   TopProductsResponse,
 } from './types'
 
@@ -131,6 +132,48 @@ export const api = {
 
   chat: (req: ChatRequest): Promise<ChatResponse> =>
     post<ChatResponse>('/api/chat', req),
+
+  chatStream: async function* (req: ChatRequest, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    const res = await fetch(`${BASE}/api/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(req),
+      signal,
+    })
+    if (!res.ok) {
+      if (res.status === 401) handleHttpError(res.status)
+      const detail = await res.json().catch(() => ({}))
+      throw new Error(detail?.detail ?? `HTTP ${res.status}`)
+    }
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      // SSE blocks are separated by double newline
+      const blocks = buf.split('\n\n')
+      buf = blocks.pop() ?? ''
+      for (const block of blocks) {
+        if (!block.trim()) continue
+        let eventType = ''
+        let dataStr = ''
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+          else if (line.startsWith('data: ')) dataStr = line.slice(6).trim()
+        }
+        if (!dataStr) continue
+        try {
+          const data = JSON.parse(dataStr)
+          yield { type: eventType, ...data } as StreamEvent
+        } catch {
+          // skip malformed blocks
+        }
+      }
+    }
+  },
 
   // --- Insights (supplier_id always derived from session cookie) ---
   saveInsight: (req: SaveInsightRequest): Promise<SaveInsightResponse> =>
