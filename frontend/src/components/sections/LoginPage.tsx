@@ -3,10 +3,10 @@ import { api } from '../../api/client'
 import type { AuthUser } from '../../api/types'
 
 const DEMO_ACCOUNTS = [
-  { email: 'nordic@demo.solvigo',  label: 'Nordic Coffee AB' },
-  { email: 'snacks@demo.solvigo',  label: 'Fresh Snacks Ltd' },
-  { email: 'home@demo.solvigo',    label: 'Clean Home Co' },
-  { email: 'baltic@demo.solvigo',  label: 'Baltic Roasters AB' },
+  { email: 'arla@demo.solvigo',          label: 'Arla Sverige' },
+  { email: 'cocacola@demo.solvigo',      label: 'Coca-Cola Europacific Partners Sverige' },
+  { email: 'orkla@demo.solvigo',         label: 'Orkla Sverige' },
+  { email: 'skanemejerier@demo.solvigo', label: 'Skånemejerier' },
 ]
 
 const DEMO_PASSWORD = 'demo1234'
@@ -138,7 +138,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         </div>
 
         <p className="text-center text-xs text-zinc-400">
-          All data grounded via MCP analytics layer · No mock data
+          Grundat i MCP-analyserad syntetisk demodata
         </p>
       </div>
     </div>

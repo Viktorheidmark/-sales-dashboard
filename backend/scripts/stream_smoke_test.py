@@ -144,8 +144,8 @@ def main():
             "  cd backend && uvicorn app.main:app --reload"
         )
 
-    nordic_cookies, nordic_id = login("nordic@demo.solvigo")
-    print(f"\nNordic Coffee AB → {nordic_id}\n")
+    nordic_cookies, nordic_id = login("arla@demo.solvigo")
+    print(f"\nArla Sverige → {nordic_id}\n")
 
     results = []
 
@@ -260,7 +260,7 @@ def main():
     print("\n── Test 8: Non-streaming /api/chat still functional ──")
     r = httpx.post(
         f"{BASE}/api/chat",
-        json={"message": "Hur stor är vår marknadsandel i Kaffe?"},
+        json={"message": "Hur stor är vår marknadsandel i Mejeri?"},
         cookies=nordic_cookies,
         timeout=90,
     )

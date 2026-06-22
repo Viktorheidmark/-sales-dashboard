@@ -279,7 +279,7 @@ def build_insight_pdf(
         canvas.setFont("Helvetica", 7)
         canvas.drawString(
             MARGIN_L, MARGIN_B - 5 * mm,
-            "Baserat på MCP-analytiklagret · Inte simulerade data · Solvigo Sales Intelligence",
+            "Solvigo Sales Intelligence · Grundat i MCP-analyserad syntetisk demodata",
         )
         canvas.drawRightString(PAGE_W - MARGIN_R, MARGIN_B - 5 * mm, now_ts)
         canvas.restoreState()

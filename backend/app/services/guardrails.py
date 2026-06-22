@@ -200,7 +200,7 @@ def classify(message: str) -> GuardrailResult:
                 "Vad vill du veta? Här är några exempel:\n\n"
                 "- Hur ser vår försäljningstrend ut de senaste 90 dagarna?\n"
                 "- Vilka produkter tappar mest i försäljning?\n"
-                "- Hur stor är vår marknadsandel i Kaffe?\n"
+                "- Hur stor är vår marknadsandel i Mejeri?\n"
                 "- Vilka regioner presterar bäst?"
             ),
             limitations=[],

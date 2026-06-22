@@ -6,7 +6,7 @@ import { Skeleton } from '../ui/Skeleton'
 import { ErrorState } from '../ui/ErrorState'
 import { MetaFooter } from '../ui/MetaFooter'
 
-const CATEGORIES = ['Coffee', 'Snacks', 'Household', 'Drinks']
+const CATEGORIES = ['Mejeri', 'Dryck', 'Mat och snacks']
 
 interface MarketShareProps {
   data: MarketShareResponse | null

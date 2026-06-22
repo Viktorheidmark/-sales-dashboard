@@ -183,7 +183,7 @@ def get_market_share(
     """
     Return this supplier's revenue share within a product category.
 
-    category_name must match a name in the categories table (e.g. 'Coffee').
+    category_name must match a name in the categories table (e.g. 'Mejeri').
     Competitor data is aggregate-only — no competitor product names, SKUs,
     order IDs, or customer data are exposed.
 

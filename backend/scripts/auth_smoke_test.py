@@ -57,7 +57,7 @@ def main():
     print("── Test 1: Valid login ──")
     r = httpx.post(
         f"{BASE}/api/auth/login",
-        json={"email": "nordic@demo.solvigo", "password": "demo1234"},
+        json={"email": "arla@demo.solvigo", "password": "demo1234"},
         timeout=TIMEOUT,
     )
     cookie_set = "session" in r.cookies
@@ -65,7 +65,7 @@ def main():
     results.append(check("Valid login", [
         ("returns 200", r.status_code == 200),
         ("session cookie set", cookie_set),
-        ("supplier_name in response", body.get("supplier_name") == "Nordic Coffee AB"),
+        ("supplier_name in response", body.get("supplier_name") == "Arla Sverige"),
         ("supplier_id in response", bool(body.get("supplier_id"))),
     ]))
     nordic_cookie = dict(r.cookies) if cookie_set else {}
@@ -75,7 +75,7 @@ def main():
     print("\n── Test 2: Wrong password ──")
     r = httpx.post(
         f"{BASE}/api/auth/login",
-        json={"email": "nordic@demo.solvigo", "password": "wrongpassword"},
+        json={"email": "arla@demo.solvigo", "password": "wrongpassword"},
         timeout=TIMEOUT,
     )
     results.append(check("Wrong password → 401", [
@@ -100,8 +100,8 @@ def main():
     results.append(check("GET /api/auth/me (authenticated)", [
         ("returns 200", r.status_code == 200),
         ("supplier_id matches login", body.get("supplier_id") == nordic_supplier_id),
-        ("supplier_name correct", body.get("supplier_name") == "Nordic Coffee AB"),
-        ("email correct", body.get("email") == "nordic@demo.solvigo"),
+        ("supplier_name correct", body.get("supplier_name") == "Arla Sverige"),
+        ("email correct", body.get("email") == "arla@demo.solvigo"),
     ]))
 
     # ── 5: GET /api/auth/me with no cookie ────────────────────────────────
@@ -133,14 +133,14 @@ def main():
 
     # ── 8: Tenant tampering — supplier_id query param ignored ─────────────
     print("\n── Test 8: Tenant tampering via query param ──")
-    # Log in as Snacks to get a different supplier_id
+    # Log in as Orkla to get a different supplier_id
     snacks_login = httpx.post(
         f"{BASE}/api/auth/login",
-        json={"email": "snacks@demo.solvigo", "password": "demo1234"},
+        json={"email": "orkla@demo.solvigo", "password": "demo1234"},
         timeout=TIMEOUT,
     )
     snacks_supplier_id = snacks_login.json().get("supplier_id", "") if snacks_login.status_code == 200 else ""
-    # Make dashboard request as Nordic but pass Snacks supplier_id in the query string
+    # Make dashboard request as Arla but pass Orkla supplier_id in the query string
     r = httpx.get(
         f"{BASE}/api/dashboard/overview",
         params={"supplier_id": snacks_supplier_id},  # attempt to tamper scope
@@ -150,7 +150,7 @@ def main():
     body = r.json() if r.status_code == 200 else {}
     results.append(check("Tenant tampering: supplier_id query param ignored", [
         ("returns 200 (not rejected)", r.status_code == 200),
-        ("response supplier_id is Nordic (session), not Snacks (param)",
+        ("response supplier_id is Arla (session), not Orkla (param)",
          body.get("supplier_id") == nordic_supplier_id),
     ]))
 
@@ -168,7 +168,7 @@ def main():
     body = r.json() if r.status_code == 200 else {}
     results.append(check("Tenant tampering: supplier_id in chat body ignored", [
         ("returns 200", r.status_code == 200),
-        ("response supplier_id is Nordic (session), not Snacks (body)",
+        ("response supplier_id is Arla (session), not Orkla (body)",
          body.get("supplier_id") == nordic_supplier_id),
     ]))
 

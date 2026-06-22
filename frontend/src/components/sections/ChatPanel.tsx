@@ -12,7 +12,7 @@ const EXAMPLE_PROMPTS = [
   'Hur går det för oss? Ge mig en översikt.',
   'Vad är vår totala omsättning de senaste 90 dagarna?',
   'Vilka produkter tappar mest i försäljning?',
-  'Hur stor är vår marknadsandel i Kaffe?',
+  'Hur stor är vår marknadsandel i Mejeri?',
   'Vilka är våra bästsäljande produkter i Stockholm?',
   'Hur ser vår försäljningstrend ut den senaste månaden?',
 ]
@@ -54,7 +54,7 @@ const PROMPT_CARDS = [
   },
   {
     label: 'Marknadsandel',
-    sub: 'Hur stor är vår andel i Coffee?',
+    sub: 'Hur stor är vår andel i Mejeri?',
     prompt: EXAMPLE_PROMPTS[3],
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
@@ -204,7 +204,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
         <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3">
           <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-100 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
-            <span className="text-xs text-zinc-500">Svar baserat på live-data</span>
+            <span className="text-xs text-zinc-500">Svar grundat i analyserad demodata</span>
           </div>
           <div className="text-sm text-zinc-800 leading-relaxed">
             <ReactMarkdown
@@ -249,7 +249,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
           {isGrounded && (
             <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-100">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <span className="text-xs text-zinc-500">Svar baserat på live-data</span>
+              <span className="text-xs text-zinc-500">Svar grundat i analyserad demodata</span>
             </div>
           )}
           <div className="text-sm text-zinc-800 leading-relaxed">

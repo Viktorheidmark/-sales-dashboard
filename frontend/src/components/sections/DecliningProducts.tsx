@@ -12,7 +12,7 @@ interface DecliningProductsProps {
   onRetry: () => void
 }
 
-const COLD_BREW_SKUS = new Set(['NCO-003', 'NCO-006'])
+const WATCH_SKUS = new Set(['ARLA-004'])
 
 export function DecliningProducts({ data, loading, error, onRetry }: DecliningProductsProps) {
   return (
@@ -50,7 +50,7 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
             </div>
 
             {data.products.map(p => {
-              const isColdBrew = COLD_BREW_SKUS.has(p.sku)
+              const isColdBrew = WATCH_SKUS.has(p.sku)
               const changePct = p.revenue_change_pct
 
               return (

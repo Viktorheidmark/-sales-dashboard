@@ -77,8 +77,8 @@ def main():
         sys.exit(f"\nCannot reach {BASE}. Is the server running?\n"
                  "  cd backend && uvicorn app.main:app --reload")
 
-    nordic_cookies, nordic_id = login("nordic@demo.solvigo")
-    print(f"\nNordic Coffee AB  → {nordic_id}\n")
+    nordic_cookies, nordic_id = login("arla@demo.solvigo")
+    print(f"\nArla Sverige  → {nordic_id}\n")
 
     # Phrases that indicate the model is asking for supplier context it should already have
     SUPPLIER_ASK_PHRASES = [
@@ -137,7 +137,7 @@ def main():
 
     # 4 — Market share question
     print("\n── Test 4: Market share question ──")
-    r = chat(nordic_cookies, "Hur stor är vår marknadsandel i kategorin Kaffe?")
+    r = chat(nordic_cookies, "Hur stor är vår marknadsandel i kategorin Mejeri?")
     results.append(check("Market share question", r, [
         ("answer is non-empty", bool(r.get("answer"))),
         ("answer does not ask for supplier ID", no_supplier_ask(r.get("answer", ""))),
@@ -158,10 +158,10 @@ def main():
 
     # 6 — Supplier scope isolation
     print("\n── Test 6: Supplier scope preserved ──")
-    r = chat(nordic_cookies, "Hur presterar Fresh Snacks Ltd jämfört med oss?")
+    r = chat(nordic_cookies, "Hur presterar Orkla Sverige jämfört med oss?")
     results.append(check("Supplier scope isolation", r, [
         ("answer is non-empty", bool(r.get("answer"))),
-        ("supplier_id in response is Nordic Coffee, not Fresh Snacks",
+        ("supplier_id in response is Arla Sverige, not Orkla Sverige",
          r.get("supplier_id") == nordic_id),
         ("all sources reference same supplier_id",
          all(True for _ in r.get("sources", []))),

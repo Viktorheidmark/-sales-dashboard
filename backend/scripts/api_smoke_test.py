@@ -7,7 +7,7 @@ Requires the FastAPI server to be running:
 Run from the backend/ directory:
     python -m scripts.api_smoke_test
 
-Logs in as Nordic Coffee AB and Fresh Snacks Ltd demo accounts,
+Logs in as Arla Sverige and Orkla Sverige demo accounts,
 then hits every dashboard endpoint and reports pass/fail.
 """
 
@@ -61,12 +61,12 @@ def main():
         sys.exit(f"\nCould not reach {BASE}. Is the server running?\n"
                  "  cd backend && uvicorn app.main:app --reload")
 
-    nordic_cookies, nordic_id = login("nordic@demo.solvigo")
-    snacks_cookies, snacks_id = login("snacks@demo.solvigo")
-    clean_cookies, clean_id = login("home@demo.solvigo")
+    nordic_cookies, nordic_id = login("arla@demo.solvigo")
+    snacks_cookies, snacks_id = login("orkla@demo.solvigo")
+    clean_cookies, clean_id = login("cocacola@demo.solvigo")
 
-    print(f"\nNordic Coffee AB  →  {nordic_id}")
-    print(f"Fresh Snacks Ltd  →  {snacks_id}\n")
+    print(f"\nArla Sverige  →  {nordic_id}")
+    print(f"Orkla Sverige  →  {snacks_id}\n")
 
     results = []
 
@@ -106,22 +106,22 @@ def main():
     results.append(check("GET /api/dashboard/top-products (Stockholm, limit=3)", s, b,
                          ["products", "region_filter"]))
 
-    # 9 — regions (Nordic)
+    # 9 — regions (Arla)
     s, b = get("/api/dashboard/regions", nordic_cookies)
     results.append(check("GET /api/dashboard/regions", s, b, ["regions"]))
 
-    # 10 — regions for Fresh Snacks (Malmö pattern)
+    # 10 — regions for Orkla (Malmö pattern)
     s, b = get("/api/dashboard/regions", snacks_cookies)
-    results.append(check("GET /api/dashboard/regions (Fresh Snacks)", s, b, ["regions"]))
+    results.append(check("GET /api/dashboard/regions (Orkla)", s, b, ["regions"]))
 
-    # 11 — market-share Coffee
-    s, b = get("/api/dashboard/market-share", nordic_cookies, {"category_name": "Coffee"})
-    results.append(check("GET /api/dashboard/market-share (Coffee)", s, b,
+    # 11 — market-share Mejeri
+    s, b = get("/api/dashboard/market-share", nordic_cookies, {"category_name": "Mejeri"})
+    results.append(check("GET /api/dashboard/market-share (Mejeri)", s, b,
                          ["market_share_pct", "supplier_revenue", "category_total_revenue"]))
 
-    # 12 — market-share Household
-    s, b = get("/api/dashboard/market-share", clean_cookies, {"category_name": "Household"})
-    results.append(check("GET /api/dashboard/market-share (Household)", s, b, ["market_share_pct"]))
+    # 12 — market-share Dryck
+    s, b = get("/api/dashboard/market-share", clean_cookies, {"category_name": "Dryck"})
+    results.append(check("GET /api/dashboard/market-share (Dryck)", s, b, ["market_share_pct"]))
 
     # 13 — declining products
     s, b = get("/api/dashboard/declining-products", nordic_cookies)
@@ -145,7 +145,7 @@ def main():
 
     # 17 — data-status: basic shape
     s, b = get("/api/dashboard/data-status", nordic_cookies)
-    results.append(check("GET /api/dashboard/data-status (Nordic)", s, b,
+    results.append(check("GET /api/dashboard/data-status (Arla)", s, b,
                          ["supplier_id", "period_start", "period_end", "latest_order_date",
                           "total_orders", "total_units", "generated_at"]))
 
@@ -157,7 +157,7 @@ def main():
           and f.get("supplier_id") == snacks_id
           and n.get("total_orders") != f.get("total_orders"))
     results.append(ok)
-    print(f"{PASS if ok else FAIL} data-status supplier_id isolation (Nordic ≠ Fresh Snacks)")
+    print(f"{PASS if ok else FAIL} data-status supplier_id isolation (Arla ≠ Orkla)")
 
     # 19 — data-status: non-negative counts and valid date format
     ok = (s_n == 200

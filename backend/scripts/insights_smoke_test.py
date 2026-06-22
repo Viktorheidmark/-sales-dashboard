@@ -21,8 +21,8 @@ import httpx
 BASE = "http://localhost:8000"
 TIMEOUT = 15
 
-NORDIC_EMAIL = "nordic@demo.solvigo"
-SNACKS_EMAIL = "snacks@demo.solvigo"
+NORDIC_EMAIL = "arla@demo.solvigo"
+SNACKS_EMAIL = "orkla@demo.solvigo"
 PASSWORD = "demo1234"
 
 # Synthetic chart payload — mirrors what chart_builder produces
@@ -69,16 +69,16 @@ def main():
 
     nordic_cookies, nordic_id = login(NORDIC_EMAIL)
     snacks_cookies, snacks_id = login(SNACKS_EMAIL)
-    print(f"Nordic Coffee AB  → {nordic_id}")
-    print(f"Fresh Snacks Ltd  → {snacks_id}\n")
+    print(f"Arla Sverige  → {nordic_id}")
+    print(f"Orkla Sverige  → {snacks_id}\n")
 
     results: list[bool] = []
     saved_id: str = ""
     no_chart_id: str = ""
 
-    # 1 — Login as Nordic Coffee (already done above)
-    print("── Test 1: Login as Nordic Coffee ──")
-    results.append(check("Login Nordic Coffee", [
+    # 1 — Login as Arla Sverige (already done above)
+    print("── Test 1: Login as Arla Sverige ──")
+    results.append(check("Login Arla Sverige", [
         ("cookie present", bool(nordic_cookies.get("session"))),
         ("supplier_id non-empty", bool(nordic_id)),
     ]))
@@ -209,23 +209,23 @@ def main():
         ("detail message present", bool(r.json().get("detail") if r.status_code == 400 else False)),
     ]))
 
-    # 9 — Login as Fresh Snacks
-    print("── Test 9: Login as Fresh Snacks ──")
-    results.append(check("Login Fresh Snacks", [
+    # 9 — Login as Orkla Sverige
+    print("── Test 9: Login as Orkla Sverige ──")
+    results.append(check("Login Orkla Sverige", [
         ("cookie present", bool(snacks_cookies.get("session"))),
         ("different supplier_id", snacks_id != nordic_id),
     ]))
 
-    # 10 — Verify Nordic insight NOT in Fresh Snacks list
-    print("── Test 10: Nordic insight not in Fresh Snacks list ──")
+    # 10 — Verify Arla insight NOT in Orkla list
+    print("── Test 10: Arla insight not in Orkla list ──")
     r = httpx.get(f"{BASE}/api/insights", cookies=snacks_cookies, timeout=TIMEOUT)
     snacks_ids = {i["id"] for i in r.json()} if r.status_code == 200 else set()
-    results.append(check("Nordic insight not in Fresh Snacks list", [
+    results.append(check("Arla insight not in Orkla list", [
         ("status 200", r.status_code == 200),
-        ("nordic insight absent", saved_id not in snacks_ids),
+        ("arla insight absent", saved_id not in snacks_ids),
     ]))
 
-    # 11 — Verify Fresh Snacks cannot read, export, or delete Nordic insight → 404
+    # 11 — Verify Orkla cannot read, export, or delete Arla insight → 404
     print("── Test 11: Cross-tenant access returns 404 ──")
     r_read = httpx.get(f"{BASE}/api/insights/{saved_id}", cookies=snacks_cookies, timeout=TIMEOUT)
     r_json = httpx.get(f"{BASE}/api/insights/{saved_id}/export.json", cookies=snacks_cookies, timeout=TIMEOUT)
@@ -238,7 +238,7 @@ def main():
         ("delete → 404", r_del.status_code == 404),
     ]))
 
-    # 12 — Delete Nordic insight as Nordic
+    # 12 — Delete Arla insight as Arla
     print("── Test 12: Delete insight ──")
     r = httpx.delete(f"{BASE}/api/insights/{saved_id}", cookies=nordic_cookies, timeout=TIMEOUT)
     results.append(check("Delete insight as owner → 204", [

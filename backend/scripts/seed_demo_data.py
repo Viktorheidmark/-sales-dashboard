@@ -26,6 +26,7 @@ from app.models import (
     OrderItem,
     Product,
     Region,
+    SavedInsight,
     Supplier,
     User,
 )
@@ -43,18 +44,24 @@ HISTORY_DAYS = 180
 # Static fixture definitions
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# SYNTHETIC DEMO DATA ONLY.
+# Company, brand and product names are used for illustration in a synthetic
+# demo. Sales figures, market shares and customer data are NOT real and do
+# not represent any actual commercial relationship.
+# ---------------------------------------------------------------------------
+
 SUPPLIERS = [
-    {"name": "Nordic Coffee AB"},
-    {"name": "Fresh Snacks Ltd"},
-    {"name": "Clean Home Co"},
-    {"name": "Baltic Roasters AB"},
+    {"name": "Arla Sverige"},
+    {"name": "Skånemejerier"},
+    {"name": "Coca-Cola Europacific Partners Sverige"},
+    {"name": "Orkla Sverige"},
 ]
 
 CATEGORIES = [
-    {"name": "Coffee"},
-    {"name": "Snacks"},
-    {"name": "Household"},
-    {"name": "Drinks"},
+    {"name": "Mejeri"},
+    {"name": "Dryck"},
+    {"name": "Mat och snacks"},
 ]
 
 REGIONS = [
@@ -67,83 +74,56 @@ REGIONS = [
 
 # brand_name → supplier_name
 BRANDS = [
-    {"name": "Nordic Coffee",   "supplier": "Nordic Coffee AB"},
-    {"name": "Fjord Roast",     "supplier": "Nordic Coffee AB"},
-    {"name": "Fresh Snacks",    "supplier": "Fresh Snacks Ltd"},
-    {"name": "SnackMax",        "supplier": "Fresh Snacks Ltd"},
-    {"name": "Clean Home",      "supplier": "Clean Home Co"},
-    {"name": "BrightHome",      "supplier": "Clean Home Co"},
-    # Competitor brands in Drinks — assigned to Nordic Coffee AB as placeholder
-    {"name": "Sparkling North", "supplier": "Nordic Coffee AB"},
-    {"name": "Nordic Sips",     "supplier": "Nordic Coffee AB"},
-    # Real Coffee competitor with its own supplier
-    {"name": "Baltic Roast",    "supplier": "Baltic Roasters AB"},
+    {"name": "Arla",                  "supplier": "Arla Sverige"},
+    {"name": "KESO",                  "supplier": "Arla Sverige"},
+    {"name": "Skånemejerier",         "supplier": "Skånemejerier"},
+    {"name": "Coca-Cola",             "supplier": "Coca-Cola Europacific Partners Sverige"},
+    {"name": "Fanta",                 "supplier": "Coca-Cola Europacific Partners Sverige"},
+    {"name": "Sprite",                "supplier": "Coca-Cola Europacific Partners Sverige"},
+    {"name": "Felix",                 "supplier": "Orkla Sverige"},
+    {"name": "Kalles",                "supplier": "Orkla Sverige"},
+    {"name": "OLW",                   "supplier": "Orkla Sverige"},
 ]
 
 # Each product: brand, category, name, sku, price (SEK), base_weight
 # base_weight controls how often this product appears in orders relative
 # to other products in the same pool.
 PRODUCTS = [
-    # Nordic Coffee brand — Coffee category
-    {"brand": "Nordic Coffee", "category": "Coffee", "name": "Espresso Dark Roast 500g",  "sku": "NCO-001", "price": "89.00",  "weight": 9},
-    {"brand": "Nordic Coffee", "category": "Coffee", "name": "Organic Medium Roast 250g", "sku": "NCO-002", "price": "72.00",  "weight": 6},
-    {"brand": "Nordic Coffee", "category": "Drinks", "name": "Cold Brew Can",              "sku": "NCO-003", "price": "29.00",  "weight": 7},
-    {"brand": "Nordic Coffee", "category": "Coffee", "name": "Decaf Blend 250g",           "sku": "NCO-004", "price": "69.00",  "weight": 4},
-    {"brand": "Nordic Coffee", "category": "Coffee", "name": "Single Origin Ethiopia 200g","sku": "NCO-005", "price": "99.00",  "weight": 3},
-    {"brand": "Nordic Coffee", "category": "Drinks", "name": "Cold Brew Nitro Can",        "sku": "NCO-006", "price": "35.00",  "weight": 3},
+    # Arla brand — Mejeri category
+    {"brand": "Arla", "category": "Mejeri", "name": "Arla Mellanmjölk 1,5 l",        "sku": "ARLA-001", "price": "19.90", "weight": 9},
+    {"brand": "Arla", "category": "Mejeri", "name": "Arla Standardmjölk 1,5 l",      "sku": "ARLA-002", "price": "20.90", "weight": 6},
+    {"brand": "Arla", "category": "Mejeri", "name": "Arla Grekisk Yoghurt Naturell", "sku": "ARLA-003", "price": "27.90", "weight": 5},
+    {"brand": "Arla", "category": "Dryck",  "name": "Arla Iced Coffee Latte",        "sku": "ARLA-004", "price": "24.90", "weight": 7},
 
-    # Fjord Roast — Coffee (competitor-ish brand for Nordic Coffee AB)
-    {"brand": "Fjord Roast",   "category": "Coffee", "name": "Fjord Dark Roast 500g",     "sku": "FJR-001", "price": "79.00",  "weight": 5},
-    {"brand": "Fjord Roast",   "category": "Coffee", "name": "Fjord Light Roast 250g",    "sku": "FJR-002", "price": "65.00",  "weight": 4},
-    {"brand": "Fjord Roast",   "category": "Drinks", "name": "Fjord Cold Brew Can",        "sku": "FJR-003", "price": "27.00",  "weight": 3},
-    {"brand": "Fjord Roast",   "category": "Coffee", "name": "Fjord Espresso Pods 16-pack","sku": "FJR-004", "price": "59.00",  "weight": 3},
+    # KESO brand — Mejeri category
+    {"brand": "KESO", "category": "Mejeri", "name": "KESO Cottage Cheese",           "sku": "ARLA-005", "price": "22.90", "weight": 8},
+    {"brand": "KESO", "category": "Mejeri", "name": "KESO Proteinpudding Choklad",   "sku": "ARLA-006", "price": "18.90", "weight": 4},
 
-    # Fresh Snacks brand — Snacks category
-    {"brand": "Fresh Snacks",  "category": "Snacks", "name": "Protein Bar Chocolate",     "sku": "FSN-001", "price": "24.00",  "weight": 8},
-    {"brand": "Fresh Snacks",  "category": "Snacks", "name": "Protein Bar Peanut",        "sku": "FSN-002", "price": "24.00",  "weight": 7},
-    {"brand": "Fresh Snacks",  "category": "Snacks", "name": "Trail Mix Berry",           "sku": "FSN-003", "price": "39.00",  "weight": 6},
-    {"brand": "Fresh Snacks",  "category": "Snacks", "name": "Oat Snack Bar",             "sku": "FSN-004", "price": "19.00",  "weight": 5},
-    {"brand": "Fresh Snacks",  "category": "Snacks", "name": "Nut Butter Pouch",          "sku": "FSN-005", "price": "32.00",  "weight": 4},
+    # Skånemejerier — Mejeri competitor (aggregate only in Arla's view)
+    {"brand": "Skånemejerier", "category": "Mejeri", "name": "Skånemejerier Lättmjölk 1,5 l",     "sku": "SKAN-001", "price": "18.90", "weight": 6},
+    {"brand": "Skånemejerier", "category": "Mejeri", "name": "Skånemejerier Kvarg Vanilj",        "sku": "SKAN-002", "price": "24.90", "weight": 5},
+    {"brand": "Skånemejerier", "category": "Mejeri", "name": "Skånemejerier Yoghurt Naturell",    "sku": "SKAN-003", "price": "21.90", "weight": 5},
+    {"brand": "Skånemejerier", "category": "Mejeri", "name": "Skånemejerier Drickyoghurt Jordgubb","sku": "SKAN-004", "price": "16.90", "weight": 4},
 
-    # SnackMax brand — Snacks category
-    {"brand": "SnackMax",      "category": "Snacks", "name": "SnackMax Protein Bar",      "sku": "SMX-001", "price": "22.00",  "weight": 5},
-    {"brand": "SnackMax",      "category": "Snacks", "name": "SnackMax Trail Mix",        "sku": "SMX-002", "price": "35.00",  "weight": 4},
-    {"brand": "SnackMax",      "category": "Snacks", "name": "SnackMax Rice Cakes",       "sku": "SMX-003", "price": "28.00",  "weight": 4},
-    {"brand": "SnackMax",      "category": "Snacks", "name": "SnackMax Protein Chips",    "sku": "SMX-004", "price": "26.00",  "weight": 3},
+    # Coca-Cola, Fanta, Sprite — Dryck category
+    {"brand": "Coca-Cola", "category": "Dryck", "name": "Coca-Cola Zero Sugar 1,5 l", "sku": "COCA-001", "price": "26.90", "weight": 9},
+    {"brand": "Coca-Cola", "category": "Dryck", "name": "Coca-Cola Original 1,5 l",   "sku": "COCA-002", "price": "26.90", "weight": 8},
+    {"brand": "Fanta",     "category": "Dryck", "name": "Fanta Orange 1,5 l",         "sku": "COCA-003", "price": "24.90", "weight": 6},
+    {"brand": "Sprite",    "category": "Dryck", "name": "Sprite Zero 1,5 l",          "sku": "COCA-004", "price": "24.90", "weight": 5},
+    {"brand": "Coca-Cola", "category": "Dryck", "name": "Coca-Cola Zero Sugar 33 cl", "sku": "COCA-005", "price": "12.90", "weight": 7},
 
-    # Clean Home brand — Household category
-    {"brand": "Clean Home",    "category": "Household", "name": "Eco Cleaning Spray",         "sku": "CLH-001", "price": "49.00",  "weight": 7},
-    {"brand": "Clean Home",    "category": "Household", "name": "Kitchen Degreaser",           "sku": "CLH-002", "price": "55.00",  "weight": 6},
-    {"brand": "Clean Home",    "category": "Household", "name": "Laundry Liquid 1L",           "sku": "CLH-003", "price": "79.00",  "weight": 5},
-    {"brand": "Clean Home",    "category": "Household", "name": "Dishwashing Tablets 30-pack", "sku": "CLH-004", "price": "89.00",  "weight": 5},
-    {"brand": "Clean Home",    "category": "Household", "name": "All-Purpose Wipes 60-pack",   "sku": "CLH-005", "price": "39.00",  "weight": 4},
-
-    # BrightHome brand — Household category
-    {"brand": "BrightHome",   "category": "Household", "name": "BrightHome Floor Cleaner",    "sku": "BHO-001", "price": "59.00",  "weight": 5},
-    {"brand": "BrightHome",   "category": "Household", "name": "BrightHome Glass Cleaner",    "sku": "BHO-002", "price": "45.00",  "weight": 4},
-    {"brand": "BrightHome",   "category": "Household", "name": "BrightHome Toilet Tabs",      "sku": "BHO-003", "price": "69.00",  "weight": 4},
-    {"brand": "BrightHome",   "category": "Household", "name": "BrightHome Fabric Softener",  "sku": "BHO-004", "price": "75.00",  "weight": 3},
-
-    # Baltic Roast — real Coffee competitor (Baltic Roasters AB)
-    {"brand": "Baltic Roast",  "category": "Coffee", "name": "Baltic Dark Roast 500g",      "sku": "BLR-001", "price": "82.00",  "weight": 7},
-    {"brand": "Baltic Roast",  "category": "Coffee", "name": "Baltic Medium Roast 250g",    "sku": "BLR-002", "price": "68.00",  "weight": 6},
-    {"brand": "Baltic Roast",  "category": "Coffee", "name": "Baltic Espresso Blend 500g",  "sku": "BLR-003", "price": "85.00",  "weight": 5},
-    {"brand": "Baltic Roast",  "category": "Coffee", "name": "Baltic Single Origin 200g",   "sku": "BLR-004", "price": "95.00",  "weight": 4},
-
-    # Sparkling North — competitor in Drinks
-    {"brand": "Sparkling North","category": "Drinks", "name": "Sparkling Water Lemon 6-pack", "sku": "SPN-001", "price": "39.00",  "weight": 6},
-    {"brand": "Sparkling North","category": "Drinks", "name": "Sparkling Water Plain 6-pack", "sku": "SPN-002", "price": "35.00",  "weight": 5},
-    {"brand": "Sparkling North","category": "Drinks", "name": "Sparkling Elderflower Can",    "sku": "SPN-003", "price": "19.00",  "weight": 4},
-
-    # Nordic Sips — competitor in Drinks
-    {"brand": "Nordic Sips",   "category": "Drinks", "name": "Nordic Sips Green Tea Can",     "sku": "NDS-001", "price": "22.00",  "weight": 4},
-    {"brand": "Nordic Sips",   "category": "Drinks", "name": "Nordic Sips Berry Boost",       "sku": "NDS-002", "price": "25.00",  "weight": 4},
-    {"brand": "Nordic Sips",   "category": "Drinks", "name": "Nordic Sips Ginger Shot",       "sku": "NDS-003", "price": "18.00",  "weight": 3},
+    # Felix, Kalles, OLW — Mat och snacks category
+    {"brand": "Felix",  "category": "Mat och snacks", "name": "Felix Ketchup 1 kg",        "sku": "OLW-001", "price": "32.90", "weight": 7},
+    {"brand": "Kalles", "category": "Mat och snacks", "name": "Kalles Kaviar Original",    "sku": "OLW-002", "price": "29.90", "weight": 6},
+    {"brand": "OLW",    "category": "Mat och snacks", "name": "OLW Grillchips",            "sku": "OLW-003", "price": "26.90", "weight": 8},
+    {"brand": "OLW",    "category": "Mat och snacks", "name": "OLW Cheez Doodles",         "sku": "OLW-004", "price": "24.90", "weight": 7},
+    {"brand": "OLW",    "category": "Mat och snacks", "name": "OLW Sourcream & Onion",     "sku": "OLW-005", "price": "26.90", "weight": 6},
+    {"brand": "Felix",  "category": "Mat och snacks", "name": "Felix Potatismos Pulver",   "sku": "OLW-006", "price": "21.90", "weight": 4},
 ]
 
 # ---------------------------------------------------------------------------
 # Customer distribution: region → (count, order_multiplier)
-# Stockholm is largest; Malmö boosted for Fresh Snacks later via product pool
+# Stockholm is largest; Malmö boosted for Orkla later via product pool
 # ---------------------------------------------------------------------------
 REGION_CUSTOMERS = {
     "Stockholm": (120, 1.6),
@@ -163,40 +143,37 @@ REGION_CUSTOMERS = {
 def _build_supplier_pools(products_by_sku):
     """
     Returns dict: supplier_name → [(product_obj, weight), ...]
-    For Fresh Snacks orders in Malmö we apply a regional weight boost later.
+    For Orkla orders in Malmö we apply a regional weight boost later.
     """
-    nordic_coffee_skus = {
-        "NCO-001": 9, "NCO-002": 6, "NCO-003": 7, "NCO-004": 4,
-        "NCO-005": 3, "NCO-006": 3,
-        "FJR-001": 5, "FJR-002": 4, "FJR-003": 3, "FJR-004": 3,
-        # Baltic Roast appears at low weight in Nordic pool for market-share visibility
-        "BLR-001": 2, "BLR-002": 2, "BLR-003": 1, "BLR-004": 1,
-        # competitors for market share in Drinks
-        "SPN-001": 3, "SPN-002": 2, "NDS-001": 2, "NDS-002": 2,
+    arla_skus = {
+        "ARLA-001": 9, "ARLA-002": 6, "ARLA-003": 5, "ARLA-004": 7,
+        "ARLA-005": 8, "ARLA-006": 4,
+        # Skånemejerier appears at low weight in Arla pool so it shows up
+        # purely as aggregate competitor revenue in the Mejeri market-share view.
+        "SKAN-001": 2, "SKAN-002": 2, "SKAN-003": 1, "SKAN-004": 1,
     }
-    baltic_roasters_skus = {
-        # BLR weights kept lower so Baltic holds ~25–35% of Coffee-category revenue
-        "BLR-001": 4, "BLR-002": 3, "BLR-003": 3, "BLR-004": 2,
-        # Nordic/Fjord products dominate even Baltic customers' baskets
-        "NCO-001": 7, "NCO-002": 5, "FJR-001": 5, "FJR-002": 4,
+    skanemejerier_skus = {
+        # Skånemejerier kept lower so Arla leads the Mejeri category.
+        "SKAN-001": 4, "SKAN-002": 3, "SKAN-003": 3, "SKAN-004": 2,
+        # Arla products dominate even Skånemejerier customers' baskets.
+        "ARLA-001": 7, "ARLA-005": 5, "ARLA-003": 4,
     }
-    fresh_snacks_skus = {
-        "FSN-001": 8, "FSN-002": 7, "FSN-003": 6, "FSN-004": 5, "FSN-005": 4,
-        "SMX-001": 5, "SMX-002": 4, "SMX-003": 4, "SMX-004": 3,
+    cocacola_skus = {
+        "COCA-001": 9, "COCA-002": 8, "COCA-003": 6, "COCA-004": 5, "COCA-005": 7,
     }
-    clean_home_skus = {
-        "CLH-001": 7, "CLH-002": 6, "CLH-003": 5, "CLH-004": 5, "CLH-005": 4,
-        "BHO-001": 5, "BHO-002": 4, "BHO-003": 4, "BHO-004": 3,
+    orkla_skus = {
+        "OLW-001": 7, "OLW-002": 6, "OLW-003": 8, "OLW-004": 7,
+        "OLW-005": 6, "OLW-006": 4,
     }
 
     def build(sku_map):
         return [(products_by_sku[sku], w) for sku, w in sku_map.items() if sku in products_by_sku]
 
     return {
-        "Nordic Coffee AB":   build(nordic_coffee_skus),
-        "Fresh Snacks Ltd":   build(fresh_snacks_skus),
-        "Clean Home Co":      build(clean_home_skus),
-        "Baltic Roasters AB": build(baltic_roasters_skus),
+        "Arla Sverige":                              build(arla_skus),
+        "Skånemejerier":                             build(skanemejerier_skus),
+        "Coca-Cola Europacific Partners Sverige":    build(cocacola_skus),
+        "Orkla Sverige":                             build(orkla_skus),
     }
 
 
@@ -204,8 +181,8 @@ def _build_supplier_pools(products_by_sku):
 # Time multipliers
 # ---------------------------------------------------------------------------
 
-def nordic_coffee_trend_multiplier(order_date: datetime) -> float:
-    """Gentle upward trend for Nordic Coffee over last 90 days."""
+def arla_trend_multiplier(order_date: datetime) -> float:
+    """Gentle upward trend for Arla over last 90 days."""
     days_ago = (TODAY - order_date).days
     if days_ago <= 90:
         # linearly ramp from 1.0 (90 days ago) to 1.6 (today)
@@ -213,9 +190,9 @@ def nordic_coffee_trend_multiplier(order_date: datetime) -> float:
     return 1.0
 
 
-def cold_brew_decay_multiplier(sku: str, order_date: datetime) -> float:
-    """Cold Brew Can declines materially in last 30 days."""
-    if sku not in ("NCO-003", "NCO-006"):
+def iced_coffee_decay_multiplier(sku: str, order_date: datetime) -> float:
+    """Arla Iced Coffee Latte declines materially in last 30 days."""
+    if sku != "ARLA-004":
         return 1.0
     days_ago = (TODAY - order_date).days
     if days_ago <= 30:
@@ -239,6 +216,9 @@ def weighted_choice(rng: random.Random, pool: list[tuple]) -> object:
 def seed(db):
     print("Clearing demo tables...")
     # FK-safe deletion order
+    # Saved insights reference supplier_id — clear them so stale product
+    # names from a previous dataset never linger in the Insikter drawer.
+    db.query(SavedInsight).delete()
     db.query(OrderItem).delete()
     db.query(Order).delete()
     db.query(Customer).delete()
@@ -387,21 +367,21 @@ def seed(db):
                 for prod, base_w in pool:
                     w = float(base_w)
 
-                    # Pattern 1 & 4: Nordic Coffee Stockholm uplift + trend
-                    if supplier_name == "Nordic Coffee AB" and region_name == "Stockholm":
+                    # Pattern 1 & 4: Arla Stockholm uplift + trend
+                    if supplier_name == "Arla Sverige" and region_name == "Stockholm":
                         w *= 1.5
-                    if supplier_name == "Nordic Coffee AB":
-                        w *= nordic_coffee_trend_multiplier(order_date)
+                    if supplier_name == "Arla Sverige":
+                        w *= arla_trend_multiplier(order_date)
 
-                    # Pattern 3: Cold Brew decay in last 30 days
-                    w *= cold_brew_decay_multiplier(prod.sku, order_date)
+                    # Pattern 3: Arla Iced Coffee Latte decay in last 30 days
+                    w *= iced_coffee_decay_multiplier(prod.sku, order_date)
 
-                    # Pattern 5: Fresh Snacks stronger in Malmö
-                    if supplier_name == "Fresh Snacks Ltd" and region_name == "Malmö":
-                        if prod.sku.startswith("FSN-"):
+                    # Pattern 5: Orkla stronger in Malmö
+                    if supplier_name == "Orkla Sverige" and region_name == "Malmö":
+                        if prod.sku.startswith("OLW-"):
                             w *= 2.0
 
-                    # Pattern 6: Clean Home stable (no extra modifiers)
+                    # Pattern 6: Coca-Cola stable (no extra modifiers)
 
                     adjusted_pool.append((prod, max(w, 0.01)))
 
@@ -438,10 +418,10 @@ def seed(db):
     print("Inserting demo users...")
     DEMO_PASSWORD_HASH = hash_password("demo1234")
     demo_users = [
-        {"email": "nordic@demo.solvigo",  "supplier": "Nordic Coffee AB"},
-        {"email": "snacks@demo.solvigo",  "supplier": "Fresh Snacks Ltd"},
-        {"email": "home@demo.solvigo",    "supplier": "Clean Home Co"},
-        {"email": "baltic@demo.solvigo",  "supplier": "Baltic Roasters AB"},
+        {"email": "arla@demo.solvigo",          "supplier": "Arla Sverige"},
+        {"email": "skanemejerier@demo.solvigo", "supplier": "Skånemejerier"},
+        {"email": "cocacola@demo.solvigo",      "supplier": "Coca-Cola Europacific Partners Sverige"},
+        {"email": "orkla@demo.solvigo",         "supplier": "Orkla Sverige"},
     ]
     for u in demo_users:
         obj = User(

@@ -21,8 +21,8 @@ import httpx
 BASE = "http://localhost:8000"
 TIMEOUT = 30  # PDF generation can be slow on first call (matplotlib init)
 
-NORDIC_EMAIL = "nordic@demo.solvigo"
-SNACKS_EMAIL = "snacks@demo.solvigo"
+NORDIC_EMAIL = "arla@demo.solvigo"
+SNACKS_EMAIL = "orkla@demo.solvigo"
 PASSWORD = "demo1234"
 
 SAMPLE_CHART = {
@@ -68,16 +68,16 @@ def main():
 
     nordic_cookies, nordic_id = login(NORDIC_EMAIL)
     snacks_cookies, snacks_id = login(SNACKS_EMAIL)
-    print(f"Nordic Coffee AB  → {nordic_id}")
-    print(f"Fresh Snacks Ltd  → {snacks_id}\n")
+    print(f"Arla Sverige  → {nordic_id}")
+    print(f"Orkla Sverige  → {snacks_id}\n")
 
     results: list[bool] = []
     chart_insight_id = ""
     no_chart_insight_id = ""
 
-    # 1 — Login as Nordic Coffee
-    print("── Test 1: Login as Nordic Coffee ──")
-    results.append(check("Login Nordic Coffee", [
+    # 1 — Login as Arla Sverige
+    print("── Test 1: Login as Arla Sverige ──")
+    results.append(check("Login Arla Sverige", [
         ("cookie present", bool(nordic_cookies.get("session"))),
         ("supplier_id non-empty", bool(nordic_id)),
     ]))
@@ -158,7 +158,7 @@ def main():
         ("size > 1 KB", len(r.content) > 1_000 if r.status_code == 200 else False),
     ]))
 
-    # 6 — Cross-tenant: Fresh Snacks cannot export Nordic insight
+    # 6 — Cross-tenant: Orkla cannot export Arla insight
     print("── Test 6: Cross-tenant PDF export → 404 ──")
     r = httpx.get(
         f"{BASE}/api/insights/{chart_insight_id}/export.pdf",

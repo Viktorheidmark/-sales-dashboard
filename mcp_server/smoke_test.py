@@ -150,9 +150,9 @@ def assert_market_share_leading(result):
     return result.get("market_share_pct", 0) > 50
 
 
-def assert_cold_brew_declining(result):
+def assert_iced_coffee_declining(result):
     for p in result.get("products", []):
-        if p.get("sku") in ("NCO-003", "NCO-006"):
+        if p.get("sku") == "ARLA-004":
             return p.get("revenue_change", 0) < 0
     return True  # not always in top-5 decliners, acceptable
 
@@ -160,16 +160,16 @@ def assert_cold_brew_declining(result):
 def main():
     db = get_session()
     try:
-        nordic_id = get_supplier_id(db, "Nordic Coffee AB")
-        snacks_id = get_supplier_id(db, "Fresh Snacks Ltd")
-        clean_id  = get_supplier_id(db, "Clean Home Co")
+        nordic_id = get_supplier_id(db, "Arla Sverige")
+        snacks_id = get_supplier_id(db, "Orkla Sverige")
+        clean_id  = get_supplier_id(db, "Coca-Cola Europacific Partners Sverige")
     finally:
         db.close()
 
     print(f"\nToday                        : {TODAY}")
-    print(f"Nordic Coffee AB supplier_id : {nordic_id}")
-    print(f"Fresh Snacks Ltd supplier_id : {snacks_id}")
-    print(f"Clean Home Co supplier_id    : {clean_id}")
+    print(f"Arla Sverige supplier_id : {nordic_id}")
+    print(f"Orkla Sverige supplier_id : {snacks_id}")
+    print(f"Coca-Cola Europacific Partners Sverige supplier_id    : {clean_id}")
 
     # Pre-compute explicit date windows used across tests
     last_90_start  = _ago(90)
@@ -185,7 +185,7 @@ def main():
         # KPIs
         # ------------------------------------------------------------------
         results.append(run(
-            "get_supplier_kpis — Nordic Coffee AB (default 179-day window)",
+            "get_supplier_kpis — Arla Sverige (default 179-day window)",
             query_supplier_kpis, db, nordic_id,
             assertions=[
                 assert_date_range(last_179_start, TODAY),
@@ -193,7 +193,7 @@ def main():
         ))
 
         results.append(run(
-            "get_supplier_kpis — Fresh Snacks Ltd (last 90 days)",
+            "get_supplier_kpis — Orkla Sverige (last 90 days)",
             query_supplier_kpis, db, snacks_id,
             start_date=last_90_start,
             end_date=TODAY,
@@ -203,7 +203,7 @@ def main():
         ))
 
         results.append(run(
-            "get_supplier_kpis — Nordic Coffee AB (historical Q4-2025)",
+            "get_supplier_kpis — Arla Sverige (historical Q4-2025)",
             query_supplier_kpis, db, nordic_id,
             start_date=hist_start,
             end_date=hist_end,
@@ -216,7 +216,7 @@ def main():
         # Sales over time
         # ------------------------------------------------------------------
         results.append(run(
-            "get_sales_over_time — Nordic Coffee AB monthly (default window)",
+            "get_sales_over_time — Arla Sverige monthly (default window)",
             query_sales_over_time, db, nordic_id,
             granularity="month",
             assertions=[
@@ -226,7 +226,7 @@ def main():
         ))
 
         results.append(run(
-            "get_sales_over_time — Nordic Coffee AB weekly (last 60 days)",
+            "get_sales_over_time — Arla Sverige weekly (last 60 days)",
             query_sales_over_time, db, nordic_id,
             start_date=last_60_start,
             end_date=TODAY,
@@ -238,7 +238,7 @@ def main():
         ))
 
         results.append(run(
-            "get_sales_over_time — Fresh Snacks Ltd daily (last 90 days)",
+            "get_sales_over_time — Orkla Sverige daily (last 90 days)",
             query_sales_over_time, db, snacks_id,
             start_date=last_90_start,
             end_date=TODAY,
@@ -250,7 +250,7 @@ def main():
         ))
 
         results.append(run(
-            "get_sales_over_time — Nordic Coffee AB monthly (historical Q4-2025)",
+            "get_sales_over_time — Arla Sverige monthly (historical Q4-2025)",
             query_sales_over_time, db, nordic_id,
             start_date=hist_start,
             end_date=hist_end,
@@ -265,16 +265,16 @@ def main():
         # Top products
         # ------------------------------------------------------------------
         results.append(run(
-            "get_top_products — Nordic Coffee AB top 5 (default window)",
+            "get_top_products — Arla Sverige top 5 (default window)",
             query_top_products, db, nordic_id,
             limit=5,
             assertions=[
-                assert_top_product_is("NCO-001"),  # Espresso Dark Roast must be #1
+                assert_top_product_is("ARLA-001"),  # Arla Mellanmjölk 1,5 l must be #1
             ],
         ))
 
         results.append(run(
-            "get_top_products — Nordic Coffee AB top 3 in Stockholm (last 90 days)",
+            "get_top_products — Arla Sverige top 3 in Stockholm (last 90 days)",
             query_top_products, db, nordic_id,
             start_date=last_90_start,
             end_date=TODAY,
@@ -289,7 +289,7 @@ def main():
         # Sales by region
         # ------------------------------------------------------------------
         results.append(run(
-            "get_sales_by_region — Nordic Coffee AB (default window)",
+            "get_sales_by_region — Arla Sverige (default window)",
             query_sales_by_region, db, nordic_id,
             assertions=[
                 assert_date_range(last_179_start, TODAY),
@@ -297,7 +297,7 @@ def main():
         ))
 
         results.append(run(
-            "get_sales_by_region — Fresh Snacks Ltd (last 90 days)",
+            "get_sales_by_region — Orkla Sverige (last 90 days)",
             query_sales_by_region, db, snacks_id,
             start_date=last_90_start,
             end_date=TODAY,
@@ -310,18 +310,18 @@ def main():
         # Market share
         # ------------------------------------------------------------------
         results.append(run(
-            "get_market_share — Nordic Coffee AB in Coffee (default window)",
-            query_market_share, db, nordic_id, "Coffee",
+            "get_market_share — Arla Sverige in Mejeri (default window)",
+            query_market_share, db, nordic_id, "Mejeri",
             assertions=[
-                ("Nordic Coffee AB holds >50% Coffee share",
+                ("Arla Sverige holds >50% Mejeri share",
                  assert_market_share_leading),
                 assert_date_range(last_179_start, TODAY),
             ],
         ))
 
         results.append(run(
-            "get_market_share — Clean Home Co in Household (last 90 days)",
-            query_market_share, db, clean_id, "Household",
+            "get_market_share — Coca-Cola Europacific Partners Sverige in Dryck (last 90 days)",
+            query_market_share, db, clean_id, "Dryck",
             start_date=last_90_start,
             end_date=TODAY,
             assertions=[
@@ -333,17 +333,17 @@ def main():
         # Declining products
         # ------------------------------------------------------------------
         results.append(run(
-            "get_declining_products — Nordic Coffee AB (30 days, top 5)",
+            "get_declining_products — Arla Sverige (30 days, top 5)",
             query_declining_products, db, nordic_id,
             days=30, limit=5,
             assertions=[
-                ("Cold Brew Can (NCO-003/NCO-006) has negative revenue_change if present",
-                 assert_cold_brew_declining),
+                ("Arla Iced Coffee Latte (ARLA-004) has negative revenue_change if present",
+                 assert_iced_coffee_declining),
             ],
         ))
 
         results.append(run(
-            "get_declining_products — Fresh Snacks Ltd (30 days, top 3)",
+            "get_declining_products — Orkla Sverige (30 days, top 3)",
             query_declining_products, db, snacks_id,
             days=30, limit=3,
         ))

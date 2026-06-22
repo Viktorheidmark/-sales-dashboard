@@ -15,7 +15,7 @@ import sys
 import httpx
 
 BASE = "http://localhost:8000"
-DEMO_EMAIL = "nordic@demo.solvigo"
+DEMO_EMAIL = "arla@demo.solvigo"
 DEMO_PASSWORD = "demo1234"
 TIMEOUT = 90
 
@@ -102,7 +102,7 @@ def main():
 
     # 4 — Market share → pie/donut chart (competitor data stays aggregate)
     print("\n── Test 4: Market share ──")
-    r = chat(cookies, "Visa marknadsandel i Coffee")
+    r = chat(cookies, "Visa marknadsandel i Mejeri")
     chart = r.get("chart")
     results.append(check("Market share → pie_chart (aggregate-only)", r, [
         ("get_market_share used", "get_market_share" in r.get("tool_calls", [])),

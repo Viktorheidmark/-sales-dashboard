@@ -41,10 +41,11 @@ function presetToDates(preset: DatePreset): {
 }
 
 function defaultCategory(supplierName: string): string {
-  if (supplierName.toLowerCase().includes('coffee')) return 'Coffee'
-  if (supplierName.toLowerCase().includes('snack')) return 'Snacks'
-  if (supplierName.toLowerCase().includes('home') || supplierName.toLowerCase().includes('clean')) return 'Household'
-  return 'Coffee'
+  const name = supplierName.toLowerCase()
+  if (name.includes('coca-cola') || name.includes('cocacola')) return 'Dryck'
+  if (name.includes('orkla')) return 'Mat och snacks'
+  // Arla and Skånemejerier (and any other dairy supplier) default to Mejeri
+  return 'Mejeri'
 }
 
 interface SectionState<T> {
@@ -64,7 +65,7 @@ export default function App() {
 
   const [datePreset, setDatePreset] = useState<DatePreset>('90d')
   const [selectedRegion, setSelectedRegion] = useState('all')
-  const [selectedCategory, setSelectedCategory] = useState('Coffee')
+  const [selectedCategory, setSelectedCategory] = useState('Mejeri')
   const [refreshTick, setRefreshTick] = useState(0)
 
   const [overview, setOverview] = useState<SectionState<OverviewResponse>>(initialState())
@@ -236,7 +237,7 @@ export default function App() {
       <footer className="border-t border-zinc-200 mt-8">
         <div className="max-w-screen-xl mx-auto px-6 py-5">
           <p className="text-xs text-zinc-500">
-            Solvigo Sales Intelligence · All data grundas i MCP-analyslagret · Ingen simulerad eller mockad data
+            Solvigo Sales Intelligence · Grundat i MCP-analyserad syntetisk demodata
           </p>
         </div>
       </footer>

@@ -69,7 +69,7 @@ Authenticated supplier users can save any grounded chat answer (one backed by MC
 **PDF report format (A4):**
 - Header band: slate-900 background, "◈ Solvigo Sales Intelligence" (brand blue), supplier name (right), "Analysrapport" sub-label.
 - Body: fråga (question), analys (answer text, line-by-line), chart rendered as PNG via matplotlib (line/bar/pie), datakällor (source tools as human-readable Swedish labels), begränsningar (limitations in amber).
-- Footer: "Baserat på MCP-analytiklagret · Inte simulerade data · Solvigo Sales Intelligence" + generation timestamp.
+- Footer: "Solvigo Sales Intelligence · Grundat i MCP-analyserad syntetisk demodata" + generation timestamp.
 - Chart render uses brand palette (`#4169e1`, `#a5b4fc`, `#c7d2fe`). Negative bar values (e.g. declining %) get `#ef4444`. Chart block is silently omitted if no chart was saved.
 - No `supplier_id`, JWT, database URLs, or internal paths appear in the output.
 
@@ -208,12 +208,16 @@ UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and p
 
 ## Demo suppliers
 
-| Supplier | Key pattern |
-|---|---|
-| **Nordic Coffee AB** | Highest Stockholm revenue; upward trend last 90 days; Cold Brew declining |
-| **Fresh Snacks Ltd** | Relatively stronger in Malmö |
-| **Clean Home Co** | Stable lower-growth across all regions |
-| **Baltic Roasters AB** | Coffee competitor (~35% Coffee share); cross-sells Nordic Coffee SKUs |
+> **Synthetic demo data.** Företags- och produktnamn används endast i syntetisk demodata. Försäljningsdata, marknadsandelar och kunddata är inte verkliga.
+
+| Supplier | Login | Category | Brands | Key pattern |
+|---|---|---|---|---|
+| **Arla Sverige** (primary demo) | `arla@demo.solvigo` | Mejeri | Arla, KESO | Strongest in Stockholm; upward trend last 90 days; *Arla Iced Coffee Latte* declining; *Arla Mellanmjölk 1,5 l* / *KESO Cottage Cheese* are top products |
+| **Coca-Cola Europacific Partners Sverige** | `cocacola@demo.solvigo` | Dryck | Coca-Cola, Fanta, Sprite | Own dashboard; leads the Dryck category |
+| **Orkla Sverige** | `orkla@demo.solvigo` | Mat och snacks | Felix, Kalles, OLW | Own dashboard; relatively stronger in Malmö |
+| **Skånemejerier** | `skanemejerier@demo.solvigo` | Mejeri | Skånemejerier | Aggregate competitor to Arla — appears only as aggregate competitor revenue in Arla's Mejeri market-share view |
+
+All demo accounts use the password `demo1234`.
 
 ---
 
@@ -291,9 +295,9 @@ fastmcp dev mcp_server/server.py   # browser inspector (requires fastmcp CLI)
 
 A suggested walkthrough for a live evaluator demo. Takes approximately 5 minutes.
 
-1. **Log in as Nordic Coffee AB** — open `http://localhost:5173`, click the "Nordic Coffee AB" demo account card, then click "Logga in". The dashboard loads with KPIs, trend, top products, regions, market share, and declining products for the last 90 days.
+1. **Log in as Arla Sverige** — open `http://localhost:5173`, click the "Arla Sverige" demo account card, then click "Logga in". The dashboard loads with KPIs, trend, top products, regions, market share, and declining products for the last 90 days.
 
-2. **Inspect the dashboard** — note that "Omsättning" (revenue), region rankings, and "Marknadsandel" (market share) panels all update from live MCP data. Change the date range to "30 dagar" and observe all panels refresh. The green live-data indicator confirms real database queries.
+2. **Inspect the dashboard** — note that "Omsättning" (revenue), region rankings, and "Marknadsandel" (market share) panels all update from MCP-queried synthetic demo data. Change the date range to "30 dagar" and observe all panels refresh.
 
 3. **Ask a grounded trend question** — scroll to "Analytics Copilot" and type or click:
    > *Hur ser vår försäljningstrend ut den senaste månaden?*
@@ -307,7 +311,7 @@ A suggested walkthrough for a live evaluator demo. Takes approximately 5 minutes
 
 6. **Export a PDF report** — open the saved insight and click "↓ Exportera rapport som PDF". A polished A4 PDF downloads with the branded header, answer text, embedded chart, and data sources. The PDF is generated server-side from the saved chart payload — not from AI text.
 
-7. **Demonstrate tenant isolation** — click "Logga ut", then log in as "Fresh Snacks Ltd". Confirm that the dashboard shows different KPIs and that the "☆ Insikter" drawer is empty (Nordic Coffee's insights are not visible).
+7. **Demonstrate tenant isolation** — click "Logga ut", then log in as "Orkla Sverige". Confirm that the dashboard shows different KPIs and that the "☆ Insikter" drawer is empty (Arla's insights are not visible).
 
 ---
 
@@ -355,13 +359,13 @@ With the backend running: [http://localhost:8000/docs](http://localhost:8000/doc
 
 ## Suggested demo questions (Swedish)
 
-Ask these in the Analytics Copilot panel as Nordic Coffee AB:
+Ask these in the Analytics Copilot panel as Arla Sverige:
 
 ```
 Vad är vår totala omsättning de senaste 90 dagarna?
 Vilka är våra bästsäljande produkter?
 Vilka produkter tappar mest i försäljning just nu?
-Hur stor är vår marknadsandel i kategorin Kaffe?
+Hur stor är vår marknadsandel i kategorin Mejeri?
 Hur ser vår försäljningstrend ut den senaste månaden?
 Vilka är våra bästsäljande produkter i Stockholm?
 Hur presterar vi i Göteborg jämfört med Stockholm?
