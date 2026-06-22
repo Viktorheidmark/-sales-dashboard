@@ -134,7 +134,7 @@ export function InsightsPanel({ isOpen, onClose }: InsightsPanelProps) {
       setDeleteConfirm(null)
       loadList()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed')
+      setError(e instanceof Error ? e.message : 'Borttagning misslyckades')
     }
   }
 
@@ -176,7 +176,7 @@ export function InsightsPanel({ isOpen, onClose }: InsightsPanelProps) {
               </button>
 
               <div>
-                <p className="text-xs text-zinc-400 mb-1">{formatDate(detail.created_at)}</p>
+                <p className="text-xs text-zinc-500 mb-1">{formatDate(detail.created_at)}</p>
                 <h3 className="text-sm font-semibold text-zinc-800 leading-snug">{detail.question}</h3>
               </div>
 
@@ -188,7 +188,7 @@ export function InsightsPanel({ isOpen, onClose }: InsightsPanelProps) {
                 <div className="border border-zinc-100 rounded-lg px-4 py-3">
                   <p className="text-xs font-semibold text-zinc-700 mb-0.5">{detail.chart.title}</p>
                   {detail.chart.description && (
-                    <p className="text-xs text-zinc-400 mb-2">{detail.chart.description}</p>
+                    <p className="text-xs text-zinc-500 mb-2">{detail.chart.description}</p>
                   )}
                   <MiniChart chart={detail.chart} />
                 </div>
@@ -284,22 +284,22 @@ export function InsightsPanel({ isOpen, onClose }: InsightsPanelProps) {
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-zinc-800 line-clamp-2 leading-snug">{s.question}</p>
-                      <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2 leading-snug">{s.answer_preview}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2 leading-snug">{s.answer_preview}</p>
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        <span className="text-xs text-zinc-400">{formatDate(s.created_at)}</span>
+                        <span className="text-xs text-zinc-500">{formatDate(s.created_at)}</span>
                         {s.has_chart && (
                           <span className="text-xs bg-brand-50 text-brand-600 border border-brand-100 rounded px-1.5 py-0.5">
                             Graf
                           </span>
                         )}
                         {s.source_tools.slice(0, 2).map(t => (
-                          <span key={t} className="text-xs bg-zinc-100 text-zinc-500 rounded px-1.5 py-0.5">
+                          <span key={t} className="text-xs bg-zinc-100 text-zinc-600 rounded px-1.5 py-0.5">
                             {t.replace('get_', '').replace(/_/g, ' ')}
                           </span>
                         ))}
                       </div>
                     </div>
-                    <span className="text-zinc-300 group-hover:text-zinc-500 text-sm shrink-0">›</span>
+                    <span className="text-zinc-400 group-hover:text-zinc-600 text-sm shrink-0">›</span>
                   </div>
                 </button>
               ))}

@@ -20,6 +20,7 @@ import { MarketShare } from './components/sections/MarketShare'
 import { DecliningProducts } from './components/sections/DecliningProducts'
 import { LoginPage } from './components/sections/LoginPage'
 import { InsightsPanel } from './components/sections/InsightsPanel'
+import { InsightStrip } from './components/sections/InsightStrip'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
 
@@ -175,6 +176,11 @@ export default function App() {
           onRetry={handleRefresh}
         />
 
+        <InsightStrip
+          decliningData={declining.data}
+          regionsData={regions.data}
+        />
+
         <SalesTrend
           data={trend.data}
           loading={trend.loading}
@@ -224,10 +230,12 @@ export default function App() {
         />
       </main>
 
-      <footer className="max-w-screen-xl mx-auto px-6 py-6 mt-4 border-t border-zinc-200">
-        <p className="text-xs text-zinc-400">
-          Solvigo Sales Intelligence · All data grounded via MCP analytics layer · No simulated or mock data
-        </p>
+      <footer className="border-t border-zinc-200 mt-8">
+        <div className="max-w-screen-xl mx-auto px-6 py-5">
+          <p className="text-xs text-zinc-500">
+            Solvigo Sales Intelligence · All data grundas i MCP-analyslagret · Ingen simulerad eller mockad data
+          </p>
+        </div>
       </footer>
     </div>
   )

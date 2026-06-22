@@ -36,11 +36,11 @@ export function Header({
               <span className="text-brand-500 text-lg font-bold tracking-tight">◈</span>
               <span className="text-lg font-semibold tracking-tight">Solvigo Sales Intelligence</span>
             </div>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <p className="text-slate-300 text-xs mt-0.5">
               {supplierName ? (
-                <>Signed in as <span className="text-slate-200 font-medium">{supplierName}</span></>
+                <>Inloggad som <span className="text-white font-medium">{supplierName}</span></>
               ) : (
-                'Supplier performance overview'
+                'Leverantörsöversikt'
               )}
             </p>
           </div>
@@ -77,7 +77,7 @@ export function Header({
               <button
                 key={p.value}
                 onClick={() => onDatePresetChange(p.value)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                className={`min-w-[4.5rem] text-center px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                   datePreset === p.value
                     ? 'bg-brand-500 text-white shadow'
                     : 'text-slate-400 hover:text-white'

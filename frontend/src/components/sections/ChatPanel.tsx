@@ -17,6 +17,58 @@ const EXAMPLE_PROMPTS = [
   'Hur ser vår försäljningstrend ut den senaste månaden?',
 ]
 
+// 2×2 prompt cards — visible labels + supporting lines, send full EXAMPLE_PROMPTS text
+const PROMPT_CARDS = [
+  {
+    label: 'Försäljningstrend',
+    sub: 'Hur har omsättningen utvecklats?',
+    prompt: EXAMPLE_PROMPTS[5],
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+        <polyline points="3 17 9 11 13 15 21 7" />
+        <polyline points="15 7 21 7 21 13" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Produkter att bevaka',
+    sub: 'Vilka produkter tappar mest?',
+    prompt: EXAMPLE_PROMPTS[2],
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+        <path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
+        <path d="M16 3H8l-2 4h12l-2-4z" />
+        <line x1="12" y1="12" x2="12" y2="12.01" strokeWidth={2.5} />
+      </svg>
+    ),
+  },
+  {
+    label: 'Starkaste region',
+    sub: 'Vilken region driver mest försäljning?',
+    prompt: EXAMPLE_PROMPTS[4],
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+        <circle cx="12" cy="10" r="3" />
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Marknadsandel',
+    sub: 'Hur stor är vår andel i Coffee?',
+    prompt: EXAMPLE_PROMPTS[3],
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+        <path d="M12 2v10l6.9 6.9" />
+        <circle cx="12" cy="12" r="10" />
+      </svg>
+    ),
+  },
+]
+
+// Prompts not covered by cards, shown via "Visa fler exempel"
+const EXTRA_PROMPTS = [EXAMPLE_PROMPTS[0], EXAMPLE_PROMPTS[1]]
+
 interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -24,7 +76,7 @@ interface Message {
   response?: ChatResponse
   error?: string
   loading?: boolean
-  question?: string  // set on assistant messages to enable saving
+  question?: string
 }
 
 interface ChatPanelProps {
@@ -80,8 +132,7 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
 function ToolBadge({ name }: { name: string }) {
   const label = name.replace('get_', '').replace(/_/g, ' ')
   return (
-    <span className="inline-flex items-center gap-1 text-xs bg-brand-50 text-brand-600 border border-brand-100 rounded px-1.5 py-0.5 font-medium">
-      <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
+    <span className="inline-flex items-center gap-1 text-xs bg-zinc-100 text-zinc-500 rounded px-1.5 py-0.5">
       {label}
     </span>
   )
@@ -89,13 +140,20 @@ function ToolBadge({ name }: { name: string }) {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
+function BookmarkIcon({ filled }: { filled?: boolean }) {
+  return (
+    <svg className="w-3.5 h-3.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" />
+    </svg>
+  )
+}
+
 function AssistantBubble({ msg }: { msg: Message }) {
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
   const handleSave = async () => {
     if (!msg.question || !msg.response || saveState !== 'idle') return
     const r = msg.response
-    // Only save grounded (MCP-backed) responses
     if (r.tool_calls.length === 0) return
     setSaveState('saving')
     try {
@@ -115,19 +173,22 @@ function AssistantBubble({ msg }: { msg: Message }) {
 
   if (msg.loading) {
     return (
-      <div className="flex gap-2 items-start">
-        <span className="shrink-0 w-6 h-6 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
-        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-400 flex items-center gap-2">
-          <span className="flex gap-0.5">
-            {[0, 1, 2].map(i => (
-              <span
-                key={i}
-                className="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-bounce"
-                style={{ animationDelay: `${i * 0.15}s` }}
-              />
-            ))}
-          </span>
-          Hämtar data via MCP…
+      <div className="flex gap-3 items-start">
+        <span className="shrink-0 w-7 h-7 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
+        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-1">
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <span className="flex gap-0.5">
+              {[0, 1, 2].map(i => (
+                <span
+                  key={i}
+                  className="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-bounce"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </span>
+            Analyserar försäljningsdata…
+          </div>
+          <p className="text-xs text-zinc-400">Hämtar relevanta signaler från analyslagret</p>
         </div>
       </div>
     )
@@ -135,9 +196,9 @@ function AssistantBubble({ msg }: { msg: Message }) {
 
   if (msg.error) {
     return (
-      <div className="flex gap-2 items-start">
-        <span className="shrink-0 w-6 h-6 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">!</span>
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+      <div className="flex gap-3 items-start">
+        <span className="shrink-0 w-7 h-7 rounded-full bg-zinc-300 text-zinc-600 text-xs flex items-center justify-center font-bold mt-0.5">!</span>
+        <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-600">
           {msg.error}
         </div>
       </div>
@@ -145,34 +206,44 @@ function AssistantBubble({ msg }: { msg: Message }) {
   }
 
   const r = msg.response!
+  const isGrounded = r.tool_calls.length > 0
+
   return (
-    <div className="flex gap-2 items-start">
-      <span className="shrink-0 w-6 h-6 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
+    <div className="flex gap-3 items-start">
+      <span className="shrink-0 w-7 h-7 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
       <div className="flex-1 min-w-0 space-y-2">
-        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3">
-          <div className="text-sm text-zinc-800 leading-relaxed prose-chat">
+        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-3">
+          {/* Grounded indicator */}
+          {isGrounded && (
+            <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+              <span className="text-xs text-zinc-500">Svar baserat på live-data</span>
+            </div>
+          )}
+
+          <div className="text-sm text-zinc-800 leading-relaxed">
             <ReactMarkdown
               components={{
                 p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
                 strong: ({ children }) => <strong className="font-semibold text-zinc-900">{children}</strong>,
                 ul: ({ children }) => <ul className="list-disc list-inside mt-1 mb-1 space-y-0.5">{children}</ul>,
                 ol: ({ children }) => <ol className="list-decimal list-inside mt-1 mb-1 space-y-0.5">{children}</ol>,
-                li: ({ children }) => <li className="text-zinc-800">{children}</li>,
+                li: ({ children }) => <li className="text-zinc-700">{children}</li>,
               }}
             >
               {msg.content}
             </ReactMarkdown>
           </div>
 
-          {/* Deterministic chart from MCP result */}
+          {/* Chart */}
           {r.chart && (
-            <div className="mt-3 pt-3 border-t border-zinc-100">
+            <div className="mt-1 pt-3 border-t border-zinc-100">
               <p className="text-xs font-semibold text-zinc-700 mb-0.5">{r.chart.title}</p>
               {r.chart.description && (
                 <p className="text-xs text-zinc-400 mb-2">{r.chart.description}</p>
               )}
               <MiniChart chart={r.chart} />
-              <p className="text-xs text-zinc-300 mt-1">
+              <p className="text-xs text-zinc-400 mt-1">
                 via {r.chart.source_tool} · {r.chart.generated_from_row_count} rader
               </p>
             </div>
@@ -180,7 +251,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
 
           {/* Limitations */}
           {r.limitations.length > 0 && (
-            <div className="mt-3 pt-2 border-t border-amber-100">
+            <div className="pt-2 border-t border-zinc-100 space-y-0.5">
               {r.limitations.map((l, i) => (
                 <p key={i} className="text-xs text-amber-600">⚠ {l}</p>
               ))}
@@ -188,30 +259,34 @@ function AssistantBubble({ msg }: { msg: Message }) {
           )}
         </div>
 
-        {/* Tool + source indicators + save action */}
-        {r.tool_calls.length > 0 && (
+        {/* Tool pills + timestamp + save */}
+        {isGrounded && (
           <div className="flex flex-wrap items-center gap-1.5 px-1">
-            <span className="text-xs text-zinc-400">via</span>
             {r.tool_calls.map(t => <ToolBadge key={t} name={t} />)}
             {r.sources[0]?.generated_at && (
-              <span className="text-xs text-zinc-400">
-                {formatDate(r.sources[0].generated_at)}
-              </span>
+              <span className="text-xs text-zinc-400">{formatDate(r.sources[0].generated_at)}</span>
             )}
             <button
               onClick={handleSave}
               disabled={saveState !== 'idle'}
-              className={`ml-auto text-xs px-2 py-0.5 rounded border transition-colors ${
+              className={`ml-auto inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-colors ${
                 saveState === 'saved'
                   ? 'border-emerald-200 text-emerald-600 bg-emerald-50 cursor-default'
                   : saveState === 'error'
                   ? 'border-red-200 text-red-500 bg-red-50 cursor-default'
                   : saveState === 'saving'
                   ? 'border-zinc-200 text-zinc-400 cursor-wait'
-                  : 'border-zinc-200 text-zinc-400 hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50'
+                  : 'border-zinc-200 text-zinc-500 hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50'
               }`}
             >
-              {saveState === 'saved' ? '✓ Sparad' : saveState === 'error' ? '✗ Fel' : saveState === 'saving' ? '…' : 'Spara insikt'}
+              <BookmarkIcon filled={saveState === 'saved'} />
+              {saveState === 'saved'
+                ? 'Sparad i Insikter'
+                : saveState === 'error'
+                ? 'Misslyckades'
+                : saveState === 'saving'
+                ? '…'
+                : 'Spara'}
             </button>
           </div>
         )}
@@ -224,6 +299,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showExtra, setShowExtra] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -235,41 +311,22 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: trimmed,
-    }
-    const loadingMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: '',
-      loading: true,
-      question: trimmed,
-    }
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: trimmed }
+    const loadingMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', loading: true, question: trimmed }
 
     setMessages(prev => [...prev, userMsg, loadingMsg])
     setInput('')
     setLoading(true)
 
     try {
-      const response = await api.chat({
-        message: trimmed,
-        start_date: startDate,
-        end_date: endDate,
-      })
-
+      const response = await api.chat({ message: trimmed, start_date: startDate, end_date: endDate })
       setMessages(prev => prev.map(m =>
-        m.id === loadingMsg.id
-          ? { ...m, loading: false, content: response.answer, response }
-          : m
+        m.id === loadingMsg.id ? { ...m, loading: false, content: response.answer, response } : m
       ))
     } catch (err) {
       const errorText = err instanceof Error ? err.message : 'Något gick fel. Försök igen.'
       setMessages(prev => prev.map(m =>
-        m.id === loadingMsg.id
-          ? { ...m, loading: false, content: '', error: errorText }
-          : m
+        m.id === loadingMsg.id ? { ...m, loading: false, content: '', error: errorText } : m
       ))
     } finally {
       setLoading(false)
@@ -287,46 +344,85 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
   const isEmpty = messages.length === 0
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 shadow-sm flex flex-col" style={{ minHeight: 480 }}>
+    <div className="bg-white rounded-xl border border-zinc-200 shadow-sm flex flex-col" style={{ minHeight: 520 }}>
       {/* Header */}
-      <div className="px-6 pt-5 pb-3 border-b border-zinc-100 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <h2 className="text-sm font-semibold text-zinc-700">Analytics Copilot</h2>
-          <span className="ml-auto text-xs text-zinc-400">Grounded via MCP · svarar på svenska</span>
+      <div className="px-6 pt-5 pb-4 border-b border-zinc-100 shrink-0">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900 leading-tight">Analysassistent</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Fråga om försäljning, produkter, regioner och marknadsandel.</p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-xs text-zinc-400">Grundad i MCP-data</span>
+            {supplierName && (
+              <p className="text-xs text-zinc-400 mt-0.5">Analys för <span className="text-zinc-500">{supplierName}</span></p>
+            )}
+          </div>
         </div>
-        {supplierName && (
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Kontext: <span className="text-zinc-600 font-medium">{supplierName}</span>
-          </p>
-        )}
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 scrollbar-thin">
+      {/* Messages / Empty state */}
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 scrollbar-thin">
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 py-8">
-            <p className="text-sm text-zinc-400 text-center">
-              Ställ en fråga om er försäljningsdata.<br />
-              Alla svar baseras på verklig analytikdata.
-            </p>
-            <div className="flex flex-col gap-2 w-full max-w-sm">
-              {EXAMPLE_PROMPTS.map(p => (
+          <div className="space-y-4">
+            {/* Headline */}
+            <div>
+              <p className="text-sm font-semibold text-zinc-800">Vad vill du förstå bättre?</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Välj ett område nedan eller skriv en egen fråga.</p>
+              <p className="text-xs text-zinc-400 mt-2">Trender · Produkter · Regioner · Marknadsandel</p>
+            </div>
+
+            {/* 2×2 prompt card grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {PROMPT_CARDS.map(card => (
                 <button
-                  key={p}
-                  onClick={() => sendMessage(p)}
-                  className="text-left text-xs px-3 py-2 rounded-lg border border-zinc-200 text-zinc-600 hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors"
+                  key={card.prompt}
+                  onClick={() => sendMessage(card.prompt)}
+                  disabled={loading}
+                  className="text-left px-4 py-3 rounded-xl border border-zinc-200 hover:border-brand-300 hover:bg-brand-50 transition-colors disabled:opacity-40 group"
                 >
-                  {p}
+                  <div className="flex items-center gap-2 mb-1 text-zinc-400 group-hover:text-brand-500 transition-colors">
+                    {card.icon}
+                    <span className="text-xs font-semibold text-zinc-700 group-hover:text-brand-700">{card.label}</span>
+                  </div>
+                  <p className="text-xs text-zinc-400">{card.sub}</p>
                 </button>
               ))}
             </div>
+
+            {/* Extra prompts */}
+            {showExtra && (
+              <div className="flex flex-col gap-1.5">
+                {EXTRA_PROMPTS.map(p => (
+                  <button
+                    key={p}
+                    onClick={() => sendMessage(p)}
+                    disabled={loading}
+                    className="text-left text-xs px-3 py-2 rounded-lg border border-zinc-200 text-zinc-600 hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-40"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!showExtra && (
+              <button
+                onClick={() => setShowExtra(true)}
+                className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors text-left px-1"
+              >
+                Visa fler exempel →
+              </button>
+            )}
           </div>
         ) : (
           messages.map(msg => (
             msg.role === 'user' ? (
               <div key={msg.id} className="flex justify-end">
-                <div className="bg-brand-500 text-white rounded-xl px-4 py-2.5 text-sm max-w-xs">
+                <div className="bg-brand-500 text-white rounded-xl px-4 py-2.5 text-sm max-w-xs leading-relaxed">
                   {msg.content}
                 </div>
               </div>
@@ -339,17 +435,17 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
       </div>
 
       {/* Input */}
-      <div className="px-4 pb-4 pt-2 border-t border-zinc-100 shrink-0">
+      <div className="px-4 pb-4 pt-3 border-t border-zinc-100 shrink-0">
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Skriv en fråga… (Enter för att skicka)"
+            placeholder="Fråga om försäljning, produkter eller marknadsandel…"
             rows={2}
             disabled={loading}
-            className="flex-1 resize-none rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent disabled:opacity-50 scrollbar-thin"
+            className="flex-1 resize-none rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:opacity-50 scrollbar-thin"
           />
           <button
             onClick={() => sendMessage(input)}
@@ -362,8 +458,8 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             </svg>
           </button>
         </div>
-        <p className="text-xs text-zinc-400 mt-1.5 px-1">
-          Svar genereras enbart från MCP-analytikverktyg · Ingen fri SQL-åtkomst
+        <p className="text-xs text-zinc-400 mt-1.5 px-0.5">
+          Enter för att skicka · Svar grundas i MCP-analytikverktyg
         </p>
       </div>
     </div>
