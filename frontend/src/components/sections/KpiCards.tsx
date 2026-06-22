@@ -9,6 +9,7 @@ interface KpiCardsProps {
   error: string | null
   onRetry: () => void
   periodLabel: string
+  compact?: boolean
 }
 
 function pctChange(current: number | null, prev: number | null): number | null {
@@ -34,17 +35,21 @@ interface KpiCardProps {
   compLabel: string
 }
 
-function KpiCard({ label, value, delta, compLabel }: KpiCardProps) {
+function KpiCard({ label, value, delta, compLabel, compact }: KpiCardProps & { compact?: boolean }) {
   const hasDelta = delta !== undefined && delta !== null
   return (
-    <div className="bg-white rounded-xl border border-slate-100 px-5 py-5">
-      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em] leading-none">{label}</p>
-      <p className="mt-3 text-[1.625rem] font-bold text-slate-900 tabular-nums leading-none">{value}</p>
-      <div className="mt-2 flex items-center gap-1.5 min-h-[1rem]">
+    <div className={`bg-white rounded-lg border border-slate-200/70 ${compact ? 'px-4 py-3.5' : 'px-5 py-5'}`}>
+      <p className={`font-medium text-slate-500 leading-none ${compact ? 'text-xs' : 'text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400'}`}>
+        {label}
+      </p>
+      <p className={`font-bold text-slate-900 tabular-nums leading-none ${compact ? 'mt-1.5 text-xl' : 'mt-3 text-[1.625rem]'}`}>
+        {value}
+      </p>
+      <div className={`flex items-center gap-1.5 min-h-[1rem] ${compact ? 'mt-1.5' : 'mt-2'}`}>
         {hasDelta && (
           <>
             <Delta pct={delta} />
-            <span className="text-[10px] text-slate-400">{compLabel}</span>
+            <span className={`text-slate-400 ${compact ? 'text-xs' : 'text-[10px]'}`}>{compLabel}</span>
           </>
         )}
       </div>
@@ -52,10 +57,10 @@ function KpiCard({ label, value, delta, compLabel }: KpiCardProps) {
   )
 }
 
-export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCardsProps) {
+export function KpiCards({ data, loading, error, onRetry, periodLabel, compact = false }: KpiCardsProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-2 lg:grid-cols-4 ${compact ? 'gap-3' : 'gap-4'}`}>
         {[...Array(4)].map((_, i) => <CardSkeleton key={i} />)}
       </div>
     )
@@ -63,7 +68,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
 
   if (error || !data) {
     return (
-      <div className="bg-white rounded-xl border border-slate-100 p-6">
+      <div className="bg-white rounded-lg border border-slate-200/70 p-5">
         <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
       </div>
     )
@@ -72,31 +77,11 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel }: KpiCard
   const compLabel = `vs. föreg. ${periodLabel}`
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <KpiCard
-        label="Omsättning"
-        value={formatSEK(data.total_revenue)}
-        delta={pctChange(data.total_revenue, data.prev_total_revenue)}
-        compLabel={compLabel}
-      />
-      <KpiCard
-        label="Beställningar"
-        value={formatNumber(data.total_orders)}
-        delta={pctChange(data.total_orders, data.prev_total_orders)}
-        compLabel={compLabel}
-      />
-      <KpiCard
-        label="Sålda enheter"
-        value={formatNumber(data.total_units)}
-        delta={pctChange(data.total_units, data.prev_total_units)}
-        compLabel={compLabel}
-      />
-      <KpiCard
-        label="Snitt ordervärde"
-        value={formatSEK(data.average_order_value)}
-        delta={pctChange(data.average_order_value, data.prev_average_order_value)}
-        compLabel={compLabel}
-      />
+    <div className={`grid grid-cols-2 lg:grid-cols-4 ${compact ? 'gap-3' : 'gap-4'}`}>
+      <KpiCard compact={compact} label="Omsättning" value={formatSEK(data.total_revenue)} delta={pctChange(data.total_revenue, data.prev_total_revenue)} compLabel={compLabel} />
+      <KpiCard compact={compact} label="Beställningar" value={formatNumber(data.total_orders)} delta={pctChange(data.total_orders, data.prev_total_orders)} compLabel={compLabel} />
+      <KpiCard compact={compact} label="Sålda enheter" value={formatNumber(data.total_units)} delta={pctChange(data.total_units, data.prev_total_units)} compLabel={compLabel} />
+      <KpiCard compact={compact} label="Snitt ordervärde" value={formatSEK(data.average_order_value)} delta={pctChange(data.average_order_value, data.prev_average_order_value)} compLabel={compLabel} />
     </div>
   )
 }

@@ -33,7 +33,7 @@ export function MarketShare({
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Marknadsandel</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Andel av kategoriomsättning</p>
+            <p className="text-xs text-slate-500 mt-0.5">Andel av kategoriomsättning</p>
           </div>
           <div className="flex gap-1 bg-slate-50 border border-slate-100 rounded-lg p-0.5">
             {CATEGORIES.map(c => (
@@ -92,24 +92,24 @@ export function MarketShare({
               <p className="-mt-1 text-2xl font-bold text-slate-900 tabular-nums leading-none">
                 {formatPct(data.market_share_pct)}
               </p>
-              <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Vår andel</p>
+              <p className="text-xs text-slate-500 mt-1">Vår andel</p>
             </div>
 
             {/* Stats */}
-            <div className="flex-1 space-y-4">
+            <div className="flex-1 space-y-3">
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">Vår omsättning</p>
-                <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">{formatSEK(data.supplier_revenue)}</p>
+                <p className="text-xs font-medium text-slate-500">Vår omsättning</p>
+                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{formatSEK(data.supplier_revenue)}</p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">Kategoritotal</p>
-                <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">{formatSEK(data.category_total_revenue)}</p>
+                <p className="text-xs font-medium text-slate-500">Kategoritotal</p>
+                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{formatSEK(data.category_total_revenue)}</p>
               </div>
-              <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2.5">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">
+              <div className="rounded-lg bg-slate-50/80 border border-slate-100 px-3 py-2">
+                <p className="text-xs text-slate-500">
                   {data.competitor_count} konkurrenter · enbart aggregat
                 </p>
-                <p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">
+                <p className="text-sm font-semibold text-slate-700 tabular-nums mt-0.5">
                   {formatSEK(data.competitor_aggregate_revenue)}
                 </p>
               </div>

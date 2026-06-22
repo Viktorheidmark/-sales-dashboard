@@ -20,11 +20,11 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Produkter att bevaka</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Nedgång mot föregående period</p>
+            <p className="text-xs text-slate-500 mt-0.5">Nedgång mot föregående period</p>
           </div>
           {data && (
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-              {data.comparison_days}d
+            <span className="text-xs font-medium text-slate-400">
+              {data.comparison_days} dagar
             </span>
           )}
         </div>
@@ -47,7 +47,7 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
             <p className="text-xs text-slate-400">Alla produkter håller sig stabila</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {data.products.map((p, idx) => {
               const isFlagged = WATCH_SKUS.has(p.sku)
               const changePct = p.revenue_change_pct
@@ -56,41 +56,41 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
               return (
                 <div
                   key={p.sku}
-                  className={`rounded-lg px-3.5 py-3.5 border ${
+                  className={`rounded-lg px-3 py-2.5 border ${
                     isFlagged
-                      ? 'bg-amber-50 border-amber-100'
+                      ? 'bg-amber-50/80 border-amber-100'
                       : severe
-                        ? 'bg-red-50 border-red-100'
-                        : 'bg-slate-50 border-slate-100'
+                        ? 'bg-red-50/80 border-red-100'
+                        : 'bg-slate-50/80 border-slate-100'
                   }`}
                 >
-                  <div className="flex items-start gap-2.5">
-                    <span className={`text-xs font-bold mt-0.5 w-4 shrink-0 ${idx === 0 ? 'text-red-500' : 'text-slate-300'}`}>
+                  <div className="flex items-start gap-2">
+                    <span className={`text-xs font-semibold mt-0.5 w-4 shrink-0 ${idx === 0 ? 'text-red-500' : 'text-slate-400'}`}>
                       {p.rank}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-sm font-medium text-slate-800 truncate">{p.product_name}</span>
                         {isFlagged && (
-                          <span className="shrink-0 text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                          <span className="shrink-0 text-[10px] font-medium bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
                             Bevakning
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="text-xs text-slate-400">{p.sku}</span>
-                        <span className="text-xs text-slate-400">Föregående: {formatSEK(p.prior_period_revenue)}</span>
-                        <span className="text-xs text-slate-600 font-medium">Nu: {formatSEK(p.latest_period_revenue)}</span>
+                        <span className="text-xs text-slate-500">Föreg: {formatSEK(p.prior_period_revenue)}</span>
+                        <span className="text-xs text-slate-600">Nu: {formatSEK(p.latest_period_revenue)}</span>
                       </div>
                     </div>
-                    <span className={`text-sm font-bold tabular-nums shrink-0 ${
-                      severe ? 'text-red-600' : 'text-orange-500'
+                    <span className={`text-sm font-semibold tabular-nums shrink-0 ${
+                      severe ? 'text-red-600' : 'text-orange-600'
                     }`}>
                       {formatPctChange(changePct)}
                     </span>
                   </div>
 
-                  <div className="mt-2.5 ml-6 h-1 bg-white/70 rounded-full overflow-hidden border border-white/50">
+                  <div className="mt-2 ml-6 h-0.5 bg-white rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${isFlagged ? 'bg-amber-400' : severe ? 'bg-red-400' : 'bg-slate-400'}`}
                       style={{

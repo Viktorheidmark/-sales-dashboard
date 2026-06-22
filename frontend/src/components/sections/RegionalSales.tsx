@@ -13,6 +13,7 @@ interface RegionalSalesProps {
   loading: boolean
   error: string | null
   onRetry: () => void
+  compact?: boolean
 }
 
 function RegionTooltip({ active, payload }: {
@@ -30,8 +31,10 @@ function RegionTooltip({ active, payload }: {
   )
 }
 
-export function RegionalSales({ data, loading, error, onRetry }: RegionalSalesProps) {
-  if (loading) return <ChartSkeleton height={220} />
+export function RegionalSales({ data, loading, error, onRetry, compact = false }: RegionalSalesProps) {
+  const chartHeight = compact ? 120 : 160
+
+  if (loading) return <ChartSkeleton height={compact ? 200 : 220} />
 
   if (error || !data) {
     return (
@@ -56,9 +59,9 @@ export function RegionalSales({ data, loading, error, onRetry }: RegionalSalesPr
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Försäljning per region</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Rankade efter omsättning</p>
+            <p className="text-xs text-slate-500 mt-0.5">Rankade efter omsättning</p>
           </div>
-          {data.regions[0] && (
+          {data.regions[0] && !compact && (
             <span className="text-xs text-brand-600 font-medium bg-brand-50 border border-brand-100 px-2 py-1 rounded-md">
               {data.regions[0].region} #1
             </span>
@@ -70,7 +73,7 @@ export function RegionalSales({ data, loading, error, onRetry }: RegionalSalesPr
           <p className="text-sm text-slate-400 text-center py-8">Inga regionala försäljningsdata för vald period</p>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={160}>
+            <ResponsiveContainer width="100%" height={chartHeight}>
               <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis
@@ -96,19 +99,19 @@ export function RegionalSales({ data, loading, error, onRetry }: RegionalSalesPr
             </ResponsiveContainer>
 
             {/* Ranked list — clearly connected to chart above */}
-            <div className="mt-3 pt-3 border-t border-slate-100">
-              <div className="grid grid-cols-[1rem_1fr_4rem_5rem] gap-x-3 mb-1.5 px-1">
+            <div className={`border-t border-slate-100 ${compact ? 'mt-2 pt-2' : 'mt-3 pt-3'}`}>
+              <div className="grid grid-cols-[1rem_1fr_4rem_5rem] gap-x-3 mb-1 px-0.5">
                 <span />
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Region</span>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Ordrar</span>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Omsättning</span>
+                <span className="text-xs font-medium text-slate-500">Region</span>
+                <span className="text-xs font-medium text-slate-500 text-right">Ordrar</span>
+                <span className="text-xs font-medium text-slate-500 text-right">Omsättning</span>
               </div>
               {data.regions.map((r, i) => (
                 <div
                   key={r.region}
-                  className="grid grid-cols-[1rem_1fr_4rem_5rem] gap-x-3 items-center py-2 border-b border-slate-50 last:border-0 px-1"
+                  className={`grid grid-cols-[1rem_1fr_4rem_5rem] gap-x-3 items-center border-b border-slate-100 last:border-0 px-0.5 ${compact ? 'py-1.5' : 'py-2 px-1'}`}
                 >
-                  <span className={`text-xs font-bold leading-none ${i === 0 ? 'text-brand-500' : 'text-slate-300'}`}>{i + 1}</span>
+                  <span className={`text-xs font-semibold leading-none ${i === 0 ? 'text-brand-600' : 'text-slate-400'}`}>{i + 1}</span>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium text-slate-800 truncate">{r.region}</span>
                     <div className="h-px flex-1 bg-slate-100 overflow-hidden max-w-[3rem]">

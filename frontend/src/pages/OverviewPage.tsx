@@ -1,5 +1,4 @@
 import { useState, useEffect, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type {
   AuthUser,
@@ -10,9 +9,9 @@ import type {
   MarketShareResponse,
   DecliningProductsResponse,
 } from '../api/types'
-import { PageHeader } from '../components/layout/PageHeader'
 import { KpiCards } from '../components/sections/KpiCards'
 import { SalesTrend } from '../components/sections/SalesTrend'
+import { ExecutiveActionPanel } from '../components/sections/ExecutiveActionPanel'
 import { TopProducts } from '../components/sections/TopProducts'
 import { RegionalSales } from '../components/sections/RegionalSales'
 import { MarketShare } from '../components/sections/MarketShare'
@@ -35,9 +34,11 @@ function formatShortDate(iso: string): string {
   })
 }
 
-function SectionLabel({ children }: { children: ReactNode }) {
+function SectionHeading({ children }: { children: ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.16em] mb-3">{children}</p>
+    <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-[0.14em] mb-4">
+      {children}
+    </h2>
   )
 }
 
@@ -95,140 +96,89 @@ export function OverviewPage({ user }: OverviewPageProps) {
   const latestOrderDate = overview.data?.latest_order_date
   const currentPreset = DATE_PRESETS.find(p => p.value === datePreset)
   const periodLabel = currentPreset?.label?.toLowerCase() ?? datePreset
+  const periodDisplay = currentPreset?.label ?? datePreset
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Försäljningsöversikt"
-        right={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-1">
-              {DATE_PRESETS.map(p => (
-                <button
-                  key={p.value}
-                  onClick={() => setDatePreset(p.value)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                    datePreset === p.value
-                      ? 'bg-slate-900 text-white'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={handleRefresh}
-              disabled={anyLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-slate-900 text-xs font-medium transition-colors disabled:opacity-40"
-              aria-label="Uppdatera"
-            >
-              <span className={anyLoading ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
-              Uppdatera
-            </button>
+    <div className="space-y-7 pb-2">
+      {/* Compact page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">
+            Försäljningsöversikt
+          </h1>
+          {latestOrderDate && (
+            <p className="mt-1 text-xs text-slate-400">
+              Senast transaktionsdatum: {formatShortDate(latestOrderDate)}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-0.5 bg-white border border-slate-200/80 rounded-lg p-1">
+            {DATE_PRESETS.map(p => (
+              <button
+                key={p.value}
+                onClick={() => setDatePreset(p.value)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                  datePreset === p.value
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
-        }
+          <button
+            onClick={handleRefresh}
+            disabled={anyLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200/80 text-slate-500 hover:text-slate-900 text-xs font-medium transition-colors disabled:opacity-40"
+            aria-label="Uppdatera"
+          >
+            <span className={anyLoading ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
+            Uppdatera
+          </button>
+        </div>
+      </div>
+
+      {/* KPI row */}
+      <KpiCards
+        data={overview.data}
+        loading={overview.loading}
+        error={overview.error}
+        onRetry={handleRefresh}
+        periodLabel={periodLabel}
+        compact
       />
 
-      {/* KPIs */}
-      <div>
-        <SectionLabel>Nyckeltal</SectionLabel>
-        <KpiCards
-          data={overview.data}
-          loading={overview.loading}
-          error={overview.error}
-          onRetry={handleRefresh}
-          periodLabel={periodLabel}
-        />
-        {latestOrderDate && (
-          <p className="mt-2.5 text-[11px] text-slate-400">
-            Senast transaktionsdatum: {formatShortDate(latestOrderDate)}
-          </p>
-        )}
-      </div>
-
-      {/* Executive hero card — two-column stable grid */}
-      {(worst || topRegion) && (
-        <div className="bg-slate-900 rounded-xl overflow-hidden">
-          <div className="grid grid-cols-1 sm:grid-cols-[13rem_1px_1fr]">
-
-            {/* Left: primary signal */}
-            <div className="pl-7 pr-9 py-7 flex flex-col gap-1">
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.18em] mb-2">
-                Viktigaste signal
-              </p>
-              {worst && worstPct ? (
-                <>
-                  <p className="text-5xl font-bold text-red-400 tabular-nums leading-none">
-                    −{worstPct}%
-                  </p>
-                  <p className="mt-2 text-[11px] text-slate-500 leading-snug">
-                    Intäktsnedgång<br />vs. föregående period
-                  </p>
-                </>
-              ) : topRegion ? (
-                <>
-                  <p className="text-5xl font-bold text-slate-200 tabular-nums leading-none">#1</p>
-                  <p className="mt-2 text-[11px] text-slate-500 leading-snug">
-                    Starkaste region
-                  </p>
-                </>
-              ) : null}
-              <Link
-                to="/assistant"
-                className="mt-auto pt-5 text-xs font-medium text-brand-400 hover:text-brand-300 transition-colors self-start"
-              >
-                Analysera →
-              </Link>
-            </div>
-
-            {/* Vertical divider */}
-            <div className="hidden sm:block bg-slate-800" />
-
-            {/* Right: narrative context */}
-            <div className="px-7 py-7 border-t border-slate-800 sm:border-t-0 flex flex-col gap-5">
-              {worst && worstPct && (
-                <div>
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.16em] mb-2">
-                    Produkt i nedgång
-                  </p>
-                  <p className="text-sm font-semibold text-slate-100">{worst.product_name}</p>
-                  <p className="mt-1.5 text-sm text-slate-400 leading-relaxed max-w-prose">
-                    Omsättningen har fallit med {worstPct}% jämfört med föregående period.
-                    Åtgärd rekommenderas om trenden håller i sig.
-                  </p>
-                </div>
-              )}
-              {topRegion && (
-                <div className={worst ? 'border-t border-slate-800 pt-5' : ''}>
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.16em] mb-2">
-                    Starkaste region
-                  </p>
-                  <p className="text-sm font-semibold text-slate-100">{topRegion.region}</p>
-                  <p className="mt-1.5 text-sm text-slate-400 leading-relaxed">
-                    Genererar mest omsättning under perioden och bör prioriteras i kommande kampanjplanering.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+      {/* Main decision area */}
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-5 lg:gap-6 items-stretch">
+        <div className="lg:col-span-7 min-w-0">
+          <SalesTrend
+            data={trend.data}
+            loading={trend.loading}
+            error={trend.error}
+            onRetry={handleRefresh}
+            featured
+            periodLabel={periodDisplay}
+          />
         </div>
-      )}
-
-      {/* Sales trend */}
-      <div>
-        <SectionLabel>Försäljningsutveckling</SectionLabel>
-        <SalesTrend
-          data={trend.data}
-          loading={trend.loading}
-          error={trend.error}
-          onRetry={handleRefresh}
-        />
+        <div className="lg:col-span-3 min-w-0">
+          <ExecutiveActionPanel
+            worst={worst}
+            worstPct={worstPct}
+            topRegion={topRegion}
+            marketShare={marketShare.data}
+            selectedCategory={selectedCategory}
+            decliningLoading={declining.loading}
+            regionsLoading={regions.loading}
+            marketShareLoading={marketShare.loading}
+          />
+        </div>
       </div>
 
-      {/* Products & regions */}
-      <div>
-        <SectionLabel>Produkter och regioner</SectionLabel>
+      {/* Operational detail */}
+      <section>
+        <SectionHeading>Operativ detalj</SectionHeading>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <TopProducts
             data={topProducts.data}
@@ -238,19 +188,21 @@ export function OverviewPage({ user }: OverviewPageProps) {
             onRetry={handleRefresh}
             selectedRegion={selectedRegion}
             onRegionChange={setSelectedRegion}
+            compact
           />
           <RegionalSales
             data={regions.data}
             loading={regions.loading}
             error={regions.error}
             onRetry={handleRefresh}
+            compact
           />
         </div>
-      </div>
+      </section>
 
-      {/* Market position & risks */}
-      <div>
-        <SectionLabel>Marknadsposition och risker</SectionLabel>
+      {/* Market position and risks */}
+      <section>
+        <SectionHeading>Marknadsposition och risker</SectionHeading>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <MarketShare
             data={marketShare.data}
@@ -267,9 +219,9 @@ export function OverviewPage({ user }: OverviewPageProps) {
             onRetry={handleRefresh}
           />
         </div>
-      </div>
+      </section>
 
-      <p className="text-[11px] text-slate-300 pb-2">Syntetisk demodata · Solvigo Sales Intelligence</p>
+      <p className="text-xs text-slate-300 pt-1">Syntetisk demodata · Solvigo Sales Intelligence</p>
     </div>
   )
 }

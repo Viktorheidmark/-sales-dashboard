@@ -13,6 +13,8 @@ interface SalesTrendProps {
   loading: boolean
   error: string | null
   onRetry: () => void
+  featured?: boolean
+  periodLabel?: string
 }
 
 /**
@@ -69,14 +71,20 @@ const INCOMPLETE_LABELS: Record<string, string> = {
   month: 'månad',
 }
 
-export function SalesTrend({ data, loading, error, onRetry }: SalesTrendProps) {
-  if (loading) return <ChartSkeleton height={280} />
+export function SalesTrend({ data, loading, error, onRetry, featured = false, periodLabel }: SalesTrendProps) {
+  const chartHeight = featured ? 340 : 280
+  const headerPad = featured ? 'px-5 pt-5 pb-3' : undefined
+  const bodyPad = featured ? 'px-5 pb-5' : undefined
+
+  if (loading) return <ChartSkeleton height={chartHeight} />
 
   if (error || !data) {
     return (
       <Card>
-        <CardHeader><h2 className="text-sm font-semibold text-slate-800">Försäljningstrend</h2></CardHeader>
-        <CardBody><ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} /></CardBody>
+        <CardHeader className={headerPad}>
+          <h2 className="text-sm font-semibold text-slate-800">Försäljningstrend</h2>
+        </CardHeader>
+        <CardBody className={bodyPad}><ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} /></CardBody>
       </Card>
     )
   }
@@ -106,28 +114,30 @@ export function SalesTrend({ data, loading, error, onRetry }: SalesTrendProps) {
   const total = chartData.reduce((s, d) => s + d.revenue, 0)
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+    <Card className={featured ? 'h-full border-slate-200/80' : ''}>
+      <CardHeader className={headerPad}>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Försäljningstrend</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {GRAN_LABELS[gran] ?? gran} · Total {formatSEK(total)}
-              {excludeNote && <span className="text-amber-500/80">{excludeNote}</span>}
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              {GRAN_LABELS[gran] ?? gran}
+              {periodLabel && <span> · {periodLabel}</span>}
+              {' · '}Total {formatSEK(total)}
+              {excludeNote && <span className="text-amber-600/90">{excludeNote}</span>}
             </p>
           </div>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+          <span className="text-xs font-medium text-slate-400">
             {gran === 'day' ? 'Dag' : gran === 'week' ? 'Vecka' : 'Månad'}
           </span>
         </div>
       </CardHeader>
-      <CardBody>
+      <CardBody className={bodyPad}>
         {chartData.length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-sm text-slate-400">
+          <div className="flex items-center justify-center h-40 text-sm text-slate-500">
             Inga försäljningsdata för vald period
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis
