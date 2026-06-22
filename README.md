@@ -55,6 +55,46 @@ Dashboard endpoints (non-chat) call the same `query_helpers` functions directly 
 
 ---
 
+## Chat charts
+
+Each grounded chat answer can include a deterministic chart payload rendered directly in the chat UI.
+
+| MCP tool | Chart type | x-axis | y-axis |
+|---|---|---|---|
+| `get_sales_over_time` | line | period (YYYY-MM or date) | revenue |
+| `get_top_products` | bar | product name | revenue |
+| `get_sales_by_region` | bar | region | revenue |
+| `get_market_share` | pie | "Oss" / "Konkurrenter" | revenue |
+| `get_declining_products` | bar | product name | % change |
+| `get_supplier_kpis` | — | no chart | — |
+
+**Key properties:**
+- Charts are built by `backend/app/services/chart_builder.py` from raw MCP output — the LLM response text is never parsed for numbers.
+- At most one chart is returned per answer. When multiple MCP tools are called, the chart comes from the highest-priority visual tool (trend → market share → top products → region → declining).
+- A chart is suppressed when the MCP result has fewer than two usable rows.
+- All guardrail responses (`prompt_injection`, `restricted`, `insufficient_data`, `unsupported`, `clarification_needed`) always return `chart = null`.
+- Chart data inherits the authenticated supplier's scope — supplier\_id is injected by the backend before every MCP call.
+- The frontend renders charts with Recharts, reusing the same library as the dashboard.
+
+Chart payload structure:
+
+```json
+{
+  "chart_type": "line_chart | bar_chart | pie_chart",
+  "title": "Försäljningstrend 2026-03-23 → 2026-06-21",
+  "description": "Intäkt per månad",
+  "x_key": "label",
+  "y_key": "revenue",
+  "data": [{ "label": "2026-03", "revenue": 12345.67 }],
+  "source_tool": "get_sales_over_time",
+  "generated_from_row_count": 12
+}
+```
+
+Smoke test: `python -m scripts.chart_smoke_test` (9 cases, requires running backend).
+
+---
+
 ## Guardrails and safety
 
 Every chat message is classified **deterministically** before any OpenAI or MCP call is made. The guardrail layer in `backend/app/services/guardrails.py` uses regex pattern matching — no LLM involved — and returns immediately for non-analytics inputs.

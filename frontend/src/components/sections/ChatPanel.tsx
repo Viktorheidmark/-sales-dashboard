@@ -35,7 +35,7 @@ interface ChatPanelProps {
 function MiniChart({ chart }: { chart: ChartPayload }) {
   const COLORS = ['#4169e1', '#a5b4fc', '#c7d2fe', '#e0e7ff']
 
-  if (chart.type === 'line_chart') {
+  if (chart.chart_type === 'line_chart') {
     return (
       <ResponsiveContainer width="100%" height={160}>
         <LineChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
@@ -48,7 +48,7 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
       </ResponsiveContainer>
     )
   }
-  if (chart.type === 'bar_chart') {
+  if (chart.chart_type === 'bar_chart') {
     return (
       <ResponsiveContainer width="100%" height={160}>
         <BarChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
@@ -61,7 +61,7 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
       </ResponsiveContainer>
     )
   }
-  if (chart.type === 'pie_chart') {
+  if (chart.chart_type === 'pie_chart') {
     return (
       <ResponsiveContainer width="100%" height={160}>
         <PieChart>
@@ -138,11 +138,17 @@ function AssistantBubble({ msg }: { msg: Message }) {
             </ReactMarkdown>
           </div>
 
-          {/* Optional chart */}
+          {/* Deterministic chart from MCP result */}
           {r.chart && (
             <div className="mt-3 pt-3 border-t border-zinc-100">
-              <p className="text-xs font-medium text-zinc-500 mb-2">{r.chart.title}</p>
+              <p className="text-xs font-semibold text-zinc-700 mb-0.5">{r.chart.title}</p>
+              {r.chart.description && (
+                <p className="text-xs text-zinc-400 mb-2">{r.chart.description}</p>
+              )}
               <MiniChart chart={r.chart} />
+              <p className="text-xs text-zinc-300 mt-1">
+                via {r.chart.source_tool} · {r.chart.generated_from_row_count} rader
+              </p>
             </div>
           )}
 

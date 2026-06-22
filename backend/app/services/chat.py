@@ -20,13 +20,14 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from openai import OpenAI
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from app.services.guardrails import classify
+from app.services.chart_builder import pick_chart
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -76,11 +77,6 @@ Regler du alltid måste följa:
 - Avslöja aldrig konkurrentdata på produkt-, kund- eller ordernivå. Konkurrentdata är alltid aggregerad.
 - Förklara osäkerhet eller begränsningar när det är relevant.
 - Föreslå praktiska nästa steg när datan stöder det.
-- Returnera ett diagram (chart_payload) endast när det tydligt tillför värde:
-    - Tidsserie → line_chart
-    - Ranking/jämförelse → bar_chart
-    - Marknadsandel → pie_chart
-- chart_payload-formatet: {{"type": "line_chart"|"bar_chart"|"pie_chart", "title": "...", "data": [...], "x_key": "...", "y_key": "..."}}
 - Håll svar under 150 ord om inte frågan kräver mer detaljer.
 """
 
@@ -127,28 +123,6 @@ def _inject_supplier_scope(tool_name: str, args: dict, supplier_id: str) -> dict
         locked["supplier_id"] = supplier_id
     return locked
 
-
-# ---------------------------------------------------------------------------
-# Extract chart payload from tool result if the LLM embedded one
-# ---------------------------------------------------------------------------
-def _extract_chart(text_content: str) -> Optional[dict]:
-    """
-    The LLM may embed a JSON chart_payload block inside its final answer.
-    We parse it out so the frontend can render it natively.
-    """
-    import re
-    match = re.search(r'```json\s*(\{.*?"type"\s*:\s*"(?:line|bar|pie)_chart".*?\})\s*```', text_content, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
-    return None
-
-
-def _strip_chart_block(text: str) -> str:
-    import re
-    return re.sub(r'```json\s*\{.*?"type"\s*:\s*"(?:line|bar|pie)_chart".*?\}\s*```', '', text, flags=re.DOTALL).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -197,8 +171,8 @@ async def run_chat(
 
     tools_used: list[str] = []
     sources: list[dict] = []
-    chart: Optional[dict] = None
     limitations: list[str] = []
+    raw_tool_results: list[tuple[str, dict]] = []  # (tool_name, parsed_result) for chart builder
 
     params = _server_params()
 
@@ -307,6 +281,8 @@ async def run_chat(
                         sources.append(source_meta)
                         if parsed.get("limitations"):
                             limitations.extend(parsed["limitations"])
+                        # Collect raw result for deterministic chart building
+                        raw_tool_results.append((tool_name, parsed))
 
                     tool_results_messages.append({
                         "role": "tool",
@@ -328,10 +304,8 @@ async def run_chat(
             else:
                 raw_answer = "Jag kunde inte generera ett svar. Försök igen."
 
-            # Extract any embedded chart payload from the answer text
-            chart = _extract_chart(raw_answer)
-            if chart:
-                raw_answer = _strip_chart_block(raw_answer)
+            # Build chart deterministically from MCP tool results (never from LLM text)
+            chart = pick_chart(raw_tool_results)
 
     return {
         "answer": raw_answer,

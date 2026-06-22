@@ -24,11 +24,14 @@ export interface SourceMeta {
 }
 
 export interface ChartPayload {
-  type: 'line_chart' | 'bar_chart' | 'pie_chart'
+  chart_type: 'line_chart' | 'bar_chart' | 'pie_chart'
   title: string
+  description: string
   data: Record<string, unknown>[]
   x_key: string
   y_key: string
+  source_tool: string
+  generated_from_row_count: number
 }
 
 export interface ChatRequest {
