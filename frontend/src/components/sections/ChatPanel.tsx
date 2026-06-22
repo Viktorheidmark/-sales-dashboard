@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -13,45 +13,21 @@ const PROMPT_CARDS = [
     label: 'Produkt i nedgång',
     sub: 'Vilken produkt minskade mest de senaste 30 dagarna?',
     prompt: 'Vilken produkt minskade mest de senaste 30 dagarna?',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <polyline points="3 7 9 13 13 9 21 17" />
-        <polyline points="15 17 21 17 21 11" />
-      </svg>
-    ),
   },
   {
     label: 'Försäljningstrend',
     sub: 'Visa försäljningstrend de senaste 90 dagarna',
     prompt: 'Visa försäljningstrend de senaste 90 dagarna',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <polyline points="3 17 9 11 13 15 21 7" />
-        <polyline points="15 7 21 7 21 13" />
-      </svg>
-    ),
   },
   {
     label: 'Starkaste region',
     sub: 'Vilken region genererar mest intäkter?',
     prompt: 'Vilken region genererar mest intäkter?',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <circle cx="12" cy="10" r="3" />
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-      </svg>
-    ),
   },
   {
     label: 'Marknadsandel',
     sub: 'Vad är vår marknadsandel i Mejeri?',
     prompt: 'Vad är vår marknadsandel i Mejeri?',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <path d="M12 2v10l6.9 6.9" />
-        <circle cx="12" cy="12" r="10" />
-      </svg>
-    ),
   },
 ]
 
@@ -59,10 +35,9 @@ interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
-  // Streaming-specific fields — only set on assistant messages during/after stream
-  statusText?: string        // current progress label (shown before first delta)
-  streamingContent?: string  // accumulated delta text (shown during streaming)
-  response?: ChatResponse    // set from `complete` event
+  statusText?: string
+  streamingContent?: string
+  response?: ChatResponse
   error?: string
   loading?: boolean
   question?: string
@@ -74,16 +49,34 @@ interface ChatPanelProps {
   supplierName?: string
 }
 
+const markdownComponents = {
+  p: ({ children }: { children?: ReactNode }) => (
+    <p className="mb-3 last:mb-0">{children}</p>
+  ),
+  strong: ({ children }: { children?: ReactNode }) => (
+    <strong className="font-semibold text-slate-900">{children}</strong>
+  ),
+  ul: ({ children }: { children?: ReactNode }) => (
+    <ul className="list-disc pl-5 mt-2 mb-3 space-y-1">{children}</ul>
+  ),
+  ol: ({ children }: { children?: ReactNode }) => (
+    <ol className="list-decimal pl-5 mt-2 mb-3 space-y-1">{children}</ol>
+  ),
+  li: ({ children }: { children?: ReactNode }) => (
+    <li className="text-slate-700">{children}</li>
+  ),
+}
+
 function MiniChart({ chart }: { chart: ChartPayload }) {
   const COLORS = ['#4169e1', '#a5b4fc', '#c7d2fe', '#e0e7ff']
   if (chart.chart_type === 'line_chart') {
     return (
-      <ResponsiveContainer width="100%" height={160}>
+      <ResponsiveContainer width="100%" height={180}>
         <LineChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-          <XAxis dataKey={chart.x_key} tick={{ fontSize: 10, fill: '#a1a1aa' }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: '#a1a1aa' }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+          <XAxis dataKey={chart.x_key} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={48} />
+          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
           <Line type="monotone" dataKey={chart.y_key} stroke="#4169e1" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
@@ -91,12 +84,12 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
   }
   if (chart.chart_type === 'bar_chart') {
     return (
-      <ResponsiveContainer width="100%" height={160}>
+      <ResponsiveContainer width="100%" height={180}>
         <BarChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" vertical={false} />
-          <XAxis dataKey={chart.x_key} tick={{ fontSize: 10, fill: '#a1a1aa' }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: '#a1a1aa' }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+          <XAxis dataKey={chart.x_key} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={48} />
+          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
           <Bar dataKey={chart.y_key} fill="#4169e1" radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
@@ -104,12 +97,12 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
   }
   if (chart.chart_type === 'pie_chart') {
     return (
-      <ResponsiveContainer width="100%" height={160}>
+      <ResponsiveContainer width="100%" height={180}>
         <PieChart>
-          <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={64} strokeWidth={0}>
+          <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={68} strokeWidth={0}>
             {chart.data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
           </Pie>
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
         </PieChart>
       </ResponsiveContainer>
     )
@@ -119,7 +112,7 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
 
 function ToolBadge({ name }: { name: string }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs bg-zinc-100 text-zinc-500 rounded px-1.5 py-0.5">
+    <span className="inline-flex items-center text-[11px] bg-slate-100 text-slate-500 rounded-md px-2 py-0.5">
       {name.replace('get_', '').replace(/_/g, ' ')}
     </span>
   )
@@ -132,6 +125,20 @@ function BookmarkIcon({ filled }: { filled?: boolean }) {
     <svg className="w-3.5 h-3.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" />
     </svg>
+  )
+}
+
+function LoadingDots() {
+  return (
+    <span className="flex gap-0.5">
+      {[0, 1, 2].map(i => (
+        <span
+          key={i}
+          className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce"
+          style={{ animationDelay: `${i * 0.15}s` }}
+        />
+      ))}
+    </span>
   )
 }
 
@@ -158,181 +165,127 @@ function AssistantBubble({ msg }: { msg: Message }) {
     }
   }
 
-  // ── Loading: show status text + bouncing dots (before any delta arrives) ──
   if (msg.loading && !msg.streamingContent) {
     return (
-      <div className="flex gap-3 items-start">
-        <span className="shrink-0 w-7 h-7 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
-        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-1.5">
-          <div className="flex items-center gap-2 text-sm text-zinc-500">
-            <span className="flex gap-0.5">
-              {[0, 1, 2].map(i => (
-                <span
-                  key={i}
-                  className="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
-            </span>
-            {msg.statusText ?? 'Analyserar försäljningsdata…'}
-          </div>
-          {msg.statusText === 'Hämtar relevanta analysdata…' && (
-            <p className="text-xs text-zinc-400">Hämtar relevanta signaler från analyslagret</p>
-          )}
+      <article className="max-w-2xl">
+        <div className="flex items-center gap-2.5 text-sm text-slate-500">
+          <LoadingDots />
+          <span>{msg.statusText ?? 'Analyserar försäljningsdata…'}</span>
         </div>
-      </div>
+      </article>
     )
   }
 
-  // ── Streaming: show partial answer as it arrives ──
   if (msg.loading && msg.streamingContent) {
     return (
-      <div className="flex gap-3 items-start">
-        <span className="shrink-0 w-7 h-7 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
-        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3">
-          <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-100 mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
-            <span className="text-xs text-zinc-500">Svar grundat i analyserad demodata</span>
-          </div>
-          <div className="text-sm text-zinc-800 leading-relaxed">
-            <ReactMarkdown
-              components={{
-                p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                strong: ({ children }) => <strong className="font-semibold text-zinc-900">{children}</strong>,
-                ul: ({ children }) => <ul className="list-disc list-inside mt-1 mb-1 space-y-0.5">{children}</ul>,
-                ol: ({ children }) => <ol className="list-decimal list-inside mt-1 mb-1 space-y-0.5">{children}</ol>,
-                li: ({ children }) => <li className="text-zinc-700">{children}</li>,
-              }}
-            >
-              {msg.streamingContent}
-            </ReactMarkdown>
-            <span className="inline-block w-0.5 h-4 bg-brand-400 animate-pulse align-text-bottom ml-0.5" />
-          </div>
+      <article className="max-w-2xl space-y-1">
+        <div className="text-[15px] text-slate-700 leading-[1.75]">
+          <ReactMarkdown components={markdownComponents}>
+            {msg.streamingContent}
+          </ReactMarkdown>
+          <span className="inline-block w-0.5 h-4 bg-brand-500 animate-pulse align-text-bottom ml-0.5" />
         </div>
-      </div>
+      </article>
     )
   }
 
-  // ── Error state ──
   if (msg.error) {
     return (
-      <div className="flex gap-3 items-start">
-        <span className="shrink-0 w-7 h-7 rounded-full bg-zinc-300 text-zinc-600 text-xs flex items-center justify-center font-bold mt-0.5">!</span>
-        <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-600">
-          {msg.error}
-        </div>
-      </div>
+      <article className="max-w-2xl">
+        <p className="text-[15px] text-slate-600 leading-relaxed">{msg.error}</p>
+      </article>
     )
   }
 
-  // ── Complete response ──
   const r = msg.response!
   const isGrounded = r.tool_calls.length > 0
 
   return (
-    <div className="flex gap-3 items-start">
-      <span className="shrink-0 w-7 h-7 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center font-bold mt-0.5">S</span>
-      <div className="flex-1 min-w-0 space-y-2">
-        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 space-y-3">
-          {isGrounded && (
-            <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <span className="text-xs text-zinc-500">Svar grundat i analyserad demodata</span>
-            </div>
-          )}
-          <div className="text-sm text-zinc-800 leading-relaxed">
-            <ReactMarkdown
-              components={{
-                p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                strong: ({ children }) => <strong className="font-semibold text-zinc-900">{children}</strong>,
-                ul: ({ children }) => <ul className="list-disc list-inside mt-1 mb-1 space-y-0.5">{children}</ul>,
-                ol: ({ children }) => <ol className="list-decimal list-inside mt-1 mb-1 space-y-0.5">{children}</ol>,
-                li: ({ children }) => <li className="text-zinc-700">{children}</li>,
-              }}
-            >
-              {msg.content}
-            </ReactMarkdown>
-          </div>
-          {r.chart && (
-            <div className="mt-1 pt-3 border-t border-zinc-100">
-              <p className="text-xs font-semibold text-zinc-700 mb-0.5">{r.chart.title}</p>
-              {r.chart.description && (
-                <p className="text-xs text-zinc-400 mb-2">{r.chart.description}</p>
-              )}
-              <MiniChart chart={r.chart} />
-              <p className="text-xs text-zinc-400 mt-1">
-                via {r.chart.source_tool} · {r.chart.generated_from_row_count} rader
-              </p>
-            </div>
-          )}
-          {r.limitations.length > 0 && (
-            <div className="pt-2 border-t border-zinc-100 space-y-0.5">
-              {r.limitations.map((l, i) => (
-                <p key={i} className="text-xs text-amber-600">⚠ {l}</p>
-              ))}
-            </div>
-          )}
+    <article className="max-w-2xl space-y-5">
+      <div className="text-[15px] text-slate-700 leading-[1.75]">
+        <ReactMarkdown components={markdownComponents}>
+          {msg.content}
+        </ReactMarkdown>
+      </div>
 
-          {isGrounded && (
-            <details className="pt-2 border-t border-zinc-100 group/sources">
-              <summary className="text-xs font-medium text-zinc-500 cursor-pointer select-none hover:text-zinc-700 list-none flex items-center gap-1">
-                <span className="transition-transform group-open/sources:rotate-90">›</span>
-                Källor och metodik
-              </summary>
-              <div className="mt-2 space-y-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {r.tool_calls.map(t => <ToolBadge key={t} name={t} />)}
-                </div>
-                {r.sources.map((s, i) => (
-                  <div key={i} className="text-xs text-zinc-500 bg-zinc-50 rounded-lg px-3 py-2 space-y-0.5">
-                    <p>
-                      <span className="font-medium text-zinc-600">{s.tool}</span>
-                      {s.source && <span className="text-zinc-400"> · {s.source}</span>}
-                    </p>
-                    {s.generated_at && (
-                      <p className="text-zinc-400">Beräknad: {formatDate(s.generated_at)}</p>
-                    )}
-                    {s.row_count !== undefined && (
-                      <p className="text-zinc-400">{s.row_count} rader</p>
-                    )}
-                    {s.date_range && (
-                      <p className="text-zinc-400">Period: {s.date_range.start} → {s.date_range.end}</p>
-                    )}
-                    {s.limitations?.map((l, j) => (
-                      <p key={j} className="text-amber-600">⚠ {l}</p>
-                    ))}
-                  </div>
+      {r.chart && (
+        <div className="pt-1">
+          <p className="text-xs font-medium text-slate-500 mb-1">{r.chart.title}</p>
+          {r.chart.description && (
+            <p className="text-xs text-slate-400 mb-3 leading-relaxed">{r.chart.description}</p>
+          )}
+          <div className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+            <MiniChart chart={r.chart} />
+          </div>
+        </div>
+      )}
+
+      {r.limitations.length > 0 && (
+        <div className="space-y-1">
+          {r.limitations.map((l, i) => (
+            <p key={i} className="text-xs text-amber-700/90 leading-relaxed">⚠ {l}</p>
+          ))}
+        </div>
+      )}
+
+      {isGrounded && (
+        <details className="group/sources">
+          <summary className="text-xs text-slate-400 cursor-pointer select-none hover:text-slate-600 list-none flex items-center gap-1 w-fit">
+            <span className="transition-transform group-open/sources:rotate-90 text-slate-300">›</span>
+            Källor och metodik
+          </summary>
+          <div className="mt-3 space-y-2 pl-3 border-l border-slate-100">
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Svar grundat i analyserad demodata.
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {r.tool_calls.map(t => <ToolBadge key={t} name={t} />)}
+            </div>
+            {r.sources.map((s, i) => (
+              <div key={i} className="text-xs text-slate-500 space-y-0.5">
+                <p>
+                  <span className="font-medium text-slate-600">{s.tool}</span>
+                  {s.source && <span className="text-slate-400"> · {s.source}</span>}
+                </p>
+                {s.generated_at && (
+                  <p className="text-slate-400">Beräknad: {formatDate(s.generated_at)}</p>
+                )}
+                {s.row_count !== undefined && (
+                  <p className="text-slate-400">{s.row_count} rader</p>
+                )}
+                {s.date_range && (
+                  <p className="text-slate-400">Period: {s.date_range.start} → {s.date_range.end}</p>
+                )}
+                {s.limitations?.map((l, j) => (
+                  <p key={j} className="text-amber-700/90">⚠ {l}</p>
                 ))}
               </div>
-            </details>
-          )}
-        </div>
-
-        {isGrounded && (
-          <div className="flex flex-wrap items-center gap-1.5 px-1">
-            {r.sources[0]?.generated_at && (
-              <span className="text-xs text-zinc-400">{formatDate(r.sources[0].generated_at)}</span>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={saveState !== 'idle'}
-              className={`ml-auto inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                saveState === 'saved'
-                  ? 'border-emerald-200 text-emerald-600 bg-emerald-50 cursor-default'
-                  : saveState === 'error'
-                  ? 'border-red-200 text-red-500 bg-red-50 cursor-default'
-                  : saveState === 'saving'
-                  ? 'border-zinc-200 text-zinc-400 cursor-wait'
-                  : 'border-zinc-200 text-zinc-500 hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50'
-              }`}
-            >
-              <BookmarkIcon filled={saveState === 'saved'} />
-              {saveState === 'saved' ? 'Sparad i Insikter' : saveState === 'error' ? 'Misslyckades' : saveState === 'saving' ? '…' : 'Spara'}
-            </button>
+            ))}
           </div>
-        )}
-      </div>
-    </div>
+        </details>
+      )}
+
+      {isGrounded && (
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleSave}
+            disabled={saveState !== 'idle'}
+            className={`inline-flex items-center gap-1.5 text-xs transition-colors ${
+              saveState === 'saved'
+                ? 'text-emerald-600 cursor-default'
+                : saveState === 'error'
+                ? 'text-red-500 cursor-default'
+                : saveState === 'saving'
+                ? 'text-slate-400 cursor-wait'
+                : 'text-slate-400 hover:text-brand-600'
+            }`}
+          >
+            <BookmarkIcon filled={saveState === 'saved'} />
+            {saveState === 'saved' ? 'Sparad i Insikter' : saveState === 'error' ? 'Misslyckades' : saveState === 'saving' ? 'Sparar…' : 'Spara'}
+          </button>
+        </div>
+      )}
+    </article>
   )
 }
 
@@ -361,7 +314,6 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
-    // Abort any in-flight stream
     abortRef.current?.abort()
     const abort = new AbortController()
     abortRef.current = abort
@@ -454,76 +406,86 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
   }
 
   const isEmpty = messages.length === 0
+  const placeholder = supplierName
+    ? `Fråga om ${supplierName}s försäljning, produkter eller marknadsandel…`
+    : 'Fråga om försäljning, produkter eller marknadsandel…'
 
   return (
-    <div className="bg-white rounded-xl border border-slate-100 shadow-sm flex flex-col" style={{ minHeight: 620 }}>
-      {/* Status bar */}
-      <div className="px-6 py-3 border-b border-slate-100 shrink-0 flex items-center justify-between gap-4">
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-          Svar grundat i analyserad demodata
-        </span>
-        {supplierName && (
-          <span className="text-xs text-slate-400">Analys för <span className="text-slate-500">{supplierName}</span></span>
-        )}
-      </div>
-
-      {/* Messages / Empty state */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 scrollbar-thin">
+    <div className="flex flex-col flex-1 min-h-0 w-full max-w-3xl mx-auto">
+      {/* Conversation workspace */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
         {isEmpty ? (
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-zinc-800">Vad vill du förstå bättre?</p>
-              <p className="text-xs text-zinc-400 mt-0.5">Välj ett område nedan eller skriv en egen fråga.</p>
-              <p className="text-xs text-zinc-400 mt-2">Trender · Produkter · Regioner · Marknadsandel</p>
+          <div className="flex flex-col items-center justify-center min-h-full px-2 py-10 sm:py-16">
+            <div className="w-full max-w-xl text-center mb-10">
+              <h2 className="text-2xl sm:text-[1.75rem] font-semibold text-slate-900 tracking-tight">
+                Vad vill du analysera?
+              </h2>
+              <p className="mt-3 text-sm text-slate-500 leading-relaxed">
+                Fråga om försäljning, produkter, regioner och marknadsandel.
+              </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {PROMPT_CARDS.map(card => (
                 <button
                   key={card.prompt}
                   onClick={() => sendMessage(card.prompt)}
                   disabled={loading}
-                  className="text-left p-4 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50 bg-slate-50 transition-colors disabled:opacity-40 group"
+                  className="text-left px-4 py-3.5 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/80 transition-colors disabled:opacity-40 group"
                 >
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5 group-hover:text-brand-500 transition-colors">{card.label}</p>
-                  <p className="text-sm font-medium text-slate-800 leading-snug group-hover:text-brand-700 transition-colors">{card.sub}</p>
+                  <p className="text-sm font-medium text-slate-800 group-hover:text-slate-900">
+                    {card.label}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                    {card.sub}
+                  </p>
                 </button>
               ))}
             </div>
+
+            {supplierName && (
+              <p className="mt-10 text-[11px] text-slate-400 text-center leading-relaxed max-w-sm">
+                Analys baserad på syntetisk försäljningsdata för{' '}
+                <span className="text-slate-500">{supplierName}</span>.
+                Konkurrentdata visas enbart aggregerat.
+              </p>
+            )}
           </div>
         ) : (
-          messages.map(msg => (
-            msg.role === 'user' ? (
-              <div key={msg.id} className="flex justify-end">
-                <div className="bg-brand-500 text-white rounded-xl px-4 py-2.5 text-sm max-w-xs leading-relaxed">
-                  {msg.content}
+          <div className="py-6 sm:py-8 space-y-10">
+            {messages.map(msg => (
+              msg.role === 'user' ? (
+                <div key={msg.id} className="flex justify-end">
+                  <p className="text-sm font-medium text-slate-800 bg-slate-100/90 rounded-xl px-4 py-2.5 max-w-lg leading-snug">
+                    {msg.content}
+                  </p>
                 </div>
-              </div>
-            ) : (
-              <AssistantBubble key={msg.id} msg={msg} />
-            )
-          ))
+              ) : (
+                <AssistantBubble key={msg.id} msg={msg} />
+              )
+            ))}
+            <div ref={bottomRef} />
+          </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-4 pb-4 pt-3 border-t border-zinc-100 shrink-0">
-        <div className="flex gap-2 items-end">
+      {/* Composer */}
+      <div className="shrink-0 pt-4 pb-2">
+        <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60 focus-within:border-brand-400/60 focus-within:shadow-md focus-within:shadow-slate-200/50 transition-shadow">
           <textarea
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Fråga om försäljning, produkter eller marknadsandel…"
+            placeholder={placeholder}
             rows={2}
             disabled={loading}
-            className="flex-1 resize-none rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:opacity-50 scrollbar-thin"
+            className="w-full resize-none rounded-2xl bg-transparent px-5 py-4 pr-14 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none disabled:opacity-50 scrollbar-thin leading-relaxed"
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || loading}
-            className="shrink-0 w-9 h-9 rounded-lg bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="absolute right-3 bottom-3 w-9 h-9 rounded-xl bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
             aria-label="Skicka"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -531,8 +493,8 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             </svg>
           </button>
         </div>
-        <p className="text-xs text-zinc-400 mt-1.5 px-0.5">
-          Enter för att skicka · Svar grundas i MCP-analytikverktyg
+        <p className="text-[11px] text-slate-400 mt-2 text-center">
+          Enter för att skicka · Shift+Enter för ny rad
         </p>
       </div>
     </div>
