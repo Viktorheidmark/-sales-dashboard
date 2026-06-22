@@ -3,7 +3,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.dependencies import get_current_supplier_id
+from app.dependencies import get_current_user
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.chat import run_chat, stream_chat
 
@@ -15,8 +15,9 @@ _TIMEOUT_SECONDS = 60
 @router.post("", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
-    supplier_id: str = Depends(get_current_supplier_id),
+    user: dict = Depends(get_current_user),
 ) -> ChatResponse:
+    supplier_id = user["supplier_id"]
     """
     Grounded AI analytics chat (non-streaming).
 
@@ -31,6 +32,7 @@ async def chat(
                 supplier_id=supplier_id,
                 start_date=req.start_date,
                 end_date=req.end_date,
+                supplier_name=user.get("supplier_name", ""),
             ),
             timeout=_TIMEOUT_SECONDS,
         )
@@ -56,8 +58,9 @@ async def chat(
 @router.post("/stream")
 async def chat_stream(
     req: ChatRequest,
-    supplier_id: str = Depends(get_current_supplier_id),
+    user: dict = Depends(get_current_user),
 ) -> StreamingResponse:
+    supplier_id = user["supplier_id"]
     """
     Grounded AI analytics chat — Server-Sent Events streaming.
 
@@ -77,6 +80,7 @@ async def chat_stream(
                 supplier_id=supplier_id,
                 start_date=req.start_date,
                 end_date=req.end_date,
+                supplier_name=user.get("supplier_name", ""),
             ):
                 yield chunk
         except asyncio.CancelledError:
