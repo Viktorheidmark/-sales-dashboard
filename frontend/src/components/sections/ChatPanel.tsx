@@ -9,6 +9,7 @@ import type { ChatResponse, ChartPayload } from '../../api/types'
 import { formatDate } from '../../utils/format'
 
 const EXAMPLE_PROMPTS = [
+  'Hur går det för oss? Ge mig en översikt.',
   'Vad är vår totala omsättning de senaste 90 dagarna?',
   'Vilka produkter tappar mest i försäljning?',
   'Hur stor är vår marknadsandel i Kaffe?',

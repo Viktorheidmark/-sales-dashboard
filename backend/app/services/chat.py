@@ -26,6 +26,8 @@ from openai import OpenAI
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
+from app.services.guardrails import classify
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -166,6 +168,19 @@ async def run_chat(
     4. Collect tool results and MCP source metadata
     5. Return structured response
     """
+    # --- Guardrail check (deterministic, no LLM/MCP) ---
+    guard = classify(message)
+    if not guard.should_call_llm:
+        return {
+            "answer": guard.answer,
+            "tool_calls": [],
+            "sources": [],
+            "chart": None,
+            "limitations": guard.limitations,
+            "supplier_id": supplier_id,
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        }
+
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
 

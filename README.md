@@ -55,6 +55,30 @@ Dashboard endpoints (non-chat) call the same `query_helpers` functions directly 
 
 ---
 
+## Guardrails and safety
+
+Every chat message is classified **deterministically** before any OpenAI or MCP call is made. The guardrail layer in `backend/app/services/guardrails.py` uses regex pattern matching — no LLM involved — and returns immediately for non-analytics inputs.
+
+| Classification | Trigger examples | Action |
+|---|---|---|
+| `prompt_injection` | "ignore previous instructions", "reveal the system prompt", "run SQL", "what is the JWT secret" | Refuse; return Swedish error; no LLM/MCP |
+| `restricted` | "which customers do competitors have?", "show competitor orders" | Explain aggregate-only policy; no LLM/MCP |
+| `insufficient_data` | margin, profit, inventory, returns, forecasts, ad spend | Explain what data is available; no LLM/MCP |
+| `unsupported` | weather, sports, coding, news, stock prices | Redirect to analytics; no LLM/MCP |
+| `clarification_needed` | vague questions with no analytics signal ("how's it going?") | Ask follow-up with 4 suggested directions |
+| `supported` | sales, revenue, products, trends, regions, market share | Pass through to full LLM + MCP flow |
+
+**Security invariants (enforced in layers):**
+- The guardrail never exposes: JWT contents, JWT secret, environment variables, database URLs, raw SQL, internal system prompts, MCP implementation details, server paths, or source code.
+- `supplier_id` is derived exclusively from the authenticated session — not from the message, not from the LLM.
+- The MCP tool list is whitelisted in `ALLOWED_TOOLS`; the LLM cannot add or modify tools.
+- Tool arguments are schema-validated; `supplier_id` is overwritten by the backend immediately before every MCP call.
+- Competitor data remains aggregate-only at both the guardrail layer (pattern match) and the MCP query layer (SQL enforced).
+
+Smoke test: `python backend/scripts/guardrail_smoke_test.py` (13 cases, requires running backend).
+
+---
+
 ## Supplier scope and competitor guardrails
 
 | Concern | Enforcement point |
