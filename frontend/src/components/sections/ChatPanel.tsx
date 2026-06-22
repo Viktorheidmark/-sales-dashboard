@@ -7,6 +7,7 @@ import {
 import { api } from '../../api/client'
 import type { ChatResponse, ChartPayload, SourceMeta } from '../../api/types'
 import { formatDate } from '../../utils/format'
+import { CHART, chartAxisTickSm, chartTooltipStyle } from '../../utils/chartTheme'
 
 const PROMPT_CARDS = [
   {
@@ -54,7 +55,7 @@ const markdownComponents = {
     <p className="mb-3 last:mb-0">{children}</p>
   ),
   strong: ({ children }: { children?: ReactNode }) => (
-    <strong className="font-semibold text-slate-900">{children}</strong>
+    <strong className="font-semibold text-slate-100">{children}</strong>
   ),
   ul: ({ children }: { children?: ReactNode }) => (
     <ul className="list-disc pl-5 mt-2 mb-3 space-y-1">{children}</ul>
@@ -63,21 +64,20 @@ const markdownComponents = {
     <ol className="list-decimal pl-5 mt-2 mb-3 space-y-1">{children}</ol>
   ),
   li: ({ children }: { children?: ReactNode }) => (
-    <li className="text-slate-700">{children}</li>
+    <li className="text-slate-300">{children}</li>
   ),
 }
 
 function MiniChart({ chart }: { chart: ChartPayload }) {
-  const COLORS = ['#4169e1', '#a5b4fc', '#c7d2fe', '#e0e7ff']
   if (chart.chart_type === 'line_chart') {
     return (
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-          <XAxis dataKey={chart.x_key} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-          <Line type="monotone" dataKey={chart.y_key} stroke="#4169e1" strokeWidth={2} dot={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+          <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
+          <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
+          <Tooltip contentStyle={chartTooltipStyle} />
+          <Line type="monotone" dataKey={chart.y_key} stroke={CHART.line} strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     )
@@ -86,11 +86,11 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
     return (
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-          <XAxis dataKey={chart.x_key} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-          <Bar dataKey={chart.y_key} fill="#4169e1" radius={[3, 3, 0, 0]} />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+          <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
+          <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
+          <Tooltip contentStyle={chartTooltipStyle} />
+          <Bar dataKey={chart.y_key} fill={CHART.barPrimary} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     )
@@ -100,9 +100,9 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
       <ResponsiveContainer width="100%" height={180}>
         <PieChart>
           <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={68} strokeWidth={0}>
-            {chart.data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+            {chart.data.map((_, i) => <Cell key={i} fill={CHART.pieColors[i % CHART.pieColors.length]} />)}
           </Pie>
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+          <Tooltip contentStyle={chartTooltipStyle} />
         </PieChart>
       </ResponsiveContainer>
     )
@@ -112,7 +112,7 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
 
 function ToolBadge({ name }: { name: string }) {
   return (
-    <span className="inline-flex items-center text-[11px] bg-slate-100 text-slate-500 rounded-md px-2 py-0.5">
+    <span className="inline-flex items-center text-[11px] bg-workspace-muted text-slate-400 border border-workspace-border rounded-md px-2 py-0.5">
       {name.replace('get_', '').replace(/_/g, ' ')}
     </span>
   )
@@ -134,7 +134,7 @@ function LoadingDots() {
       {[0, 1, 2].map(i => (
         <span
           key={i}
-          className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce"
+          className="w-1.5 h-1.5 rounded-full bg-slate-500 animate-bounce"
           style={{ animationDelay: `${i * 0.15}s` }}
         />
       ))}
@@ -179,11 +179,11 @@ function AssistantBubble({ msg }: { msg: Message }) {
   if (msg.loading && msg.streamingContent) {
     return (
       <article className="max-w-2xl space-y-1">
-        <div className="text-[15px] text-slate-700 leading-[1.75]">
+        <div className="text-[15px] text-slate-300 leading-[1.75]">
           <ReactMarkdown components={markdownComponents}>
             {msg.streamingContent}
           </ReactMarkdown>
-          <span className="inline-block w-0.5 h-4 bg-brand-500 animate-pulse align-text-bottom ml-0.5" />
+          <span className="inline-block w-0.5 h-4 bg-brand-400 animate-pulse align-text-bottom ml-0.5" />
         </div>
       </article>
     )
@@ -192,7 +192,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
   if (msg.error) {
     return (
       <article className="max-w-2xl">
-        <p className="text-[15px] text-slate-600 leading-relaxed">{msg.error}</p>
+        <p className="text-[15px] text-slate-400 leading-relaxed">{msg.error}</p>
       </article>
     )
   }
@@ -202,7 +202,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
 
   return (
     <article className="max-w-2xl space-y-5">
-      <div className="text-[15px] text-slate-700 leading-[1.75]">
+      <div className="text-[15px] text-slate-300 leading-[1.75]">
         <ReactMarkdown components={markdownComponents}>
           {msg.content}
         </ReactMarkdown>
@@ -214,7 +214,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
           {r.chart.description && (
             <p className="text-xs text-slate-400 mb-3 leading-relaxed">{r.chart.description}</p>
           )}
-          <div className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+          <div className="rounded-lg border border-workspace-border bg-workspace-muted/50 px-3 py-2">
             <MiniChart chart={r.chart} />
           </div>
         </div>
@@ -223,19 +223,19 @@ function AssistantBubble({ msg }: { msg: Message }) {
       {r.limitations.length > 0 && (
         <div className="space-y-1">
           {r.limitations.map((l, i) => (
-            <p key={i} className="text-xs text-amber-700/90 leading-relaxed">⚠ {l}</p>
+            <p key={i} className="text-xs text-amber-400/90 leading-relaxed">⚠ {l}</p>
           ))}
         </div>
       )}
 
       {isGrounded && (
         <details className="group/sources">
-          <summary className="text-xs text-slate-400 cursor-pointer select-none hover:text-slate-600 list-none flex items-center gap-1 w-fit">
-            <span className="transition-transform group-open/sources:rotate-90 text-slate-300">›</span>
+          <summary className="text-xs text-slate-500 cursor-pointer select-none hover:text-slate-300 list-none flex items-center gap-1 w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded">
+            <span className="transition-transform group-open/sources:rotate-90 text-slate-600">›</span>
             Källor och metodik
           </summary>
-          <div className="mt-3 space-y-2 pl-3 border-l border-slate-100">
-            <p className="text-xs text-slate-400 leading-relaxed">
+          <div className="mt-3 space-y-2 pl-3 border-l border-workspace-border">
+            <p className="text-xs text-slate-500 leading-relaxed">
               Svar grundat i analyserad demodata.
             </p>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -244,7 +244,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
             {r.sources.map((s, i) => (
               <div key={i} className="text-xs text-slate-500 space-y-0.5">
                 <p>
-                  <span className="font-medium text-slate-600">{s.tool}</span>
+                  <span className="font-medium text-slate-300">{s.tool}</span>
                   {s.source && <span className="text-slate-400"> · {s.source}</span>}
                 </p>
                 {s.generated_at && (
@@ -257,7 +257,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
                   <p className="text-slate-400">Period: {s.date_range.start} → {s.date_range.end}</p>
                 )}
                 {s.limitations?.map((l, j) => (
-                  <p key={j} className="text-amber-700/90">⚠ {l}</p>
+                  <p key={j} className="text-amber-400/90">⚠ {l}</p>
                 ))}
               </div>
             ))}
@@ -272,12 +272,12 @@ function AssistantBubble({ msg }: { msg: Message }) {
             disabled={saveState !== 'idle'}
             className={`inline-flex items-center gap-1.5 text-xs transition-colors ${
               saveState === 'saved'
-                ? 'text-emerald-600 cursor-default'
+                ? 'text-emerald-400 cursor-default'
                 : saveState === 'error'
-                ? 'text-red-500 cursor-default'
+                ? 'text-red-400 cursor-default'
                 : saveState === 'saving'
-                ? 'text-slate-400 cursor-wait'
-                : 'text-slate-400 hover:text-brand-600'
+                ? 'text-slate-500 cursor-wait'
+                : 'text-slate-500 hover:text-brand-400'
             }`}
           >
             <BookmarkIcon filled={saveState === 'saved'} />
@@ -417,7 +417,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center min-h-full px-2 py-10 sm:py-16">
             <div className="w-full max-w-xl text-center mb-10">
-              <h2 className="text-2xl sm:text-[1.75rem] font-semibold text-slate-900 tracking-tight">
+              <h2 className="text-2xl sm:text-[1.75rem] font-semibold text-slate-100 tracking-tight">
                 Vad vill du analysera?
               </h2>
               <p className="mt-3 text-sm text-slate-500 leading-relaxed">
@@ -431,9 +431,9 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
                   key={card.prompt}
                   onClick={() => sendMessage(card.prompt)}
                   disabled={loading}
-                  className="text-left px-4 py-3.5 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/80 transition-colors disabled:opacity-40 group"
+                  className="text-left px-4 py-3.5 rounded-xl border border-workspace-border bg-workspace-surface hover:border-workspace-border hover:bg-workspace-elevated transition-colors disabled:opacity-40 group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
                 >
-                  <p className="text-sm font-medium text-slate-800 group-hover:text-slate-900">
+                  <p className="text-sm font-medium text-slate-200 group-hover:text-slate-100">
                     {card.label}
                   </p>
                   <p className="mt-1 text-xs text-slate-500 leading-relaxed">
@@ -446,7 +446,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             {supplierName && (
               <p className="mt-10 text-[11px] text-slate-400 text-center leading-relaxed max-w-sm">
                 Analys baserad på syntetisk försäljningsdata för{' '}
-                <span className="text-slate-500">{supplierName}</span>.
+                <span className="text-slate-400">{supplierName}</span>.
                 Konkurrentdata visas enbart aggregerat.
               </p>
             )}
@@ -456,7 +456,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             {messages.map(msg => (
               msg.role === 'user' ? (
                 <div key={msg.id} className="flex justify-end">
-                  <p className="text-sm font-medium text-slate-800 bg-slate-100/90 rounded-xl px-4 py-2.5 max-w-lg leading-snug">
+                  <p className="text-sm font-medium text-slate-200 bg-workspace-elevated border border-workspace-border rounded-xl px-4 py-2.5 max-w-lg leading-snug">
                     {msg.content}
                   </p>
                 </div>
@@ -471,7 +471,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
 
       {/* Composer */}
       <div className="shrink-0 pt-4 pb-2">
-        <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60 focus-within:border-brand-400/60 focus-within:shadow-md focus-within:shadow-slate-200/50 transition-shadow">
+        <div className="relative rounded-2xl border border-workspace-border bg-workspace-elevated focus-within:border-brand-500/40 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           <textarea
             ref={inputRef}
             value={input}
@@ -480,12 +480,12 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             placeholder={placeholder}
             rows={2}
             disabled={loading}
-            className="w-full resize-none rounded-2xl bg-transparent px-5 py-4 pr-14 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none disabled:opacity-50 scrollbar-thin leading-relaxed"
+            className="w-full resize-none rounded-2xl bg-transparent px-5 py-4 pr-14 text-[15px] text-slate-200 placeholder:text-slate-500 focus:outline-none disabled:opacity-50 scrollbar-thin leading-relaxed"
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || loading}
-            className="absolute right-3 bottom-3 w-9 h-9 rounded-xl bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+            className="absolute right-3 bottom-3 w-9 h-9 rounded-xl bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors disabled:opacity-35 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             aria-label="Skicka"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -493,7 +493,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             </svg>
           </button>
         </div>
-        <p className="text-[11px] text-slate-400 mt-2 text-center">
+        <p className="text-[11px] text-slate-600 mt-2 text-center">
           Enter för att skicka · Shift+Enter för ny rad
         </p>
       </div>

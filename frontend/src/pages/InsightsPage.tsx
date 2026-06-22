@@ -7,19 +7,18 @@ import {
 import { api } from '../api/client'
 import type { ChartPayload, InsightDetail, InsightSummary } from '../api/types'
 import { PageHeader } from '../components/layout/PageHeader'
-
-const COLORS = ['#4169e1', '#a5b4fc', '#c7d2fe', '#e0e7ff']
+import { CHART, chartAxisTickSm, chartTooltipStyle } from '../utils/chartTheme'
 
 function MiniChart({ chart }: { chart: ChartPayload }) {
   if (chart.chart_type === 'line_chart') {
     return (
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-          <XAxis dataKey={chart.x_key} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-          <Line type="monotone" dataKey={chart.y_key} stroke="#4169e1" strokeWidth={2} dot={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+          <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
+          <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
+          <Tooltip contentStyle={chartTooltipStyle} />
+          <Line type="monotone" dataKey={chart.y_key} stroke={CHART.line} strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     )
@@ -28,11 +27,11 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
     return (
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-          <XAxis dataKey={chart.x_key} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-          <Bar dataKey={chart.y_key} fill="#4169e1" radius={[3, 3, 0, 0]} />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+          <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
+          <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
+          <Tooltip contentStyle={chartTooltipStyle} />
+          <Bar dataKey={chart.y_key} fill={CHART.barPrimary} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     )
@@ -42,9 +41,9 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
       <ResponsiveContainer width="100%" height={180}>
         <PieChart>
           <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={72} strokeWidth={0}>
-            {chart.data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+            {chart.data.map((_, i) => <Cell key={i} fill={CHART.pieColors[i % CHART.pieColors.length]} />)}
           </Pie>
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+          <Tooltip contentStyle={chartTooltipStyle} />
         </PieChart>
       </ResponsiveContainer>
     )
@@ -138,33 +137,33 @@ export function InsightsPage() {
       />
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</p>
+        <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">{error}</p>
       )}
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
-              <div className="h-4 w-3/4 bg-slate-100 rounded animate-pulse" />
-              <div className="h-3 w-full bg-slate-100 rounded animate-pulse" />
-              <div className="h-3 w-1/2 bg-slate-100 rounded animate-pulse" />
+            <div key={i} className="surface-card p-5 space-y-3">
+              <div className="h-4 w-3/4 bg-workspace-border/60 rounded animate-pulse" />
+              <div className="h-3 w-full bg-workspace-border/60 rounded animate-pulse" />
+              <div className="h-3 w-1/2 bg-workspace-border/60 rounded animate-pulse" />
             </div>
           ))}
         </div>
       ) : summaries.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm py-20 px-6 text-center">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center mb-5">
-            <svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <div className="surface-card py-20 px-6 text-center">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-workspace-elevated border border-workspace-border flex items-center justify-center mb-5">
+            <svg className="w-7 h-7 text-slate-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" />
             </svg>
           </div>
-          <p className="text-base font-semibold text-slate-900">Inga sparade insikter ännu</p>
-          <p className="text-sm text-slate-400 mt-1.5 max-w-xs mx-auto">
+          <p className="text-base font-semibold text-slate-100">Inga sparade insikter ännu</p>
+          <p className="text-sm text-slate-500 mt-1.5 max-w-xs mx-auto">
             Spara ett svar från analysassistenten för att bygga upp ditt insiktsbibliotek.
           </p>
           <Link
             to="/assistant"
-            className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
+            className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             Öppna analysassistenten →
           </Link>
@@ -172,38 +171,38 @@ export function InsightsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {summaries.map(s => (
-            <div key={s.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 flex flex-col hover:shadow-md transition-shadow">
+            <div key={s.id} className="surface-card p-5 flex flex-col hover:border-workspace-border/80 transition-colors">
               <button
                 onClick={() => openDetail(s.id)}
-                className="text-left"
+                className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
               >
-                <p className="text-sm font-semibold text-slate-900 leading-snug line-clamp-2 hover:text-brand-600 transition-colors">
+                <p className="text-sm font-semibold text-slate-100 leading-snug line-clamp-2 hover:text-brand-400 transition-colors">
                   {s.question}
                 </p>
               </button>
-              <p className="mt-2 text-sm text-slate-500 leading-relaxed line-clamp-2 flex-1">{s.answer_preview}</p>
+              <p className="mt-2 text-sm text-slate-400 leading-relaxed line-clamp-2 flex-1">{s.answer_preview}</p>
 
               <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                <span className="text-xs text-slate-400">{formatDate(s.created_at)}</span>
+                <span className="text-xs text-slate-500">{formatDate(s.created_at)}</span>
                 {s.has_chart && (
-                  <span className="text-xs bg-brand-50 text-brand-600 border border-brand-100 rounded px-1.5 py-0.5">Graf</span>
+                  <span className="text-xs bg-brand-500/10 text-brand-400 border border-brand-500/20 rounded px-1.5 py-0.5">Graf</span>
                 )}
                 {s.source_tools.slice(0, 2).map(t => (
-                  <span key={t} className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">{toolLabel(t)}</span>
+                  <span key={t} className="text-xs bg-workspace-muted text-slate-400 border border-workspace-border rounded px-1.5 py-0.5">{toolLabel(t)}</span>
                 ))}
               </div>
 
-              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-workspace-border/60">
                 <button
                   onClick={() => openDetail(s.id)}
-                  className="text-xs font-medium text-brand-600 hover:text-brand-700"
+                  className="text-xs font-medium text-brand-400 hover:text-brand-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
                 >
                   Öppna
                 </button>
                 <button
                   onClick={() => handleExportPdf(s.id, s.created_at)}
                   disabled={pdfLoading === s.id}
-                  className="text-xs font-medium text-slate-500 hover:text-slate-800 disabled:opacity-60"
+                  className="text-xs font-medium text-slate-500 hover:text-slate-300 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
                 >
                   {pdfLoading === s.id ? 'Genererar…' : 'Exportera PDF'}
                 </button>
@@ -213,13 +212,13 @@ export function InsightsPage() {
                     <span className="text-xs text-slate-500">Bekräfta?</span>
                     <button
                       onClick={() => handleDelete(s.id)}
-                      className="text-xs font-medium px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+                      className="text-xs font-medium px-2 py-1 rounded bg-red-500/90 text-white hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
                     >
                       Ja
                     </button>
                     <button
                       onClick={() => setDeleteConfirm(null)}
-                      className="text-xs text-slate-500 hover:text-slate-700"
+                      className="text-xs text-slate-500 hover:text-slate-300"
                     >
                       Nej
                     </button>
@@ -227,7 +226,7 @@ export function InsightsPage() {
                 ) : (
                   <button
                     onClick={() => setDeleteConfirm(s.id)}
-                    className="ml-auto text-xs font-medium text-slate-400 hover:text-red-500"
+                    className="ml-auto text-xs font-medium text-slate-500 hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 rounded"
                   >
                     Ta bort
                   </button>
@@ -239,19 +238,19 @@ export function InsightsPage() {
       )}
 
       {exportError && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{exportError}</p>
+        <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">{exportError}</p>
       )}
 
       {/* Detail overlay */}
       {(detail || detailLoading) && (
         <div className="fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setDetail(null)} aria-hidden />
-          <aside className="relative ml-auto h-full w-full max-w-lg bg-white shadow-2xl flex flex-col">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
-              <h2 className="text-sm font-semibold text-slate-800">Insiktsdetaljer</h2>
+          <div className="absolute inset-0 bg-black/60" onClick={() => setDetail(null)} aria-hidden />
+          <aside className="relative ml-auto h-full w-full max-w-lg bg-workspace-surface border-l border-workspace-border flex flex-col">
+            <div className="px-6 py-4 border-b border-workspace-border flex items-center justify-between shrink-0">
+              <h2 className="text-sm font-semibold text-slate-100">Insiktsdetaljer</h2>
               <button
                 onClick={() => setDetail(null)}
-                className="text-slate-400 hover:text-slate-700 text-lg leading-none"
+                className="text-slate-500 hover:text-slate-300 text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
                 aria-label="Stäng"
               >
                 ✕
@@ -266,19 +265,19 @@ export function InsightsPage() {
               ) : (
                 <div className="space-y-5">
                   <div>
-                    <p className="text-xs text-slate-400 mb-1">{formatDate(detail.created_at)}</p>
-                    <h3 className="text-base font-semibold text-slate-900 leading-snug">{detail.question}</h3>
+                    <p className="text-xs text-slate-500 mb-1">{formatDate(detail.created_at)}</p>
+                    <h3 className="text-base font-semibold text-slate-100 leading-snug">{detail.question}</h3>
                   </div>
 
-                  <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50 rounded-lg px-4 py-3 border border-slate-100">
+                  <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap surface-inset px-4 py-3">
                     {detail.answer}
                   </div>
 
                   {detail.chart && (
-                    <div className="border border-slate-100 rounded-lg px-4 py-3">
-                      <p className="text-xs font-semibold text-slate-700 mb-0.5">{detail.chart.title}</p>
+                    <div className="border border-workspace-border rounded-lg px-4 py-3 bg-workspace-muted/50">
+                      <p className="text-xs font-semibold text-slate-300 mb-0.5">{detail.chart.title}</p>
                       {detail.chart.description && (
-                        <p className="text-xs text-slate-400 mb-2">{detail.chart.description}</p>
+                        <p className="text-xs text-slate-500 mb-2">{detail.chart.description}</p>
                       )}
                       <MiniChart chart={detail.chart} />
                     </div>
@@ -287,7 +286,7 @@ export function InsightsPage() {
                   {detail.tool_calls.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {detail.tool_calls.map(t => (
-                        <span key={t} className="text-xs bg-brand-50 text-brand-600 border border-brand-100 rounded px-1.5 py-0.5">
+                        <span key={t} className="text-xs bg-brand-500/10 text-brand-400 border border-brand-500/20 rounded px-1.5 py-0.5">
                           {toolLabel(t)}
                         </span>
                       ))}
@@ -297,7 +296,7 @@ export function InsightsPage() {
                   {detail.limitations.length > 0 && (
                     <div className="space-y-0.5">
                       {detail.limitations.map((l, i) => (
-                        <p key={i} className="text-xs text-amber-600">⚠ {l}</p>
+                        <p key={i} className="text-xs text-amber-400/90">⚠ {l}</p>
                       ))}
                     </div>
                   )}
@@ -306,7 +305,7 @@ export function InsightsPage() {
                     <button
                       onClick={() => handleExportPdf(detail.id, detail.created_at)}
                       disabled={pdfLoading === detail.id}
-                      className="w-full text-sm px-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                      className="w-full text-sm px-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                     >
                       {pdfLoading === detail.id ? '… Genererar rapport' : '↓ Exportera rapport som PDF'}
                     </button>
@@ -315,13 +314,13 @@ export function InsightsPage() {
                         <span className="text-xs text-slate-500">Bekräfta?</span>
                         <button
                           onClick={() => handleDelete(detail.id)}
-                          className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600"
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500/90 text-white hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
                         >
                           Ta bort
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
-                          className="text-xs px-2 py-1.5 text-slate-500 hover:text-slate-700"
+                          className="text-xs px-2 py-1.5 text-slate-500 hover:text-slate-300"
                         >
                           Avbryt
                         </button>
@@ -329,7 +328,7 @@ export function InsightsPage() {
                     ) : (
                       <button
                         onClick={() => setDeleteConfirm(detail.id)}
-                        className="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-400 hover:border-red-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        className="w-full text-xs px-3 py-1.5 rounded-lg border border-workspace-border text-slate-500 hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
                       >
                         Ta bort insikt
                       </button>

@@ -31,13 +31,13 @@ export function TopProducts({
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-800">Topprodukter</h2>
+            <h2 className="text-sm font-semibold text-slate-100">Topprodukter</h2>
             <p className="text-xs text-slate-500 mt-0.5">Rankade efter omsättning</p>
           </div>
           <select
             value={selectedRegion}
             onChange={e => onRegionChange(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent shrink-0"
+            className="input-select shrink-0"
           >
             {regionOptions.map(r => (
               <option key={r.value} value={r.value}>{r.label}</option>
@@ -53,10 +53,9 @@ export function TopProducts({
         ) : error || !data ? (
           <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
         ) : data.products.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-8">Inga produkter hittades för vald period</p>
+          <p className="text-sm text-slate-500 text-center py-8">Inga produkter hittades för vald period</p>
         ) : (
           <div>
-            {/* Column header */}
             <div className={`grid grid-cols-[1.25rem_1fr_3.5rem_4.5rem] gap-x-3 mb-1.5 px-0.5 ${compact ? '' : 'mb-2 px-1'}`}>
               <span />
               <span className="text-xs font-medium text-slate-500">Produkt</span>
@@ -69,27 +68,27 @@ export function TopProducts({
               return (
                 <div
                   key={p.sku}
-                  className={`grid grid-cols-[1.25rem_1fr_3.5rem_4.5rem] gap-x-3 items-center border-b border-slate-100 last:border-0 ${
+                  className={`grid grid-cols-[1.25rem_1fr_3.5rem_4.5rem] gap-x-3 items-center border-b border-workspace-border/50 last:border-0 ${
                     compact ? 'py-2' : 'py-2.5 px-1'
-                  } ${isTop && !compact ? 'rounded-lg bg-slate-50 -mx-1 px-2' : ''}`}
+                  } ${isTop && !compact ? 'rounded-lg bg-workspace-muted/80 -mx-1 px-2' : ''}`}
                 >
-                  <span className={`text-xs font-semibold tabular-nums leading-none ${isTop ? 'text-brand-600' : 'text-slate-400'}`}>
+                  <span className={`text-xs font-semibold tabular-nums leading-none ${isTop ? 'text-brand-400' : 'text-slate-500'}`}>
                     {p.rank}
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate leading-snug">{p.product_name}</p>
+                    <p className="text-sm font-medium text-slate-200 truncate leading-snug">{p.product_name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-slate-400">{p.sku}</span>
-                      <div className="flex-1 h-0.5 bg-slate-100 rounded-full overflow-hidden max-w-[3.5rem]">
+                      <span className="text-xs text-slate-500">{p.sku}</span>
+                      <div className="flex-1 h-0.5 bg-workspace-border/60 rounded-full overflow-hidden max-w-[3.5rem]">
                         <div
-                          className={`h-full rounded-full ${isTop ? 'bg-brand-400' : 'bg-slate-300'}`}
+                          className={`h-full rounded-full ${isTop ? 'bg-brand-500' : 'bg-slate-600'}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
                     </div>
                   </div>
-                  <span className="text-xs text-slate-600 tabular-nums text-right">{formatNumber(p.units)}</span>
-                  <span className={`text-sm font-semibold tabular-nums text-right ${isTop ? 'text-slate-900' : 'text-slate-700'}`}>
+                  <span className="text-xs text-slate-400 tabular-nums text-right">{formatNumber(p.units)}</span>
+                  <span className={`text-sm font-semibold tabular-nums text-right ${isTop ? 'text-slate-100' : 'text-slate-300'}`}>
                     {formatSEK(p.revenue)}
                   </span>
                 </div>

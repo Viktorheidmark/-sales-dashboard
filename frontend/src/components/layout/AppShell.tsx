@@ -11,21 +11,23 @@ export function AppShell({ supplierName, onLogout }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-workspace">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:w-60 z-30">
         <Sidebar supplierName={supplierName} onLogout={onLogout} />
       </aside>
 
       {/* Mobile top bar */}
-      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between bg-slate-900 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="text-brand-500 text-lg font-bold leading-none">◈</span>
-          <span className="text-sm font-semibold text-white tracking-tight">Solvigo</span>
+      <div className="md:hidden sticky top-0 z-30 flex items-center justify-between bg-sidebar border-b border-sidebar-border px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-md bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">
+            <span className="text-brand-400 text-sm font-bold leading-none">◈</span>
+          </div>
+          <span className="text-sm font-semibold text-slate-100 tracking-tight">Solvigo</span>
         </div>
         <button
           onClick={() => setDrawerOpen(true)}
-          className="text-slate-300 hover:text-white p-1"
+          className="text-slate-400 hover:text-slate-200 p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
           aria-label="Öppna meny"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -37,8 +39,8 @@ export function AppShell({ supplierName, onLogout }: AppShellProps) {
       {/* Mobile drawer */}
       {drawerOpen && (
         <div className="md:hidden fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} aria-hidden />
-          <div className="absolute inset-y-0 left-0 w-64 shadow-xl">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} aria-hidden />
+          <div className="absolute inset-y-0 left-0 w-64 border-r border-sidebar-border">
             <Sidebar
               supplierName={supplierName}
               onLogout={onLogout}

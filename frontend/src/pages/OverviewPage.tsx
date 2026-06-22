@@ -103,26 +103,22 @@ export function OverviewPage({ user }: OverviewPageProps) {
       {/* Compact page header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">
+          <h1 className="text-xl font-semibold text-slate-100 tracking-tight">
             Försäljningsöversikt
           </h1>
           {latestOrderDate && (
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-500">
               Senast transaktionsdatum: {formatShortDate(latestOrderDate)}
             </p>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <div className="flex items-center gap-0.5 bg-white border border-slate-200/80 rounded-lg p-1">
+          <div className="segment-control">
             {DATE_PRESETS.map(p => (
               <button
                 key={p.value}
                 onClick={() => setDatePreset(p.value)}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                  datePreset === p.value
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                }`}
+                className={`segment-btn ${datePreset === p.value ? 'segment-btn-active' : ''}`}
               >
                 {p.label}
               </button>
@@ -131,7 +127,7 @@ export function OverviewPage({ user }: OverviewPageProps) {
           <button
             onClick={handleRefresh}
             disabled={anyLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200/80 text-slate-500 hover:text-slate-900 text-xs font-medium transition-colors disabled:opacity-40"
+            className="btn-ghost"
             aria-label="Uppdatera"
           >
             <span className={anyLoading ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
@@ -221,7 +217,7 @@ export function OverviewPage({ user }: OverviewPageProps) {
         </div>
       </section>
 
-      <p className="text-xs text-slate-300 pt-1">Syntetisk demodata · Solvigo Sales Intelligence</p>
+      <p className="text-xs text-slate-600 pt-1">Syntetisk demodata · Solvigo Sales Intelligence</p>
     </div>
   )
 }

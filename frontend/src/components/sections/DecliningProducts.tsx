@@ -19,11 +19,11 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-slate-800">Produkter att bevaka</h2>
+            <h2 className="text-sm font-semibold text-slate-100">Produkter att bevaka</h2>
             <p className="text-xs text-slate-500 mt-0.5">Nedgång mot föregående period</p>
           </div>
           {data && (
-            <span className="text-xs font-medium text-slate-400">
+            <span className="text-xs font-medium text-slate-500">
               {data.comparison_days} dagar
             </span>
           )}
@@ -38,13 +38,13 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
           <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
         ) : data.products.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2">
-            <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-              <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="text-sm font-medium text-slate-700">Inga produkter i nedgång</p>
-            <p className="text-xs text-slate-400">Alla produkter håller sig stabila</p>
+            <p className="text-sm font-medium text-slate-300">Inga produkter i nedgång</p>
+            <p className="text-xs text-slate-500">Alla produkter håller sig stabila</p>
           </div>
         ) : (
           <div className="space-y-1.5">
@@ -58,41 +58,44 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
                   key={p.sku}
                   className={`rounded-lg px-3 py-2.5 border ${
                     isFlagged
-                      ? 'bg-amber-50/80 border-amber-100'
+                      ? 'bg-amber-500/5 border-amber-500/20'
                       : severe
-                        ? 'bg-red-50/80 border-red-100'
-                        : 'bg-slate-50/80 border-slate-100'
+                        ? 'bg-red-500/5 border-red-500/20'
+                        : 'bg-workspace-muted/60 border-workspace-border/60'
                   }`}
                 >
                   <div className="flex items-start gap-2">
-                    <span className={`text-xs font-semibold mt-0.5 w-4 shrink-0 ${idx === 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                    <span className={`text-xs font-semibold mt-0.5 w-4 shrink-0 ${idx === 0 ? 'text-red-400' : 'text-slate-500'}`}>
                       {p.rank}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-medium text-slate-800 truncate">{p.product_name}</span>
+                        <span className="text-sm font-medium text-slate-200 truncate">{p.product_name}</span>
                         {isFlagged && (
-                          <span className="shrink-0 text-[10px] font-medium bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                          <span className="shrink-0 text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded">
                             Bevakning
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-xs text-slate-400">{p.sku}</span>
+                        <span className="text-xs text-slate-500">{p.sku}</span>
                         <span className="text-xs text-slate-500">Föreg: {formatSEK(p.prior_period_revenue)}</span>
-                        <span className="text-xs text-slate-600">Nu: {formatSEK(p.latest_period_revenue)}</span>
+                        <span className="text-xs text-slate-400">Nu: {formatSEK(p.latest_period_revenue)}</span>
                       </div>
                     </div>
-                    <span className={`text-sm font-semibold tabular-nums shrink-0 ${
-                      severe ? 'text-red-600' : 'text-orange-600'
-                    }`}>
+                    <span
+                      className={`text-sm font-semibold tabular-nums shrink-0 ${
+                        severe ? 'text-red-400' : 'text-orange-400'
+                      }`}
+                      aria-label="Förändring"
+                    >
                       {formatPctChange(changePct)}
                     </span>
                   </div>
 
-                  <div className="mt-2 ml-6 h-0.5 bg-white rounded-full overflow-hidden">
+                  <div className="mt-2 ml-6 h-0.5 bg-workspace-border/60 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${isFlagged ? 'bg-amber-400' : severe ? 'bg-red-400' : 'bg-slate-400'}`}
+                      className={`h-full rounded-full ${isFlagged ? 'bg-amber-500/70' : severe ? 'bg-red-500/70' : 'bg-slate-500'}`}
                       style={{
                         width: `${Math.max(2, Math.min(100, (p.latest_period_revenue / p.prior_period_revenue) * 100))}%`,
                       }}

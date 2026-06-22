@@ -4,14 +4,48 @@
 
 @layer base {
   body {
-    @apply bg-zinc-50 text-zinc-900 antialiased;
+    @apply bg-workspace text-slate-300 antialiased;
     font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply bg-workspace-surface border border-workspace-border rounded-xl;
+  }
+
+  .surface-elevated {
+    @apply bg-workspace-elevated border border-workspace-border rounded-xl;
+  }
+
+  .surface-inset {
+    @apply bg-workspace-muted border border-workspace-border/60 rounded-lg;
+  }
+
+  .segment-control {
+    @apply flex items-center gap-0.5 bg-workspace-surface border border-workspace-border rounded-lg p-1;
+  }
+
+  .segment-btn {
+    @apply px-3 py-1.5 rounded-md text-xs font-semibold transition-colors text-slate-400 hover:text-slate-200 hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50;
+  }
+
+  .segment-btn-active {
+    @apply bg-brand-500/15 text-brand-400 border border-brand-500/25;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-workspace-surface border border-workspace-border text-slate-400 hover:text-slate-200 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40;
+  }
+
+  .input-select {
+    @apply text-xs border border-workspace-border rounded-lg px-2.5 py-1.5 text-slate-300 bg-workspace-elevated focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/50;
   }
 }
 
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: theme('colors.zinc.300') transparent;
+    scrollbar-color: theme('colors.workspace.border') transparent;
   }
 }

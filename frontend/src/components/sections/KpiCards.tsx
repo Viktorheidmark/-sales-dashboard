@@ -22,7 +22,10 @@ function Delta({ pct }: { pct: number | null }) {
   const positive = pct >= 0
   const sign = positive ? '+' : ''
   return (
-    <span className={`text-[11px] font-semibold tabular-nums ${positive ? 'text-emerald-600' : 'text-red-500'}`}>
+    <span
+      className={`text-xs font-semibold tabular-nums ${positive ? 'text-emerald-400' : 'text-red-400'}`}
+      aria-label={positive ? 'Positiv förändring' : 'Negativ förändring'}
+    >
       {sign}{pct.toFixed(1).replace('.', ',')}%
     </span>
   )
@@ -38,18 +41,16 @@ interface KpiCardProps {
 function KpiCard({ label, value, delta, compLabel, compact }: KpiCardProps & { compact?: boolean }) {
   const hasDelta = delta !== undefined && delta !== null
   return (
-    <div className={`bg-white rounded-lg border border-slate-200/70 ${compact ? 'px-4 py-3.5' : 'px-5 py-5'}`}>
-      <p className={`font-medium text-slate-500 leading-none ${compact ? 'text-xs' : 'text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400'}`}>
-        {label}
-      </p>
-      <p className={`font-bold text-slate-900 tabular-nums leading-none ${compact ? 'mt-1.5 text-xl' : 'mt-3 text-[1.625rem]'}`}>
+    <div className={`surface-elevated ${compact ? 'px-4 py-3.5' : 'px-5 py-5'}`}>
+      <p className="text-xs font-medium text-slate-500 leading-none">{label}</p>
+      <p className={`font-bold text-slate-100 tabular-nums leading-none ${compact ? 'mt-1.5 text-xl' : 'mt-3 text-[1.625rem]'}`}>
         {value}
       </p>
       <div className={`flex items-center gap-1.5 min-h-[1rem] ${compact ? 'mt-1.5' : 'mt-2'}`}>
         {hasDelta && (
           <>
             <Delta pct={delta} />
-            <span className={`text-slate-400 ${compact ? 'text-xs' : 'text-[10px]'}`}>{compLabel}</span>
+            <span className="text-xs text-slate-500">{compLabel}</span>
           </>
         )}
       </div>
@@ -68,7 +69,7 @@ export function KpiCards({ data, loading, error, onRetry, periodLabel, compact =
 
   if (error || !data) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200/70 p-5">
+      <div className="surface-card p-5">
         <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
       </div>
     )
