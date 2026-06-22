@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { api } from '../../api/client'
-import type { ChatResponse, ChartPayload } from '../../api/types'
+import type { ChatResponse, ChartPayload, SourceMeta } from '../../api/types'
 import { formatDate } from '../../utils/format'
 
 const EXAMPLE_PROMPTS = [
@@ -24,6 +24,7 @@ interface Message {
   response?: ChatResponse
   error?: string
   loading?: boolean
+  question?: string  // set on assistant messages to enable saving
 }
 
 interface ChatPanelProps {
@@ -86,7 +87,32 @@ function ToolBadge({ name }: { name: string }) {
   )
 }
 
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
 function AssistantBubble({ msg }: { msg: Message }) {
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+
+  const handleSave = async () => {
+    if (!msg.question || !msg.response || saveState !== 'idle') return
+    const r = msg.response
+    // Only save grounded (MCP-backed) responses
+    if (r.tool_calls.length === 0) return
+    setSaveState('saving')
+    try {
+      await api.saveInsight({
+        question: msg.question,
+        answer: r.answer,
+        chart: r.chart ?? undefined,
+        tool_calls: r.tool_calls,
+        sources: r.sources as unknown as SourceMeta[],
+        limitations: r.limitations,
+      })
+      setSaveState('saved')
+    } catch {
+      setSaveState('error')
+    }
+  }
+
   if (msg.loading) {
     return (
       <div className="flex gap-2 items-start">
@@ -162,16 +188,31 @@ function AssistantBubble({ msg }: { msg: Message }) {
           )}
         </div>
 
-        {/* Tool + source indicators */}
+        {/* Tool + source indicators + save action */}
         {r.tool_calls.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 px-1">
             <span className="text-xs text-zinc-400">via</span>
             {r.tool_calls.map(t => <ToolBadge key={t} name={t} />)}
             {r.sources[0]?.generated_at && (
-              <span className="text-xs text-zinc-400 ml-auto">
+              <span className="text-xs text-zinc-400">
                 {formatDate(r.sources[0].generated_at)}
               </span>
             )}
+            <button
+              onClick={handleSave}
+              disabled={saveState !== 'idle'}
+              className={`ml-auto text-xs px-2 py-0.5 rounded border transition-colors ${
+                saveState === 'saved'
+                  ? 'border-emerald-200 text-emerald-600 bg-emerald-50 cursor-default'
+                  : saveState === 'error'
+                  ? 'border-red-200 text-red-500 bg-red-50 cursor-default'
+                  : saveState === 'saving'
+                  ? 'border-zinc-200 text-zinc-400 cursor-wait'
+                  : 'border-zinc-200 text-zinc-400 hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50'
+              }`}
+            >
+              {saveState === 'saved' ? '✓ Sparad' : saveState === 'error' ? '✗ Fel' : saveState === 'saving' ? '…' : 'Spara insikt'}
+            </button>
           </div>
         )}
       </div>
@@ -204,6 +245,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
       role: 'assistant',
       content: '',
       loading: true,
+      question: trimmed,
     }
 
     setMessages(prev => [...prev, userMsg, loadingMsg])

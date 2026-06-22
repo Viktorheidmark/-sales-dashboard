@@ -55,6 +55,40 @@ Dashboard endpoints (non-chat) call the same `query_helpers` functions directly 
 
 ---
 
+## Saved insights and PDF reports
+
+Authenticated supplier users can save any grounded chat answer (one backed by MCP tool data) and later retrieve or export it as a polished PDF report.
+
+**Behaviour:**
+- Insights are supplier-scoped — the backend derives `supplier_id` from the session cookie; the frontend never sends it.
+- Cross-tenant reads, exports, or deletes always return 404 (never 403).
+- Only grounded responses (those with `tool_calls.length > 0`) can be saved — guardrail, unsupported, or clarification responses have no "Save insight" button.
+- The chart payload is stored as JSONB and reproduced faithfully on export; chart values always come from MCP results, never from AI prose.
+- PDF is the only user-facing export format — no public sharing links or bulk operations in this MVP.
+
+**PDF report format (A4):**
+- Header band: slate-900 background, "◈ Solvigo Sales Intelligence" (brand blue), supplier name (right), "Analysrapport" sub-label.
+- Body: fråga (question), analys (answer text, line-by-line), chart rendered as PNG via matplotlib (line/bar/pie), datakällor (source tools as human-readable Swedish labels), begränsningar (limitations in amber).
+- Footer: "Baserat på MCP-analytiklagret · Inte simulerade data · Solvigo Sales Intelligence" + generation timestamp.
+- Chart render uses brand palette (`#4169e1`, `#a5b4fc`, `#c7d2fe`). Negative bar values (e.g. declining %) get `#ef4444`. Chart block is silently omitted if no chart was saved.
+- No `supplier_id`, JWT, database URLs, or internal paths appear in the output.
+
+**Endpoints (all require session cookie):**
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/insights` | Save a grounded insight |
+| `GET` | `/api/insights` | List own insights (newest first, max 100) |
+| `GET` | `/api/insights/{id}` | Full detail including chart |
+| `DELETE` | `/api/insights/{id}` | Delete own insight |
+| `GET` | `/api/insights/{id}/export.pdf` | Download polished A4 PDF report |
+
+PDF generation: `backend/app/services/pdf_builder.py` — `reportlab` (Platypus, A4) + `matplotlib` (Agg backend, in-memory PNG). No browser or system-level dependencies.
+
+Smoke test: `python -m scripts.pdf_smoke_test` (8 cases, requires running backend).
+
+---
+
 ## Chat charts
 
 Each grounded chat answer can include a deterministic chart payload rendered directly in the chat UI.
@@ -338,4 +372,4 @@ Hur presterar vi i Göteborg jämfört med Stockholm?
 | Date handling | Tool default window when no dates passed | Explicit date required from frontend |
 | Seed data | Synthetic, deterministic | Real anonymised retailer export |
 
-**Out of scope for MVP:** authentication, saved insights export, PDF reports, background jobs, multi-turn chat memory, real-time streaming responses, admin panels.
+**Out of scope for MVP:** authentication, background jobs, multi-turn chat memory, real-time streaming responses, admin panels.

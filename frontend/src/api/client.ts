@@ -3,10 +3,14 @@ import type {
   ChatRequest,
   ChatResponse,
   DecliningProductsResponse,
+  InsightDetail,
+  InsightSummary,
   MarketShareResponse,
   OverviewResponse,
   RegionsResponse,
   SalesOverTimeResponse,
+  SaveInsightRequest,
+  SaveInsightResponse,
   TopProductsResponse,
 } from './types'
 
@@ -39,6 +43,26 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     throw new Error(detail?.detail ?? `HTTP ${res.status}`)
   }
   return res.json() as Promise<T>
+}
+
+async function del(path: string): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail?.detail ?? `HTTP ${res.status}`)
+  }
+}
+
+async function getBlob(path: string): Promise<Blob> {
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include' })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail?.detail ?? `HTTP ${res.status}`)
+  }
+  return res.blob()
 }
 
 export const api = {
@@ -95,4 +119,20 @@ export const api = {
 
   chat: (req: ChatRequest): Promise<ChatResponse> =>
     post<ChatResponse>('/api/chat', req),
+
+  // --- Insights (supplier_id always derived from session cookie) ---
+  saveInsight: (req: SaveInsightRequest): Promise<SaveInsightResponse> =>
+    post<SaveInsightResponse>('/api/insights', req),
+
+  listInsights: (limit = 20): Promise<InsightSummary[]> =>
+    get<InsightSummary[]>('/api/insights', { limit }),
+
+  getInsight: (id: string): Promise<InsightDetail> =>
+    get<InsightDetail>(`/api/insights/${id}`),
+
+  deleteInsight: (id: string): Promise<void> =>
+    del(`/api/insights/${id}`),
+
+  exportInsightPdf: (id: string): Promise<Blob> =>
+    getBlob(`/api/insights/${id}/export.pdf`),
 }

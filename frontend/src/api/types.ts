@@ -40,6 +40,42 @@ export interface ChatRequest {
   end_date?: string
 }
 
+// --- /api/insights ---
+
+export interface SaveInsightRequest {
+  question: string
+  answer: string
+  chart?: ChartPayload | null
+  tool_calls: string[]
+  sources: SourceMeta[]
+  limitations: string[]
+}
+
+export interface SaveInsightResponse {
+  id: string
+  created_at: string
+}
+
+export interface InsightSummary {
+  id: string
+  question: string
+  answer_preview: string
+  created_at: string
+  has_chart: boolean
+  source_tools: string[]
+}
+
+export interface InsightDetail {
+  id: string
+  question: string
+  answer: string
+  chart?: ChartPayload | null
+  tool_calls: string[]
+  sources: Record<string, unknown>[]
+  limitations: string[]
+  created_at: string
+}
+
 export interface ChatResponse {
   answer: string
   tool_calls: string[]

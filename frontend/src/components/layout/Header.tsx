@@ -6,6 +6,7 @@ interface HeaderProps {
   onDatePresetChange: (p: DatePreset) => void
   onRefresh: () => void
   onLogout: () => void
+  onInsights: () => void
   loading: boolean
 }
 
@@ -22,6 +23,7 @@ export function Header({
   onDatePresetChange,
   onRefresh,
   onLogout,
+  onInsights,
   loading,
 }: HeaderProps) {
   return (
@@ -44,6 +46,12 @@ export function Header({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={onInsights}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              ☆ Insikter
+            </button>
             <button
               onClick={onRefresh}
               disabled={loading}

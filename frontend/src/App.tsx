@@ -19,6 +19,7 @@ import { RegionalSales } from './components/sections/RegionalSales'
 import { MarketShare } from './components/sections/MarketShare'
 import { DecliningProducts } from './components/sections/DecliningProducts'
 import { LoginPage } from './components/sections/LoginPage'
+import { InsightsPanel } from './components/sections/InsightsPanel'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
 
@@ -57,6 +58,7 @@ function initialState<T>(): SectionState<T> {
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>('loading')
   const [user, setUser] = useState<AuthUser | null>(null)
+  const [showInsights, setShowInsights] = useState(false)
 
   const [datePreset, setDatePreset] = useState<DatePreset>('90d')
   const [selectedRegion, setSelectedRegion] = useState('All regions')
@@ -150,8 +152,10 @@ export default function App() {
         onDatePresetChange={setDatePreset}
         onRefresh={handleRefresh}
         onLogout={handleLogout}
+        onInsights={() => setShowInsights(true)}
         loading={anyLoading}
       />
+      <InsightsPanel isOpen={showInsights} onClose={() => setShowInsights(false)} />
 
       <main className="max-w-screen-xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <KpiCards
