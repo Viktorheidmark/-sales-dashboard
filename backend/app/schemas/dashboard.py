@@ -35,10 +35,24 @@ class OverviewResponse(BaseModel):
     total_orders: int
     total_units: int
     average_order_value: Optional[float]
+    latest_order_date: Optional[str] = None
     date_range: DateRange
     source: str
     generated_at: str
     row_count: int
+    limitations: list[str]
+
+
+# --- /api/dashboard/data-status ---
+
+class DataStatusResponse(BaseModel):
+    supplier_id: str
+    period_start: str
+    period_end: str
+    latest_order_date: Optional[str]
+    total_orders: int
+    total_units: int
+    generated_at: str
     limitations: list[str]
 
 

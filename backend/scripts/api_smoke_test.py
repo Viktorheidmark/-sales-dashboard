@@ -143,6 +143,37 @@ def main():
     results.append(ok)
     print(f"{PASS if ok else FAIL} GET /api/dashboard/sales-over-time (bad granularity → 422)")
 
+    # 17 — data-status: basic shape
+    s, b = get("/api/dashboard/data-status", nordic_cookies)
+    results.append(check("GET /api/dashboard/data-status (Nordic)", s, b,
+                         ["supplier_id", "period_start", "period_end", "latest_order_date",
+                          "total_orders", "total_units", "generated_at"]))
+
+    # 18 — data-status: supplier scope isolation
+    s_n, n = get("/api/dashboard/data-status", nordic_cookies)
+    s_f, f = get("/api/dashboard/data-status", snacks_cookies)
+    ok = (s_n == 200 and s_f == 200
+          and n.get("supplier_id") == nordic_id
+          and f.get("supplier_id") == snacks_id
+          and n.get("total_orders") != f.get("total_orders"))
+    results.append(ok)
+    print(f"{PASS if ok else FAIL} data-status supplier_id isolation (Nordic ≠ Fresh Snacks)")
+
+    # 19 — data-status: non-negative counts and valid date format
+    ok = (s_n == 200
+          and n.get("total_orders", -1) >= 0
+          and n.get("total_units", -1) >= 0
+          and isinstance(n.get("latest_order_date"), str)
+          and len(n.get("latest_order_date", "")) == 10)  # YYYY-MM-DD
+    results.append(ok)
+    print(f"{PASS if ok else FAIL} data-status counts non-negative, latest_order_date is YYYY-MM-DD")
+
+    # 20 — data-status: unauthenticated → 401
+    s, b = get("/api/dashboard/data-status", cookies={})
+    ok = s == 401
+    results.append(ok)
+    print(f"{PASS if ok else FAIL} GET /api/dashboard/data-status (no cookie → 401)")
+
     passed = sum(1 for r in results if r)
     total = len(results)
     print(f"\n{'─'*50}")

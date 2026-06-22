@@ -433,3 +433,48 @@ python -m scripts.stream_smoke_test
 ```
 
 The non-streaming endpoint (`POST /api/chat`) is preserved unchanged for backwards compatibility.
+
+---
+
+## Data freshness and quality (Phase 16)
+
+Every dashboard response includes a `generated_at` timestamp (request time) and a `source` field (e.g. `MCP:get_supplier_kpis`). The KPI overview response also includes `latest_order_date` — the most recent `order_date` value in the database for that supplier and period, derived from `MAX(order_date)` over the same supplier-scoped query used for all other KPI fields.
+
+### What is displayed
+
+Below the KPI cards, a compact metadata row shows:
+
+```
+Dataperiod: 24 mars–22 juni 2026 · 771 ordrar · 2 913 sålda enheter
+Senast transaktionsdatum: 22 juni 2026 · Beräknad: 22 juni 2026 20:10
+```
+
+- **Dataperiod** — the selected date window (from the date-picker preset)
+- **ordrar / sålda enheter** — real counts for that supplier and period
+- **Senast transaktionsdatum** — `MAX(order_date)` from the database; tells users how recent the data actually is
+- **Beräknad** — when the backend query ran (request time)
+
+The distinction matters: if data is loaded at 20:10 but the latest transaction was yesterday, users can see that directly rather than assuming "now = latest data."
+
+### Data-status endpoint
+
+`GET /api/dashboard/data-status` returns a dedicated freshness summary scoped to the authenticated supplier:
+
+```json
+{
+  "supplier_id": "...",
+  "period_start": "2026-03-24",
+  "period_end": "2026-06-22",
+  "latest_order_date": "2026-06-22",
+  "total_orders": 771,
+  "total_units": 2913,
+  "generated_at": "2026-06-22T20:10:00Z",
+  "limitations": []
+}
+```
+
+`supplier_id` is always derived from the authenticated session — the frontend cannot supply or override it. Unauthenticated requests return 401.
+
+### MetaFooter
+
+All dashboard cards show "Beräknat från försäljningsdata · {source}" in the card footer, replacing the previous "Live-data" label which implied real-time connectivity.

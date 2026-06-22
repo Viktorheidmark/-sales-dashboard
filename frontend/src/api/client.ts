@@ -2,6 +2,7 @@ import type {
   AuthUser,
   ChatRequest,
   ChatResponse,
+  DataStatusResponse,
   DecliningProductsResponse,
   InsightDetail,
   InsightSummary,
@@ -128,6 +129,12 @@ export const api = {
     get<DecliningProductsResponse>('/api/dashboard/declining-products', {
       days,
       limit: 5,
+    }),
+
+  getDataStatus: (startDate?: string, endDate?: string) =>
+    get<DataStatusResponse>('/api/dashboard/data-status', {
+      start_date: startDate,
+      end_date: endDate,
     }),
 
   chat: (req: ChatRequest): Promise<ChatResponse> =>

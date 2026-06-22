@@ -62,7 +62,8 @@ def query_supplier_kpis(
                 CASE WHEN COUNT(DISTINCT o.id) = 0
                      THEN 0
                      ELSE SUM(oi.revenue) / COUNT(DISTINCT o.id)
-                END                                   AS average_order_value
+                END                                   AS average_order_value,
+                MAX(o.order_date)                     AS latest_order_date
             FROM order_items oi
             JOIN orders  o ON o.id  = oi.order_id
             JOIN products p ON p.id = oi.product_id
@@ -80,6 +81,7 @@ def query_supplier_kpis(
         "total_orders": int(row.total_orders),
         "total_units": int(row.total_units),
         "average_order_value": _float(row.average_order_value),
+        "latest_order_date": row.latest_order_date.date().isoformat() if row.latest_order_date else None,
         "date_range": {"start": _to_iso(sd), "end": _to_iso(ed)},
         "source": "MCP:get_supplier_kpis",
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -444,5 +446,50 @@ def query_declining_products(
         "source": "MCP:get_declining_products",
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "row_count": len(products),
+        "limitations": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 7. Data status
+# ---------------------------------------------------------------------------
+
+def query_data_status(
+    db: Session,
+    supplier_id: str,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> dict:
+    """
+    Return data-freshness metadata for a supplier over a date range:
+    latest transaction date, period order/unit counts, and request timestamp.
+    """
+    sd, ed = _date_range(start_date, end_date)
+
+    row = db.execute(
+        text("""
+            SELECT
+                MAX(o.order_date)             AS latest_order_date,
+                COUNT(DISTINCT o.id)          AS total_orders,
+                COALESCE(SUM(oi.quantity), 0) AS total_units
+            FROM order_items oi
+            JOIN orders   o ON o.id  = oi.order_id
+            JOIN products p ON p.id  = oi.product_id
+            JOIN brands   b ON b.id  = p.brand_id
+            WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+              AND o.order_date >= :start_date
+              AND o.order_date <  :end_date + INTERVAL '1 day'
+        """),
+        {"supplier_id": supplier_id, "start_date": sd, "end_date": ed},
+    ).fetchone()
+
+    return {
+        "supplier_id": supplier_id,
+        "period_start": _to_iso(sd),
+        "period_end": _to_iso(ed),
+        "latest_order_date": row.latest_order_date.date().isoformat() if row.latest_order_date else None,
+        "total_orders": int(row.total_orders),
+        "total_units": int(row.total_units),
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "limitations": [],
     }

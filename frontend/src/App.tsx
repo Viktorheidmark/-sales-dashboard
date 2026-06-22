@@ -21,6 +21,7 @@ import { DecliningProducts } from './components/sections/DecliningProducts'
 import { LoginPage } from './components/sections/LoginPage'
 import { InsightsPanel } from './components/sections/InsightsPanel'
 import { InsightStrip } from './components/sections/InsightStrip'
+import { DataStatusRow } from './components/sections/DataStatusRow'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
 
@@ -175,6 +176,8 @@ export default function App() {
           error={overview.error}
           onRetry={handleRefresh}
         />
+
+        <DataStatusRow data={overview.data} loading={overview.loading} />
 
         <InsightStrip
           decliningData={declining.data}

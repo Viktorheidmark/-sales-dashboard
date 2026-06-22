@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from app.dependencies import get_current_supplier_id
 from app.schemas.dashboard import (
+    DataStatusResponse,
     DecliningProductsResponse,
     MarketShareResponse,
     OverviewResponse,
@@ -77,3 +78,13 @@ def declining_products(
 ):
     """Products with the largest revenue decline vs the prior equal-length period."""
     return analytics.get_declining_products(supplier_id, days, limit)
+
+
+@router.get("/data-status", response_model=DataStatusResponse)
+def data_status(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    supplier_id: str = Depends(get_current_supplier_id),
+):
+    """Data-freshness metadata: latest transaction date, period counts, request timestamp."""
+    return analytics.get_data_status(supplier_id, start_date, end_date)

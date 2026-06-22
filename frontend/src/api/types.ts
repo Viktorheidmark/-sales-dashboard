@@ -109,10 +109,22 @@ export interface OverviewResponse {
   total_orders: number
   total_units: number
   average_order_value: number | null
+  latest_order_date: string | null
   date_range: DateRange
   source: string
   generated_at: string
   row_count: number
+  limitations: string[]
+}
+
+export interface DataStatusResponse {
+  supplier_id: string
+  period_start: string
+  period_end: string
+  latest_order_date: string | null
+  total_orders: number
+  total_units: number
+  generated_at: string
   limitations: string[]
 }
 

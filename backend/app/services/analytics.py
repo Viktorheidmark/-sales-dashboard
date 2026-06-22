@@ -30,6 +30,7 @@ if str(_backend_root) not in sys.path:
 
 from mcp_server.db import get_session
 from mcp_server.query_helpers import (
+    query_data_status,
     query_declining_products,
     query_market_share,
     query_sales_by_region,
@@ -191,5 +192,20 @@ def get_declining_products(
     db = get_session()
     try:
         return query_declining_products(db, sid, d, lim)
+    finally:
+        db.close()
+
+
+def get_data_status(
+    supplier_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> dict:
+    sid = _validate_supplier_id(supplier_id)
+    sd = _parse_date(start_date, "start_date")
+    ed = _parse_date(end_date, "end_date")
+    db = get_session()
+    try:
+        return query_data_status(db, sid, sd, ed)
     finally:
         db.close()
