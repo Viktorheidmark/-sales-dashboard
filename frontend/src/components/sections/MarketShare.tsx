@@ -115,11 +115,7 @@ export function MarketShare({
           <MetaFooter
             source={data.source}
             generatedAt={data.generated_at}
-            limitations={data.limitations.map(l =>
-              l === 'Competitor data is aggregate-only. No competitor product or order details are exposed.'
-                ? 'Konkurrentdata visas endast aggregerat. Produkt-, order- och kunddetaljer visas inte.'
-                : l
-            )}
+            limitations={data.limitations}
           />
         )}
       </CardBody>

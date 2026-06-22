@@ -352,7 +352,7 @@ def query_market_share(
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "row_count": 1,
         "limitations": [
-            "Competitor data is aggregate-only. No competitor product or order details are exposed."
+            "Konkurrentdata visas endast aggregerat. Produkt-, order- och kunddetaljer visas inte."
         ],
     }
 
