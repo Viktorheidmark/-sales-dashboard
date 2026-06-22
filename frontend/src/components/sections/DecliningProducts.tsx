@@ -19,11 +19,11 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">Produkter att bevaka</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Nedgång mot föregående period</p>
+            <h2 className="text-sm font-semibold text-theme-heading">Produkter att bevaka</h2>
+            <p className="text-xs text-theme-muted mt-0.5">Nedgång mot föregående period</p>
           </div>
           {data && (
-            <span className="text-xs font-medium text-slate-500">
+            <span className="text-xs font-medium text-theme-muted">
               {data.comparison_days} dagar
             </span>
           )}
@@ -43,8 +43,8 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="text-sm font-medium text-slate-300">Inga produkter i nedgång</p>
-            <p className="text-xs text-slate-500">Alla produkter håller sig stabila</p>
+            <p className="text-sm font-medium text-theme-body">Inga produkter i nedgång</p>
+            <p className="text-xs text-theme-muted">Alla produkter håller sig stabila</p>
           </div>
         ) : (
           <div className="space-y-1.5">
@@ -65,12 +65,12 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
                   }`}
                 >
                   <div className="flex items-start gap-2">
-                    <span className={`text-xs font-semibold mt-0.5 w-4 shrink-0 ${idx === 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                    <span className={`text-xs font-semibold mt-0.5 w-4 shrink-0 ${idx === 0 ? 'text-red-400' : 'text-theme-muted'}`}>
                       {p.rank}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-medium text-slate-200 truncate">{p.product_name}</span>
+                        <span className="text-sm font-medium text-theme-strong truncate">{p.product_name}</span>
                         {isFlagged && (
                           <span className="shrink-0 text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded">
                             Bevakning
@@ -78,9 +78,9 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-xs text-slate-500">{p.sku}</span>
-                        <span className="text-xs text-slate-500">Föreg: {formatSEK(p.prior_period_revenue)}</span>
-                        <span className="text-xs text-slate-400">Nu: {formatSEK(p.latest_period_revenue)}</span>
+                        <span className="text-xs text-theme-muted">{p.sku}</span>
+                        <span className="text-xs text-theme-muted">Föreg: {formatSEK(p.prior_period_revenue)}</span>
+                        <span className="text-xs text-theme-muted">Nu: {formatSEK(p.latest_period_revenue)}</span>
                       </div>
                     </div>
                     <span
@@ -95,7 +95,7 @@ export function DecliningProducts({ data, loading, error, onRetry }: DecliningPr
 
                   <div className="mt-2 ml-6 h-0.5 bg-workspace-border/60 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${isFlagged ? 'bg-amber-500/70' : severe ? 'bg-red-500/70' : 'bg-slate-500'}`}
+                      className={`h-full rounded-full ${isFlagged ? 'bg-amber-500/70' : severe ? 'bg-red-500/70' : 'bg-workspace-border'}`}
                       style={{
                         width: `${Math.max(2, Math.min(100, (p.latest_period_revenue / p.prior_period_revenue) * 100))}%`,
                       }}

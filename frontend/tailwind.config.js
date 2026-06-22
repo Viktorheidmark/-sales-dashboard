@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -13,17 +14,24 @@ export default {
           700: '#2f52c4',
         },
         workspace: {
-          DEFAULT: '#0e1218',
-          canvas: '#121820',
-          surface: '#161d27',
-          elevated: '#1c2531',
-          border: '#2a3544',
-          muted: '#131a22',
+          DEFAULT: 'var(--ws-bg)',
+          canvas: 'var(--ws-canvas)',
+          surface: 'var(--ws-surface)',
+          elevated: 'var(--ws-elevated)',
+          border: 'var(--ws-border)',
+          muted: 'var(--ws-muted)',
         },
         sidebar: {
-          DEFAULT: '#060a0f',
-          elevated: '#0c1118',
-          border: '#151c26',
+          DEFAULT: 'var(--sb-bg)',
+          elevated: 'var(--sb-elevated)',
+          border: 'var(--sb-border)',
+        },
+        theme: {
+          heading: 'var(--color-heading)',
+          strong: 'var(--color-strong)',
+          body: 'var(--color-body)',
+          muted: 'var(--color-muted)',
+          faint: 'var(--color-faint)',
         },
       },
       fontFamily: {

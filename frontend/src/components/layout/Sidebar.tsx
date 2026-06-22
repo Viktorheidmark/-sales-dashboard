@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { ThemeToggle } from '../ui/ThemeToggle'
 
 interface SidebarProps {
   supplierName: string
@@ -45,11 +46,11 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
       <div className="px-5 py-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-brand-500/15 border border-brand-500/25 flex items-center justify-center shrink-0">
-            <span className="text-brand-400 text-base font-bold leading-none">◈</span>
+            <span className="text-brand-600 dark:text-brand-400 text-base font-bold leading-none">◈</span>
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-100 leading-tight tracking-tight">Solvigo</div>
-            <div className="text-[10px] font-medium tracking-[0.18em] uppercase text-slate-500 leading-tight mt-0.5">
+            <div className="text-sm font-semibold text-theme-heading leading-tight tracking-tight">Solvigo</div>
+            <div className="text-[10px] font-medium tracking-[0.18em] uppercase text-theme-muted leading-tight mt-0.5">
               Sales Intelligence
             </div>
           </div>
@@ -58,7 +59,7 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-5 space-y-0.5">
-        <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-[0.16em] px-3 mb-3">
+        <p className="text-[10px] font-semibold text-theme-faint uppercase tracking-[0.16em] px-3 mb-3">
           Navigering
         </p>
         {NAV_ITEMS.map(item => (
@@ -70,14 +71,14 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
                 isActive
-                  ? 'bg-brand-500/10 text-slate-100 border-l-2 border-brand-500 pl-[10px]'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03] border-l-2 border-transparent pl-[10px]'
+                  ? 'bg-brand-500/10 text-theme-heading border-l-2 border-brand-500 pl-[10px]'
+                  : 'text-theme-muted hover:text-theme-strong hover:bg-[var(--surface-hover)] border-l-2 border-transparent pl-[10px]'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <span className={isActive ? 'text-brand-400' : 'text-slate-500'}>{item.icon}</span>
+                <span className={isActive ? 'text-brand-600 dark:text-brand-400' : 'text-theme-faint'}>{item.icon}</span>
                 {item.label}
               </>
             )}
@@ -88,19 +89,23 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
       {/* Account */}
       <div className="px-4 py-5 border-t border-sidebar-border">
         <div className="surface-inset flex items-center gap-2.5 px-3 py-2.5 mb-3">
-          <div className="w-8 h-8 rounded-full bg-workspace-elevated border border-workspace-border flex items-center justify-center shrink-0 text-xs font-semibold text-slate-200">
+          <div className="w-8 h-8 rounded-full bg-workspace-elevated border border-workspace-border flex items-center justify-center shrink-0 text-xs font-semibold text-theme-strong">
             {initial}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-slate-200 truncate leading-snug" title={supplierName}>
+            <p className="text-xs font-medium text-theme-strong truncate leading-snug" title={supplierName}>
               {supplierName || '—'}
             </p>
-            <p className="text-[10px] text-slate-500 leading-snug mt-0.5">Leverantörsvy</p>
+            <p className="text-[10px] text-theme-muted leading-snug mt-0.5">Leverantörsvy</p>
           </div>
+        </div>
+        <div className="mb-3">
+          <p className="text-[10px] font-medium text-theme-faint uppercase tracking-[0.12em] px-1 mb-2">Tema</p>
+          <ThemeToggle />
         </div>
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-300 hover:bg-white/[0.03] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-theme-muted hover:text-theme-body hover:bg-[var(--surface-hover)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
         >
           <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

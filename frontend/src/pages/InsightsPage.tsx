@@ -7,18 +7,20 @@ import {
 import { api } from '../api/client'
 import type { ChartPayload, InsightDetail, InsightSummary } from '../api/types'
 import { PageHeader } from '../components/layout/PageHeader'
-import { CHART, chartAxisTickSm, chartTooltipStyle } from '../utils/chartTheme'
+import { useChartTheme } from '../utils/chartTheme'
 
 function MiniChart({ chart }: { chart: ChartPayload }) {
+  const { chart: colors, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
+
   if (chart.chart_type === 'line_chart') {
     return (
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
           <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
           <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
           <Tooltip contentStyle={chartTooltipStyle} />
-          <Line type="monotone" dataKey={chart.y_key} stroke={CHART.line} strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey={chart.y_key} stroke={colors.line} strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     )
@@ -27,11 +29,11 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
     return (
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
           <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
           <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
           <Tooltip contentStyle={chartTooltipStyle} />
-          <Bar dataKey={chart.y_key} fill={CHART.barPrimary} radius={[3, 3, 0, 0]} />
+          <Bar dataKey={chart.y_key} fill={colors.barPrimary} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     )
@@ -41,7 +43,7 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
       <ResponsiveContainer width="100%" height={180}>
         <PieChart>
           <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={72} strokeWidth={0}>
-            {chart.data.map((_, i) => <Cell key={i} fill={CHART.pieColors[i % CHART.pieColors.length]} />)}
+            {chart.data.map((_, i) => <Cell key={i} fill={colors.pieColors[i % colors.pieColors.length]} />)}
           </Pie>
           <Tooltip contentStyle={chartTooltipStyle} />
         </PieChart>
@@ -153,12 +155,12 @@ export function InsightsPage() {
       ) : summaries.length === 0 ? (
         <div className="surface-card py-20 px-6 text-center">
           <div className="mx-auto w-14 h-14 rounded-2xl bg-workspace-elevated border border-workspace-border flex items-center justify-center mb-5">
-            <svg className="w-7 h-7 text-slate-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+            <svg className="w-7 h-7 text-theme-muted" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" />
             </svg>
           </div>
-          <p className="text-base font-semibold text-slate-100">Inga sparade insikter ännu</p>
-          <p className="text-sm text-slate-500 mt-1.5 max-w-xs mx-auto">
+          <p className="text-base font-semibold text-theme-heading">Inga sparade insikter ännu</p>
+          <p className="text-sm text-theme-muted mt-1.5 max-w-xs mx-auto">
             Spara ett svar från analysassistenten för att bygga upp ditt insiktsbibliotek.
           </p>
           <Link
@@ -176,40 +178,40 @@ export function InsightsPage() {
                 onClick={() => openDetail(s.id)}
                 className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
               >
-                <p className="text-sm font-semibold text-slate-100 leading-snug line-clamp-2 hover:text-brand-400 transition-colors">
+                <p className="text-sm font-semibold text-theme-heading leading-snug line-clamp-2 hover:text-brand-600 dark:text-brand-400 transition-colors">
                   {s.question}
                 </p>
               </button>
-              <p className="mt-2 text-sm text-slate-400 leading-relaxed line-clamp-2 flex-1">{s.answer_preview}</p>
+              <p className="mt-2 text-sm text-theme-muted leading-relaxed line-clamp-2 flex-1">{s.answer_preview}</p>
 
               <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                <span className="text-xs text-slate-500">{formatDate(s.created_at)}</span>
+                <span className="text-xs text-theme-muted">{formatDate(s.created_at)}</span>
                 {s.has_chart && (
-                  <span className="text-xs bg-brand-500/10 text-brand-400 border border-brand-500/20 rounded px-1.5 py-0.5">Graf</span>
+                  <span className="text-xs bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 rounded px-1.5 py-0.5">Graf</span>
                 )}
                 {s.source_tools.slice(0, 2).map(t => (
-                  <span key={t} className="text-xs bg-workspace-muted text-slate-400 border border-workspace-border rounded px-1.5 py-0.5">{toolLabel(t)}</span>
+                  <span key={t} className="text-xs bg-workspace-muted text-theme-muted border border-workspace-border rounded px-1.5 py-0.5">{toolLabel(t)}</span>
                 ))}
               </div>
 
               <div className="flex items-center gap-2 mt-4 pt-3 border-t border-workspace-border/60">
                 <button
                   onClick={() => openDetail(s.id)}
-                  className="text-xs font-medium text-brand-400 hover:text-brand-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+                  className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
                 >
                   Öppna
                 </button>
                 <button
                   onClick={() => handleExportPdf(s.id, s.created_at)}
                   disabled={pdfLoading === s.id}
-                  className="text-xs font-medium text-slate-500 hover:text-slate-300 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+                  className="text-xs font-medium text-theme-muted hover:text-theme-body disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
                 >
                   {pdfLoading === s.id ? 'Genererar…' : 'Exportera PDF'}
                 </button>
 
                 {deleteConfirm === s.id ? (
                   <span className="ml-auto flex items-center gap-1.5">
-                    <span className="text-xs text-slate-500">Bekräfta?</span>
+                    <span className="text-xs text-theme-muted">Bekräfta?</span>
                     <button
                       onClick={() => handleDelete(s.id)}
                       className="text-xs font-medium px-2 py-1 rounded bg-red-500/90 text-white hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
@@ -218,7 +220,7 @@ export function InsightsPage() {
                     </button>
                     <button
                       onClick={() => setDeleteConfirm(null)}
-                      className="text-xs text-slate-500 hover:text-slate-300"
+                      className="text-xs text-theme-muted hover:text-theme-body"
                     >
                       Nej
                     </button>
@@ -226,7 +228,7 @@ export function InsightsPage() {
                 ) : (
                   <button
                     onClick={() => setDeleteConfirm(s.id)}
-                    className="ml-auto text-xs font-medium text-slate-500 hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 rounded"
+                    className="ml-auto text-xs font-medium text-theme-muted hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 rounded"
                   >
                     Ta bort
                   </button>
@@ -247,10 +249,10 @@ export function InsightsPage() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setDetail(null)} aria-hidden />
           <aside className="relative ml-auto h-full w-full max-w-lg bg-workspace-surface border-l border-workspace-border flex flex-col">
             <div className="px-6 py-4 border-b border-workspace-border flex items-center justify-between shrink-0">
-              <h2 className="text-sm font-semibold text-slate-100">Insiktsdetaljer</h2>
+              <h2 className="text-sm font-semibold text-theme-heading">Insiktsdetaljer</h2>
               <button
                 onClick={() => setDetail(null)}
-                className="text-slate-500 hover:text-slate-300 text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+                className="text-theme-muted hover:text-theme-body text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
                 aria-label="Stäng"
               >
                 ✕
@@ -265,19 +267,19 @@ export function InsightsPage() {
               ) : (
                 <div className="space-y-5">
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">{formatDate(detail.created_at)}</p>
-                    <h3 className="text-base font-semibold text-slate-100 leading-snug">{detail.question}</h3>
+                    <p className="text-xs text-theme-muted mb-1">{formatDate(detail.created_at)}</p>
+                    <h3 className="text-base font-semibold text-theme-heading leading-snug">{detail.question}</h3>
                   </div>
 
-                  <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap surface-inset px-4 py-3">
+                  <div className="text-sm text-theme-body leading-relaxed whitespace-pre-wrap surface-inset px-4 py-3">
                     {detail.answer}
                   </div>
 
                   {detail.chart && (
                     <div className="border border-workspace-border rounded-lg px-4 py-3 bg-workspace-muted/50">
-                      <p className="text-xs font-semibold text-slate-300 mb-0.5">{detail.chart.title}</p>
+                      <p className="text-xs font-semibold text-theme-body mb-0.5">{detail.chart.title}</p>
                       {detail.chart.description && (
-                        <p className="text-xs text-slate-500 mb-2">{detail.chart.description}</p>
+                        <p className="text-xs text-theme-muted mb-2">{detail.chart.description}</p>
                       )}
                       <MiniChart chart={detail.chart} />
                     </div>
@@ -286,7 +288,7 @@ export function InsightsPage() {
                   {detail.tool_calls.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {detail.tool_calls.map(t => (
-                        <span key={t} className="text-xs bg-brand-500/10 text-brand-400 border border-brand-500/20 rounded px-1.5 py-0.5">
+                        <span key={t} className="text-xs bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 rounded px-1.5 py-0.5">
                           {toolLabel(t)}
                         </span>
                       ))}
@@ -311,7 +313,7 @@ export function InsightsPage() {
                     </button>
                     {deleteConfirm === detail.id ? (
                       <div className="flex items-center justify-end gap-2">
-                        <span className="text-xs text-slate-500">Bekräfta?</span>
+                        <span className="text-xs text-theme-muted">Bekräfta?</span>
                         <button
                           onClick={() => handleDelete(detail.id)}
                           className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500/90 text-white hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
@@ -320,7 +322,7 @@ export function InsightsPage() {
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
-                          className="text-xs px-2 py-1.5 text-slate-500 hover:text-slate-300"
+                          className="text-xs px-2 py-1.5 text-theme-muted hover:text-theme-body"
                         >
                           Avbryt
                         </button>
@@ -328,7 +330,7 @@ export function InsightsPage() {
                     ) : (
                       <button
                         onClick={() => setDeleteConfirm(detail.id)}
-                        className="w-full text-xs px-3 py-1.5 rounded-lg border border-workspace-border text-slate-500 hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+                        className="w-full text-xs px-3 py-1.5 rounded-lg border border-workspace-border text-theme-muted hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
                       >
                         Ta bort insikt
                       </button>

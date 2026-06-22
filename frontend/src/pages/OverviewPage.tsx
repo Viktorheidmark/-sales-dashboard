@@ -36,7 +36,7 @@ function formatShortDate(iso: string): string {
 
 function SectionHeading({ children }: { children: ReactNode }) {
   return (
-    <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-[0.14em] mb-4">
+    <h2 className="text-xs font-semibold text-theme-muted uppercase tracking-[0.14em] mb-4">
       {children}
     </h2>
   )
@@ -103,11 +103,11 @@ export function OverviewPage({ user }: OverviewPageProps) {
       {/* Compact page header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-100 tracking-tight">
+          <h1 className="text-xl font-semibold text-theme-heading tracking-tight">
             Försäljningsöversikt
           </h1>
           {latestOrderDate && (
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-theme-muted">
               Senast transaktionsdatum: {formatShortDate(latestOrderDate)}
             </p>
           )}
@@ -217,7 +217,7 @@ export function OverviewPage({ user }: OverviewPageProps) {
         </div>
       </section>
 
-      <p className="text-xs text-slate-600 pt-1">Syntetisk demodata · Solvigo Sales Intelligence</p>
+      <p className="text-xs text-theme-faint pt-1">Syntetisk demodata · Solvigo Sales Intelligence</p>
     </div>
   )
 }

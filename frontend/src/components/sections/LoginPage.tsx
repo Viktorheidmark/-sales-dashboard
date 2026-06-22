@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../../api/client'
 import type { AuthUser } from '../../api/types'
+import { ThemeToggle } from '../ui/ThemeToggle'
 
 const DEMO_ACCOUNTS = [
   { email: 'arla@demo.solvigo',          label: 'Arla Sverige' },
@@ -43,25 +44,28 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md space-y-6">
+    <div className="min-h-screen bg-workspace flex flex-col items-center justify-center px-4 py-8 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle compact />
+      </div>
 
+      <div className="w-full max-w-md space-y-6">
         {/* Wordmark */}
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
-            <span className="text-brand-500 text-2xl font-bold">◈</span>
-            <span className="text-xl font-semibold text-zinc-900 tracking-tight">
+            <span className="text-brand-600 dark:text-brand-500 text-2xl font-bold">◈</span>
+            <span className="text-xl font-semibold text-theme-heading tracking-tight">
               Solvigo Sales Intelligence
             </span>
           </div>
-          <p className="text-sm text-zinc-500">Logga in för att se er leverantörsdashboard</p>
+          <p className="text-sm text-theme-muted">Logga in för att se er leverantörsdashboard</p>
         </div>
 
         {/* Login card */}
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-8">
+        <div className="surface-card p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1">
+              <label className="block text-xs font-medium text-theme-muted mb-1">
                 Email
               </label>
               <input
@@ -71,12 +75,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 placeholder="your@email.com"
                 required
                 disabled={loading}
-                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent disabled:opacity-50"
+                className="input-field"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1">
+              <label className="block text-xs font-medium text-theme-muted mb-1">
                 Password
               </label>
               <input
@@ -86,12 +90,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 placeholder="••••••••"
                 required
                 disabled={loading}
-                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent disabled:opacity-50"
+                className="input-field"
               />
             </div>
 
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg px-3 py-2">
                 {error}
               </p>
             )}
@@ -99,7 +103,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <button
               type="submit"
               disabled={loading || !email.trim() || !password}
-              className="w-full bg-brand-500 hover:bg-brand-600 text-white rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-brand-500 hover:bg-brand-600 text-white rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
             >
               {loading && (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -110,9 +114,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         </div>
 
         {/* Demo accounts */}
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-            Demo accounts — password: <span className="font-mono text-zinc-700">{DEMO_PASSWORD}</span>
+        <div className="surface-card p-6">
+          <p className="text-xs font-semibold text-theme-muted uppercase tracking-wider mb-3">
+            Demo accounts — password: <span className="font-mono text-theme-strong">{DEMO_PASSWORD}</span>
           </p>
           <div className="space-y-2">
             {DEMO_ACCOUNTS.map(account => (
@@ -121,15 +125,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 type="button"
                 onClick={() => fillDemo(account.email)}
                 disabled={loading}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-zinc-100 hover:border-brand-200 hover:bg-brand-50 text-left transition-colors group disabled:opacity-40"
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-workspace-border hover:border-brand-500/30 hover:bg-brand-500/5 text-left transition-colors group disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
               >
                 <div>
-                  <p className="text-sm font-medium text-zinc-800 group-hover:text-brand-700">
+                  <p className="text-sm font-medium text-theme-strong group-hover:text-brand-600 dark:group-hover:text-brand-400">
                     {account.label}
                   </p>
-                  <p className="text-xs text-zinc-400 font-mono">{account.email}</p>
+                  <p className="text-xs text-theme-faint font-mono">{account.email}</p>
                 </div>
-                <span className="text-xs text-zinc-300 group-hover:text-brand-400 shrink-0">
+                <span className="text-xs text-theme-faint group-hover:text-brand-600 dark:group-hover:text-brand-400 shrink-0">
                   use →
                 </span>
               </button>
@@ -137,7 +141,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           </div>
         </div>
 
-        <p className="text-center text-xs text-zinc-400">
+        <p className="text-center text-xs text-theme-faint">
           Grundat i MCP-analyserad syntetisk demodata
         </p>
       </div>

@@ -23,11 +23,11 @@ export function AppShell({ supplierName, onLogout }: AppShellProps) {
           <div className="w-7 h-7 rounded-md bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">
             <span className="text-brand-400 text-sm font-bold leading-none">◈</span>
           </div>
-          <span className="text-sm font-semibold text-slate-100 tracking-tight">Solvigo</span>
+          <span className="text-sm font-semibold text-theme-heading tracking-tight">Solvigo</span>
         </div>
         <button
           onClick={() => setDrawerOpen(true)}
-          className="text-slate-400 hover:text-slate-200 p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+          className="text-theme-muted hover:text-theme-strong p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
           aria-label="Öppna meny"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

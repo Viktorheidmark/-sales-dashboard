@@ -28,7 +28,7 @@ function PanelBlock({
 }) {
   return (
     <div className="py-4 border-b border-workspace-border/60 last:border-0 last:pb-0 first:pt-0">
-      <p className="text-xs font-medium text-slate-500 mb-2">{label}</p>
+      <p className="text-xs font-medium text-theme-muted mb-2">{label}</p>
       {children}
     </div>
   )
@@ -50,8 +50,8 @@ export function ExecutiveActionPanel({
   return (
     <aside className="surface-elevated flex flex-col h-full">
       <div className="px-5 pt-5 pb-1">
-        <h2 className="text-sm font-semibold text-slate-100">Vad kräver åtgärd?</h2>
-        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+        <h2 className="text-sm font-semibold text-theme-heading">Vad kräver åtgärd?</h2>
+        <p className="text-xs text-theme-muted mt-1 leading-relaxed">
           Prioriterade signaler från vald period
         </p>
       </div>
@@ -67,10 +67,10 @@ export function ExecutiveActionPanel({
           <div className="flex-1">
             {worst && worstPct && (
               <PanelBlock label="Produkt i nedgång">
-                <p className="text-sm font-semibold text-slate-100 leading-snug">{worst.product_name}</p>
-                <p className="mt-1.5 text-sm text-slate-400 leading-relaxed">
+                <p className="text-sm font-semibold text-theme-heading leading-snug">{worst.product_name}</p>
+                <p className="mt-1.5 text-sm text-theme-muted leading-relaxed">
                   Omsättningen har fallit med{' '}
-                  <span className="text-red-400 font-medium tabular-nums">−{worstPct}%</span>
+                  <span className="text-red-600 dark:text-red-400 font-medium tabular-nums">−{worstPct}%</span>
                   {' '}jämfört med föregående period.
                 </p>
               </PanelBlock>
@@ -78,8 +78,8 @@ export function ExecutiveActionPanel({
 
             {topRegion && (
               <PanelBlock label="Starkaste region">
-                <p className="text-sm font-semibold text-slate-100">{topRegion.region}</p>
-                <p className="mt-1.5 text-sm text-slate-400 leading-relaxed">
+                <p className="text-sm font-semibold text-theme-heading">{topRegion.region}</p>
+                <p className="mt-1.5 text-sm text-theme-muted leading-relaxed">
                   Genererar mest omsättning under perioden.
                 </p>
               </PanelBlock>
@@ -91,13 +91,13 @@ export function ExecutiveActionPanel({
               </PanelBlock>
             ) : marketShare ? (
               <PanelBlock label="Marknadsandel">
-                <p className="text-2xl font-bold text-slate-100 tabular-nums leading-none">
+                <p className="text-2xl font-bold text-theme-heading tabular-nums leading-none">
                   {formatPct(marketShare.market_share_pct)}
                 </p>
-                <p className="mt-1.5 text-sm text-slate-400 leading-relaxed">
+                <p className="mt-1.5 text-sm text-theme-muted leading-relaxed">
                   Andel av {selectedCategory.toLowerCase()}kategorin.
                   {marketShare.competitor_count > 0 && (
-                    <span className="text-slate-500">
+                    <span className="text-theme-faint">
                       {' '}Konkurrentdata visas enbart aggregerat ({marketShare.competitor_count} aktörer).
                     </span>
                   )}
@@ -106,7 +106,7 @@ export function ExecutiveActionPanel({
             ) : null}
 
             {!worst && !topRegion && !marketShare && !anyLoading && (
-              <p className="text-sm text-slate-500 leading-relaxed py-2">
+              <p className="text-sm text-theme-muted leading-relaxed py-2">
                 Inga prioriterade signaler för vald period.
               </p>
             )}
@@ -115,7 +115,7 @@ export function ExecutiveActionPanel({
 
         <Link
           to="/assistant"
-          className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-brand-400 hover:text-brand-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+          className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
         >
           Öppna analysassistenten
           <span aria-hidden>→</span>

@@ -3,15 +3,63 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+
+    --ws-bg: #f4f6f9;
+    --ws-canvas: #eef1f6;
+    --ws-surface: #ffffff;
+    --ws-elevated: #f8fafc;
+    --ws-border: #e2e8f0;
+    --ws-muted: #f1f5f9;
+
+    --sb-bg: #ffffff;
+    --sb-elevated: #f8fafc;
+    --sb-border: #e2e8f0;
+
+    --color-heading: #0f172a;
+    --color-strong: #1e293b;
+    --color-body: #334155;
+    --color-muted: #64748b;
+    --color-faint: #94a3b8;
+
+    --surface-hover: rgba(15, 23, 42, 0.04);
+    --scrollbar-thumb: #cbd5e1;
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    --ws-bg: #0e1218;
+    --ws-canvas: #121820;
+    --ws-surface: #161d27;
+    --ws-elevated: #1c2531;
+    --ws-border: #2a3544;
+    --ws-muted: #131a22;
+
+    --sb-bg: #060a0f;
+    --sb-elevated: #0c1118;
+    --sb-border: #151c26;
+
+    --color-heading: #f1f5f9;
+    --color-strong: #e2e8f0;
+    --color-body: #cbd5e1;
+    --color-muted: #94a3b8;
+    --color-faint: #64748b;
+
+    --surface-hover: rgba(255, 255, 255, 0.05);
+    --scrollbar-thumb: #2a3544;
+  }
+
   body {
-    @apply bg-workspace text-slate-300 antialiased;
+    @apply bg-workspace text-theme-body antialiased;
     font-family: 'Inter', system-ui, sans-serif;
   }
 }
 
 @layer components {
   .surface-card {
-    @apply bg-workspace-surface border border-workspace-border rounded-xl;
+    @apply bg-workspace-surface border border-workspace-border rounded-xl shadow-sm dark:shadow-none;
   }
 
   .surface-elevated {
@@ -19,7 +67,8 @@
   }
 
   .surface-inset {
-    @apply bg-workspace-muted border border-workspace-border/60 rounded-lg;
+    @apply bg-workspace-muted border border-workspace-border rounded-lg;
+    border-color: color-mix(in srgb, var(--ws-border) 60%, transparent);
   }
 
   .segment-control {
@@ -27,25 +76,29 @@
   }
 
   .segment-btn {
-    @apply px-3 py-1.5 rounded-md text-xs font-semibold transition-colors text-slate-400 hover:text-slate-200 hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50;
+    @apply inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold transition-colors text-theme-muted hover:text-theme-strong hover:bg-[var(--surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50;
   }
 
   .segment-btn-active {
-    @apply bg-brand-500/15 text-brand-400 border border-brand-500/25;
+    @apply bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/25;
   }
 
   .btn-ghost {
-    @apply inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-workspace-surface border border-workspace-border text-slate-400 hover:text-slate-200 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40;
+    @apply inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-workspace-surface border border-workspace-border text-theme-muted hover:text-theme-strong text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40;
   }
 
   .input-select {
-    @apply text-xs border border-workspace-border rounded-lg px-2.5 py-1.5 text-slate-300 bg-workspace-elevated focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/50;
+    @apply text-xs border border-workspace-border rounded-lg px-2.5 py-1.5 text-theme-body bg-workspace-elevated focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/50;
+  }
+
+  .input-field {
+    @apply w-full rounded-lg border border-workspace-border px-3 py-2 text-sm text-theme-strong placeholder:text-theme-faint bg-workspace-elevated focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/50 disabled:opacity-50;
   }
 }
 
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: theme('colors.workspace.border') transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 }

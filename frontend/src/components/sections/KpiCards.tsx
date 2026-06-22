@@ -23,7 +23,7 @@ function Delta({ pct }: { pct: number | null }) {
   const sign = positive ? '+' : ''
   return (
     <span
-      className={`text-xs font-semibold tabular-nums ${positive ? 'text-emerald-400' : 'text-red-400'}`}
+      className={`text-xs font-semibold tabular-nums ${positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
       aria-label={positive ? 'Positiv förändring' : 'Negativ förändring'}
     >
       {sign}{pct.toFixed(1).replace('.', ',')}%
@@ -42,15 +42,15 @@ function KpiCard({ label, value, delta, compLabel, compact }: KpiCardProps & { c
   const hasDelta = delta !== undefined && delta !== null
   return (
     <div className={`surface-elevated ${compact ? 'px-4 py-3.5' : 'px-5 py-5'}`}>
-      <p className="text-xs font-medium text-slate-500 leading-none">{label}</p>
-      <p className={`font-bold text-slate-100 tabular-nums leading-none ${compact ? 'mt-1.5 text-xl' : 'mt-3 text-[1.625rem]'}`}>
+      <p className="text-xs font-medium text-theme-muted leading-none">{label}</p>
+      <p className={`font-bold text-theme-heading tabular-nums leading-none ${compact ? 'mt-1.5 text-xl' : 'mt-3 text-[1.625rem]'}`}>
         {value}
       </p>
       <div className={`flex items-center gap-1.5 min-h-[1rem] ${compact ? 'mt-1.5' : 'mt-2'}`}>
         {hasDelta && (
           <>
             <Delta pct={delta} />
-            <span className="text-xs text-slate-500">{compLabel}</span>
+            <span className="text-xs text-theme-muted">{compLabel}</span>
           </>
         )}
       </div>

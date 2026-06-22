@@ -31,8 +31,8 @@ export function TopProducts({
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">Topprodukter</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Rankade efter omsättning</p>
+            <h2 className="text-sm font-semibold text-theme-heading">Topprodukter</h2>
+            <p className="text-xs text-theme-muted mt-0.5">Rankade efter omsättning</p>
           </div>
           <select
             value={selectedRegion}
@@ -53,14 +53,14 @@ export function TopProducts({
         ) : error || !data ? (
           <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
         ) : data.products.length === 0 ? (
-          <p className="text-sm text-slate-500 text-center py-8">Inga produkter hittades för vald period</p>
+          <p className="text-sm text-theme-muted text-center py-8">Inga produkter hittades för vald period</p>
         ) : (
           <div>
             <div className={`grid grid-cols-[1.25rem_1fr_3.5rem_4.5rem] gap-x-3 mb-1.5 px-0.5 ${compact ? '' : 'mb-2 px-1'}`}>
               <span />
-              <span className="text-xs font-medium text-slate-500">Produkt</span>
-              <span className="text-xs font-medium text-slate-500 text-right">Enheter</span>
-              <span className="text-xs font-medium text-slate-500 text-right">Omsättning</span>
+              <span className="text-xs font-medium text-theme-muted">Produkt</span>
+              <span className="text-xs font-medium text-theme-muted text-right">Enheter</span>
+              <span className="text-xs font-medium text-theme-muted text-right">Omsättning</span>
             </div>
             {data.products.map((p, idx) => {
               const pct = ((p.revenue ?? 0) / maxRevenue) * 100
@@ -72,23 +72,23 @@ export function TopProducts({
                     compact ? 'py-2' : 'py-2.5 px-1'
                   } ${isTop && !compact ? 'rounded-lg bg-workspace-muted/80 -mx-1 px-2' : ''}`}
                 >
-                  <span className={`text-xs font-semibold tabular-nums leading-none ${isTop ? 'text-brand-400' : 'text-slate-500'}`}>
+                  <span className={`text-xs font-semibold tabular-nums leading-none ${isTop ? 'text-brand-600 dark:text-brand-400' : 'text-theme-muted'}`}>
                     {p.rank}
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-200 truncate leading-snug">{p.product_name}</p>
+                    <p className="text-sm font-medium text-theme-strong truncate leading-snug">{p.product_name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-slate-500">{p.sku}</span>
+                      <span className="text-xs text-theme-muted">{p.sku}</span>
                       <div className="flex-1 h-0.5 bg-workspace-border/60 rounded-full overflow-hidden max-w-[3.5rem]">
                         <div
-                          className={`h-full rounded-full ${isTop ? 'bg-brand-500' : 'bg-slate-600'}`}
+                          className={`h-full rounded-full ${isTop ? 'bg-brand-500' : 'bg-workspace-border'}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
                     </div>
                   </div>
-                  <span className="text-xs text-slate-400 tabular-nums text-right">{formatNumber(p.units)}</span>
-                  <span className={`text-sm font-semibold tabular-nums text-right ${isTop ? 'text-slate-100' : 'text-slate-300'}`}>
+                  <span className="text-xs text-theme-muted tabular-nums text-right">{formatNumber(p.units)}</span>
+                  <span className={`text-sm font-semibold tabular-nums text-right ${isTop ? 'text-theme-heading' : 'text-theme-body'}`}>
                     {formatSEK(p.revenue)}
                   </span>
                 </div>
