@@ -4,7 +4,6 @@ import { formatSEK, formatPct } from '../../utils/format'
 import { Card, CardHeader, CardBody } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
 import { ErrorState } from '../ui/ErrorState'
-import { MetaFooter } from '../ui/MetaFooter'
 
 const CATEGORIES = ['Mejeri', 'Dryck', 'Mat och snacks']
 
@@ -32,16 +31,25 @@ export function MarketShare({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-zinc-700">Marknadsandel</h2>
-          <select
-            value={selectedCategory}
-            onChange={e => onCategoryChange(e.target.value)}
-            className="text-xs border border-zinc-200 rounded-md px-2 py-1 text-zinc-600 bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
-          >
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">Marknadsandel</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Andel av kategoriomsättning</p>
+          </div>
+          <div className="flex gap-1 bg-slate-50 border border-slate-100 rounded-lg p-0.5">
             {CATEGORIES.map(c => (
-              <option key={c} value={c}>{c}</option>
+              <button
+                key={c}
+                onClick={() => onCategoryChange(c)}
+                className={`text-xs px-2.5 py-1.5 rounded-md font-medium transition-colors ${
+                  selectedCategory === c
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-100'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {c}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
       </CardHeader>
       <CardBody>
@@ -55,68 +63,58 @@ export function MarketShare({
         ) : error || !data ? (
           <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
         ) : (
-          <>
-            <div className="flex items-center gap-6">
-              {/* Donut chart */}
-              <div className="shrink-0">
-                <ResponsiveContainer width={160} height={160}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={48}
-                      outerRadius={72}
-                      dataKey="value"
-                      startAngle={90}
-                      endAngle={-270}
-                      strokeWidth={0}
-                    >
-                      {pieData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v: number) => formatSEK(v)}
-                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <p className="text-center -mt-2 text-2xl font-bold text-zinc-900 tabular-nums">
-                  {formatPct(data.market_share_pct)}
-                </p>
-                <p className="text-center text-xs text-zinc-400 mt-0.5">er andel</p>
-              </div>
+          <div className="flex items-center gap-6">
+            {/* Donut + pct label */}
+            <div className="shrink-0 flex flex-col items-center">
+              <ResponsiveContainer width={148} height={148}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={44}
+                    outerRadius={68}
+                    dataKey="value"
+                    startAngle={90}
+                    endAngle={-270}
+                    strokeWidth={0}
+                  >
+                    {pieData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(v: number) => formatSEK(v)}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <p className="-mt-1 text-2xl font-bold text-slate-900 tabular-nums leading-none">
+                {formatPct(data.market_share_pct)}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Vår andel</p>
+            </div>
 
-              {/* Stats */}
-              <div className="flex-1 space-y-3">
-                <div>
-                  <p className="text-xs text-zinc-400 uppercase tracking-wider">Vår omsättning</p>
-                  <p className="text-lg font-bold text-zinc-900 tabular-nums">{formatSEK(data.supplier_revenue)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-zinc-400 uppercase tracking-wider">Kategoritotal</p>
-                  <p className="text-lg font-bold text-zinc-900 tabular-nums">{formatSEK(data.category_total_revenue)}</p>
-                </div>
-                <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-3 py-2">
-                  <p className="text-xs text-zinc-500 font-medium">
-                    Konkurrenter ({data.competitor_count})
-                    <span className="ml-1 text-zinc-400 font-normal">— enbart aggregat</span>
-                  </p>
-                  <p className="text-sm font-semibold text-zinc-700 tabular-nums mt-0.5">
-                    {formatSEK(data.competitor_aggregate_revenue)}
-                  </p>
-                </div>
+            {/* Stats */}
+            <div className="flex-1 space-y-4">
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">Vår omsättning</p>
+                <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">{formatSEK(data.supplier_revenue)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">Kategoritotal</p>
+                <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">{formatSEK(data.category_total_revenue)}</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2.5">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">
+                  {data.competitor_count} konkurrenter · enbart aggregat
+                </p>
+                <p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">
+                  {formatSEK(data.competitor_aggregate_revenue)}
+                </p>
               </div>
             </div>
-          </>
-        )}
-        {data && (
-          <MetaFooter
-            source={data.source}
-            generatedAt={data.generated_at}
-            limitations={data.limitations}
-          />
+          </div>
         )}
       </CardBody>
     </Card>

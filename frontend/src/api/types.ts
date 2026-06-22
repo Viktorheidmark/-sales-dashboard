@@ -111,6 +111,11 @@ export interface OverviewResponse {
   average_order_value: number | null
   latest_order_date: string | null
   date_range: DateRange
+  prev_total_revenue: number | null
+  prev_total_orders: number | null
+  prev_total_units: number | null
+  prev_average_order_value: number | null
+  prev_date_range: DateRange | null
   source: string
   generated_at: string
   row_count: number

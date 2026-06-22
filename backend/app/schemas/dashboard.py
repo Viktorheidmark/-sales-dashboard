@@ -37,6 +37,11 @@ class OverviewResponse(BaseModel):
     average_order_value: Optional[float]
     latest_order_date: Optional[str] = None
     date_range: DateRange
+    prev_total_revenue: Optional[float] = None
+    prev_total_orders: Optional[int] = None
+    prev_total_units: Optional[int] = None
+    prev_average_order_value: Optional[float] = None
+    prev_date_range: Optional[DateRange] = None
     source: str
     generated_at: str
     row_count: int

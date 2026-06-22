@@ -8,20 +8,22 @@ import { api } from '../../api/client'
 import type { ChatResponse, ChartPayload, SourceMeta } from '../../api/types'
 import { formatDate } from '../../utils/format'
 
-const EXAMPLE_PROMPTS = [
-  'Hur går det för oss? Ge mig en översikt.',
-  'Vad är vår totala omsättning de senaste 90 dagarna?',
-  'Vilka produkter tappar mest i försäljning?',
-  'Hur stor är vår marknadsandel i Mejeri?',
-  'Vilka är våra bästsäljande produkter i Stockholm?',
-  'Hur ser vår försäljningstrend ut den senaste månaden?',
-]
-
 const PROMPT_CARDS = [
   {
+    label: 'Produkt i nedgång',
+    sub: 'Vilken produkt minskade mest de senaste 30 dagarna?',
+    prompt: 'Vilken produkt minskade mest de senaste 30 dagarna?',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+        <polyline points="3 7 9 13 13 9 21 17" />
+        <polyline points="15 17 21 17 21 11" />
+      </svg>
+    ),
+  },
+  {
     label: 'Försäljningstrend',
-    sub: 'Hur har omsättningen utvecklats?',
-    prompt: EXAMPLE_PROMPTS[5],
+    sub: 'Visa försäljningstrend de senaste 90 dagarna',
+    prompt: 'Visa försäljningstrend de senaste 90 dagarna',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
         <polyline points="3 17 9 11 13 15 21 7" />
@@ -30,21 +32,9 @@ const PROMPT_CARDS = [
     ),
   },
   {
-    label: 'Produkter att bevaka',
-    sub: 'Vilka produkter tappar mest?',
-    prompt: EXAMPLE_PROMPTS[2],
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
-        <path d="M16 3H8l-2 4h12l-2-4z" />
-        <line x1="12" y1="12" x2="12" y2="12.01" strokeWidth={2.5} />
-      </svg>
-    ),
-  },
-  {
     label: 'Starkaste region',
-    sub: 'Vilken region driver mest försäljning?',
-    prompt: EXAMPLE_PROMPTS[4],
+    sub: 'Vilken region genererar mest intäkter?',
+    prompt: 'Vilken region genererar mest intäkter?',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
         <circle cx="12" cy="10" r="3" />
@@ -54,8 +44,8 @@ const PROMPT_CARDS = [
   },
   {
     label: 'Marknadsandel',
-    sub: 'Hur stor är vår andel i Mejeri?',
-    prompt: EXAMPLE_PROMPTS[3],
+    sub: 'Vad är vår marknadsandel i Mejeri?',
+    prompt: 'Vad är vår marknadsandel i Mejeri?',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
         <path d="M12 2v10l6.9 6.9" />
@@ -64,8 +54,6 @@ const PROMPT_CARDS = [
     ),
   },
 ]
-
-const EXTRA_PROMPTS = [EXAMPLE_PROMPTS[0], EXAMPLE_PROMPTS[1]]
 
 interface Message {
   id: string
@@ -284,11 +272,44 @@ function AssistantBubble({ msg }: { msg: Message }) {
               ))}
             </div>
           )}
+
+          {isGrounded && (
+            <details className="pt-2 border-t border-zinc-100 group/sources">
+              <summary className="text-xs font-medium text-zinc-500 cursor-pointer select-none hover:text-zinc-700 list-none flex items-center gap-1">
+                <span className="transition-transform group-open/sources:rotate-90">›</span>
+                Källor och metodik
+              </summary>
+              <div className="mt-2 space-y-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {r.tool_calls.map(t => <ToolBadge key={t} name={t} />)}
+                </div>
+                {r.sources.map((s, i) => (
+                  <div key={i} className="text-xs text-zinc-500 bg-zinc-50 rounded-lg px-3 py-2 space-y-0.5">
+                    <p>
+                      <span className="font-medium text-zinc-600">{s.tool}</span>
+                      {s.source && <span className="text-zinc-400"> · {s.source}</span>}
+                    </p>
+                    {s.generated_at && (
+                      <p className="text-zinc-400">Beräknad: {formatDate(s.generated_at)}</p>
+                    )}
+                    {s.row_count !== undefined && (
+                      <p className="text-zinc-400">{s.row_count} rader</p>
+                    )}
+                    {s.date_range && (
+                      <p className="text-zinc-400">Period: {s.date_range.start} → {s.date_range.end}</p>
+                    )}
+                    {s.limitations?.map((l, j) => (
+                      <p key={j} className="text-amber-600">⚠ {l}</p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
 
         {isGrounded && (
           <div className="flex flex-wrap items-center gap-1.5 px-1">
-            {r.tool_calls.map(t => <ToolBadge key={t} name={t} />)}
             {r.sources[0]?.generated_at && (
               <span className="text-xs text-zinc-400">{formatDate(r.sources[0].generated_at)}</span>
             )}
@@ -319,7 +340,6 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [showExtra, setShowExtra] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -436,24 +456,16 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
   const isEmpty = messages.length === 0
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 shadow-sm flex flex-col" style={{ minHeight: 520 }}>
-      {/* Header */}
-      <div className="px-6 pt-5 pb-4 border-b border-zinc-100 shrink-0">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 mt-0.5" />
-            <div>
-              <h2 className="text-base font-semibold text-zinc-900 leading-tight">Analysassistent</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Fråga om försäljning, produkter, regioner och marknadsandel.</p>
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <span className="text-xs text-zinc-400">Grundad i MCP-data</span>
-            {supplierName && (
-              <p className="text-xs text-zinc-400 mt-0.5">Analys för <span className="text-zinc-500">{supplierName}</span></p>
-            )}
-          </div>
-        </div>
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm flex flex-col" style={{ minHeight: 620 }}>
+      {/* Status bar */}
+      <div className="px-6 py-3 border-b border-slate-100 shrink-0 flex items-center justify-between gap-4">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+          Svar grundat i analyserad demodata
+        </span>
+        {supplierName && (
+          <span className="text-xs text-slate-400">Analys för <span className="text-slate-500">{supplierName}</span></span>
+        )}
       </div>
 
       {/* Messages / Empty state */}
@@ -465,44 +477,19 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
               <p className="text-xs text-zinc-400 mt-0.5">Välj ett område nedan eller skriv en egen fråga.</p>
               <p className="text-xs text-zinc-400 mt-2">Trender · Produkter · Regioner · Marknadsandel</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {PROMPT_CARDS.map(card => (
                 <button
                   key={card.prompt}
                   onClick={() => sendMessage(card.prompt)}
                   disabled={loading}
-                  className="text-left px-4 py-3 rounded-xl border border-zinc-200 hover:border-brand-300 hover:bg-brand-50 transition-colors disabled:opacity-40 group"
+                  className="text-left p-4 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50 bg-slate-50 transition-colors disabled:opacity-40 group"
                 >
-                  <div className="flex items-center gap-2 mb-1 text-zinc-400 group-hover:text-brand-500 transition-colors">
-                    {card.icon}
-                    <span className="text-xs font-semibold text-zinc-700 group-hover:text-brand-700">{card.label}</span>
-                  </div>
-                  <p className="text-xs text-zinc-400">{card.sub}</p>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5 group-hover:text-brand-500 transition-colors">{card.label}</p>
+                  <p className="text-sm font-medium text-slate-800 leading-snug group-hover:text-brand-700 transition-colors">{card.sub}</p>
                 </button>
               ))}
             </div>
-            {showExtra && (
-              <div className="flex flex-col gap-1.5">
-                {EXTRA_PROMPTS.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => sendMessage(p)}
-                    disabled={loading}
-                    className="text-left text-xs px-3 py-2 rounded-lg border border-zinc-200 text-zinc-600 hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-40"
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            )}
-            {!showExtra && (
-              <button
-                onClick={() => setShowExtra(true)}
-                className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors text-left px-1"
-              >
-                Visa fler exempel →
-              </button>
-            )}
           </div>
         ) : (
           messages.map(msg => (

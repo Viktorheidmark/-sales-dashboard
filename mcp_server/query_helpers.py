@@ -39,6 +39,26 @@ def _float(v) -> Optional[float]:
 # 1. KPIs
 # ---------------------------------------------------------------------------
 
+_KPI_SQL = """
+    SELECT
+        COALESCE(SUM(oi.revenue), 0)         AS total_revenue,
+        COUNT(DISTINCT o.id)                  AS total_orders,
+        COALESCE(SUM(oi.quantity), 0)         AS total_units,
+        CASE WHEN COUNT(DISTINCT o.id) = 0
+             THEN 0
+             ELSE SUM(oi.revenue) / COUNT(DISTINCT o.id)
+        END                                   AS average_order_value,
+        MAX(o.order_date)                     AS latest_order_date
+    FROM order_items oi
+    JOIN orders  o ON o.id  = oi.order_id
+    JOIN products p ON p.id = oi.product_id
+    JOIN brands   b ON b.id = p.brand_id
+    WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+      AND o.order_date >= :start_date
+      AND o.order_date <  :end_date + INTERVAL '1 day'
+"""
+
+
 def query_supplier_kpis(
     db: Session,
     supplier_id: str,
@@ -46,34 +66,19 @@ def query_supplier_kpis(
     end_date: Optional[date] = None,
 ) -> dict:
     """
-    Return aggregate KPIs for a supplier over a date range.
+    Return aggregate KPIs for a supplier over a date range, plus prior-period
+    comparison values for the same duration shifted back by one period.
 
     Joins: order_items → products → brands (filtered by supplier_id)
            order_items → orders (filtered by order_date range)
     """
     sd, ed = _date_range(start_date, end_date)
+    period_days = (ed - sd).days + 1
+    prev_ed = sd - timedelta(days=1)
+    prev_sd = sd - timedelta(days=period_days)
 
-    row = db.execute(
-        text("""
-            SELECT
-                COALESCE(SUM(oi.revenue), 0)         AS total_revenue,
-                COUNT(DISTINCT o.id)                  AS total_orders,
-                COALESCE(SUM(oi.quantity), 0)         AS total_units,
-                CASE WHEN COUNT(DISTINCT o.id) = 0
-                     THEN 0
-                     ELSE SUM(oi.revenue) / COUNT(DISTINCT o.id)
-                END                                   AS average_order_value,
-                MAX(o.order_date)                     AS latest_order_date
-            FROM order_items oi
-            JOIN orders  o ON o.id  = oi.order_id
-            JOIN products p ON p.id = oi.product_id
-            JOIN brands   b ON b.id = p.brand_id
-            WHERE b.supplier_id = CAST(:supplier_id AS uuid)
-              AND o.order_date >= :start_date
-              AND o.order_date <  :end_date + INTERVAL '1 day'
-        """),
-        {"supplier_id": supplier_id, "start_date": sd, "end_date": ed},
-    ).fetchone()
+    row = db.execute(text(_KPI_SQL), {"supplier_id": supplier_id, "start_date": sd, "end_date": ed}).fetchone()
+    prev = db.execute(text(_KPI_SQL), {"supplier_id": supplier_id, "start_date": prev_sd, "end_date": prev_ed}).fetchone()
 
     return {
         "supplier_id": supplier_id,
@@ -83,6 +88,11 @@ def query_supplier_kpis(
         "average_order_value": _float(row.average_order_value),
         "latest_order_date": row.latest_order_date.date().isoformat() if row.latest_order_date else None,
         "date_range": {"start": _to_iso(sd), "end": _to_iso(ed)},
+        "prev_total_revenue": _float(prev.total_revenue),
+        "prev_total_orders": int(prev.total_orders),
+        "prev_total_units": int(prev.total_units),
+        "prev_average_order_value": _float(prev.average_order_value),
+        "prev_date_range": {"start": _to_iso(prev_sd), "end": _to_iso(prev_ed)},
         "source": "MCP:get_supplier_kpis",
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "row_count": 1,
