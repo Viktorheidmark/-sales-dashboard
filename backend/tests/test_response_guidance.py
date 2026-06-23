@@ -38,14 +38,14 @@ class ResponseGuidanceTests(unittest.TestCase):
         self.assertTrue(is_sustained_revenue_decline(sustained))
 
     def test_claims_unsupported_strong_decline_on_mixed_series(self):
-        answer = "Arla Sverige har en nedåtgående trend under perioden."
+        answer = "Coca-Cola Europacific Partners Sverige har en nedåtgående trend under perioden."
         raw = [("get_sales_over_time", {"series": [
             {"revenue": 100}, {"revenue": 120}, {"revenue": 90}, {"revenue": 110},
         ]})]
         self.assertTrue(claims_unsupported_strong_decline(answer, raw))
 
     def test_allows_strong_decline_when_sustained(self):
-        answer = "Arla Sverige visar en nedåtgående trend."
+        answer = "Coca-Cola Europacific Partners Sverige visar en nedåtgående trend."
         raw = [("get_sales_over_time", {"series": [
             {"revenue": 100}, {"revenue": 120}, {"revenue": 110},
             {"revenue": 90}, {"revenue": 80}, {"revenue": 70},
@@ -53,7 +53,7 @@ class ResponseGuidanceTests(unittest.TestCase):
         self.assertFalse(claims_unsupported_strong_decline(answer, raw))
 
     def test_sanitize_trend_wording_softens_short_series(self):
-        answer = "Försäljningen för Arla Sverige visade en nedåtgående trend under perioden 25 maj–14 juni 2026."
+        answer = "Försäljningen för Coca-Cola Europacific Partners Sverige visade en nedåtgående trend under perioden 25 maj–14 juni 2026."
         raw = [("get_sales_over_time", {"series": [
             {"revenue": 49}, {"revenue": 40}, {"revenue": 34},
         ]})]

@@ -24,31 +24,34 @@ from app.services.period_utils import completed_week_bounds
 
 
 class IntentRouterTests(unittest.TestCase):
-    def test_default_category_arla(self):
-        self.assertEqual(default_category_for_supplier("Arla Sverige"), "Mejeri")
+    def test_default_category_cocacola(self):
+        self.assertEqual(default_category_for_supplier("Coca-Cola Europacific Partners Sverige"), "Läsk")
 
-    def test_brand_vs_competitors_forces_market_share_mejeri(self):
+    def test_default_category_orkla_snacks(self):
+        self.assertEqual(default_category_for_supplier("Orkla Snacks Sverige"), "Chips & snacks")
+
+    def test_brand_vs_competitors_forces_market_share_lask(self):
         plans = plan_forced_tools(
             "Hur går det för vårt märke jämfört med konkurrenterna?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_market_share")
-        self.assertEqual(plans[0].args["category_name"], "Mejeri")
+        self.assertEqual(plans[0].args["category_name"], "Läsk")
 
-    def test_explicit_mejeri_market_share(self):
+    def test_explicit_lask_market_share(self):
         plans = plan_forced_tools(
-            "Vad är vår marknadsandel i Mejeri?",
-            "Arla Sverige",
+            "Vad är vår marknadsandel i Läsk?",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_market_share")
-        self.assertEqual(plans[0].args["category_name"], "Mejeri")
+        self.assertEqual(plans[0].args["category_name"], "Läsk")
 
     def test_top_products_stockholm(self):
         plans = plan_forced_tools(
             "Vilka produkter säljer bäst i Stockholm?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_top_products")
@@ -57,7 +60,7 @@ class IntentRouterTests(unittest.TestCase):
     def test_sales_trend_90_days(self):
         plans = plan_forced_tools(
             "Hur har försäljningen utvecklats de senaste 90 dagarna?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
@@ -67,7 +70,7 @@ class IntentRouterTests(unittest.TestCase):
         # chart suppressed (LLM gets comparison data, chart shown separately on request).
         plans = plan_forced_tools(
             "Hur såg försäljningen ut senaste veckan?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
@@ -81,7 +84,7 @@ class IntentRouterTests(unittest.TestCase):
     def test_sales_trend_30_days_weekly_granularity(self):
         plans = plan_forced_tools(
             "Hur har försäljningen utvecklats senaste 30 dagarna?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(plans[0].args.get("granularity"), "week")
 
@@ -95,7 +98,7 @@ class IntentRouterTests(unittest.TestCase):
         plans = plan_period_followup_tools(
             "senaste 30 dagarna då?",
             prior,
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
@@ -105,17 +108,17 @@ class IntentRouterTests(unittest.TestCase):
 
     def test_period_followup_market_share(self):
         prior = PriorTurnContext(
-            question="Vad är vår marknadsandel i Mejeri?",
+            question="Vad är vår marknadsandel i Läsk?",
             tool_calls=("get_market_share",),
         )
         plans = plan_forced_tools(
             "senaste 30 dagarna då?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
             prior_context=prior,
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_market_share")
-        self.assertEqual(plans[0].args["category_name"], "Mejeri")
+        self.assertEqual(plans[0].args["category_name"], "Läsk")
 
     def test_period_followup_top_products_stockholm(self):
         prior = PriorTurnContext(
@@ -124,7 +127,7 @@ class IntentRouterTests(unittest.TestCase):
         )
         plans = plan_forced_tools(
             "senaste 30 dagarna då?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
             prior_context=prior,
         )
         self.assertEqual(len(plans), 1)
@@ -137,8 +140,8 @@ class IntentRouterTests(unittest.TestCase):
             tool_calls=("get_sales_over_time",),
         )
         plans = plan_forced_tools(
-            "Vad är vår marknadsandel i Mejeri?",
-            "Arla Sverige",
+            "Vad är vår marknadsandel i Läsk?",
+            "Coca-Cola Europacific Partners Sverige",
             prior_context=prior,
         )
         self.assertEqual(plans[0].tool_name, "get_market_share")
@@ -146,25 +149,25 @@ class IntentRouterTests(unittest.TestCase):
     def test_focus_question_forces_declining(self):
         plans = plan_forced_tools(
             "Vad borde vi fokusera på nästa period?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_declining_products")
 
     def test_diagram_followup_market_share(self):
         prior = PriorTurnContext(
-            question="Vad är vår marknadsandel i Mejeri?",
+            question="Vad är vår marknadsandel i Läsk?",
             tool_calls=("get_market_share",),
             sources=({"date_range": {"start": "2026-03-25", "end": "2026-06-23"}},),
         )
         plans = plan_followup_tools(
             "Visa ett diagram för det.",
             prior,
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_market_share")
-        self.assertEqual(plans[0].args["category_name"], "Mejeri")
+        self.assertEqual(plans[0].args["category_name"], "Läsk")
 
     def test_diagram_followup_top_products_stockholm(self):
         prior = PriorTurnContext(
@@ -174,7 +177,7 @@ class IntentRouterTests(unittest.TestCase):
         plans = plan_followup_tools(
             "Visa ett diagram för det",
             prior,
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(plans[0].tool_name, "get_top_products")
         self.assertEqual(plans[0].args["region"], "Stockholm")
@@ -187,7 +190,7 @@ class IntentRouterTests(unittest.TestCase):
         plans = plan_followup_tools(
             "Visa diagram för det",
             prior,
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(plans[0].tool_name, "get_declining_products")
 
@@ -199,7 +202,7 @@ class IntentRouterTests(unittest.TestCase):
         plans = plan_followup_tools(
             "Visa ett diagram för det.",
             prior,
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
 
@@ -207,7 +210,7 @@ class IntentRouterTests(unittest.TestCase):
         _, week_end = completed_week_bounds()
         plans = plan_forced_tools(
             "Hur såg försäljningen ut senaste veckan?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(plans[0].args.get("end_date"), week_end.isoformat())
         wrong_end = (week_end - timedelta(days=7)).isoformat()
@@ -217,7 +220,7 @@ class IntentRouterTests(unittest.TestCase):
         # Direct weekly question must NOT auto-widen to 8 weeks.
         plans = plan_forced_tools(
             "Hur såg försäljningen ut senaste veckan?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertTrue(plans[0].args.get("_suppress_chart"))
@@ -226,18 +229,18 @@ class IntentRouterTests(unittest.TestCase):
     def test_regional_sales_routing(self):
         plans = plan_forced_tools(
             "Vilken region genererar mest intäkter?",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_by_region")
 
     def test_redundant_diagram_followup_skipped_when_chart_shown(self):
         prior = PriorTurnContext(
-            question="Vad är vår marknadsandel i Mejeri?",
+            question="Vad är vår marknadsandel i Läsk?",
             tool_calls=("get_market_share",),
             has_chart=True,
         )
-        plans = plan_followup_tools("visa diagram", prior, "Arla Sverige")
+        plans = plan_followup_tools("visa diagram", prior, "Coca-Cola Europacific Partners Sverige")
         self.assertEqual(plans, [])
 
     def test_diagram_followup_visa_diagram_after_weekly_sales_is_daily_exact_week(self):
@@ -251,7 +254,7 @@ class IntentRouterTests(unittest.TestCase):
             # sources end date is Sunday of the answered week (always a real Sunday)
             sources=({"date_range": {"start": prev_start.isoformat(), "end": week_end.isoformat()}},),
         )
-        plans = plan_followup_tools("visa diagram", prior, "Arla Sverige")
+        plans = plan_followup_tools("visa diagram", prior, "Coca-Cola Europacific Partners Sverige")
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
         # Must be daily granularity for the within-week breakdown
@@ -276,7 +279,7 @@ class IntentRouterTests(unittest.TestCase):
             tool_calls=("get_sales_over_time",),
             sources=({"date_range": {"start": prev_start.isoformat(), "end": week_end.isoformat()}},),
         )
-        plans = plan_long_term_trend_tools("Visa trenden", prior, "Arla Sverige")
+        plans = plan_long_term_trend_tools("Visa trenden", prior, "Coca-Cola Europacific Partners Sverige")
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
         self.assertEqual(plans[0].args.get("granularity"), "week")
@@ -299,7 +302,7 @@ class IntentRouterTests(unittest.TestCase):
         )
         for phrase in ("Visa trenden", "Visa utvecklingen över tid", "visa trend"):
             with self.subTest(phrase=phrase):
-                plans = plan_forced_tools(phrase, "Arla Sverige", prior_context=prior)
+                plans = plan_forced_tools(phrase, "Coca-Cola Europacific Partners Sverige", prior_context=prior)
                 self.assertEqual(len(plans), 1, msg=f"No plan for '{phrase}'")
                 self.assertEqual(plans[0].tool_name, "get_sales_over_time")
                 self.assertTrue(plans[0].args.get("_chart_context_widened"))
@@ -316,7 +319,7 @@ class IntentRouterTests(unittest.TestCase):
         # 30-day trend should not suppress the chart.
         plans = plan_forced_tools(
             "Visa försäljningstrend de senaste 30 dagarna",
-            "Arla Sverige",
+            "Coca-Cola Europacific Partners Sverige",
         )
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
@@ -329,7 +332,7 @@ class IntentRouterTests(unittest.TestCase):
             tool_calls=("get_sales_over_time",),
             has_chart=True,
         )
-        plans = plan_followup_tools("visa diagram", prior, "Arla Sverige")
+        plans = plan_followup_tools("visa diagram", prior, "Coca-Cola Europacific Partners Sverige")
         self.assertEqual(plans, [], msg="Should not re-plan when chart already shown")
 
     def test_is_diagram_followup(self):
@@ -341,7 +344,7 @@ class IntentRouterTests(unittest.TestCase):
         self.assertFalse(is_diagram_followup_request("Vad är vår marknadsandel?"))
 
     def test_extract_category_and_region(self):
-        self.assertEqual(extract_category("Marknadsandel i Dryck"), "Dryck")
+        self.assertEqual(extract_category("Marknadsandel i Läsk"), "Läsk")
         self.assertEqual(extract_region("försäljning i Göteborg"), "Göteborg")
 
 

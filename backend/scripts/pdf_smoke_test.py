@@ -21,8 +21,8 @@ import httpx
 BASE = "http://localhost:8000"
 TIMEOUT = 30  # PDF generation can be slow on first call (matplotlib init)
 
-NORDIC_EMAIL = "arla@demo.solvigo"
-SNACKS_EMAIL = "orkla@demo.solvigo"
+NORDIC_EMAIL = "cocacola@demo.solvigo"
+SNACKS_EMAIL = "olw@demo.solvigo"
 PASSWORD = "demo1234"
 
 SAMPLE_CHART = {
@@ -68,16 +68,16 @@ def main():
 
     nordic_cookies, nordic_id = login(NORDIC_EMAIL)
     snacks_cookies, snacks_id = login(SNACKS_EMAIL)
-    print(f"Arla Sverige  → {nordic_id}")
-    print(f"Orkla Sverige  → {snacks_id}\n")
+    print(f"Coca-Cola Europacific Partners Sverige  → {nordic_id}")
+    print(f"Orkla Snacks Sverige  → {snacks_id}\n")
 
     results: list[bool] = []
     chart_insight_id = ""
     no_chart_insight_id = ""
 
-    # 1 — Login as Arla Sverige
-    print("── Test 1: Login as Arla Sverige ──")
-    results.append(check("Login Arla Sverige", [
+    # 1 — Login as Coca-Cola Europacific Partners Sverige
+    print("── Test 1: Login as Coca-Cola Europacific Partners Sverige ──")
+    results.append(check("Login Coca-Cola Europacific Partners Sverige", [
         ("cookie present", bool(nordic_cookies.get("session"))),
         ("supplier_id non-empty", bool(nordic_id)),
     ]))

@@ -14,8 +14,8 @@ from typing import Any, Optional
 
 from app.services.period_utils import align_weekly_query_bounds, completed_week_bounds
 
-CATEGORIES = ("Mejeri", "Dryck", "Mat och snacks")
-KNOWN_REGIONS = ("Stockholm", "Göteborg", "Malmö", "Uppsala", "Online")
+CATEGORIES = ("Läsk", "Chips & snacks")
+KNOWN_REGIONS = ("Stockholm", "Göteborg", "Malmö", "Uppsala", "Västerås", "Örebro", "Linköping", "Helsingborg")
 
 CHART_TOOL_PRIORITY = [
     "get_market_share",
@@ -151,23 +151,19 @@ class PriorTurnContext:
 
 def default_category_for_supplier(supplier_name: str) -> str:
     name = supplier_name.lower()
-    if "coca-cola" in name or "cocacola" in name:
-        return "Dryck"
-    if "orkla" in name:
-        return "Mat och snacks"
-    return "Mejeri"
+    if "coca-cola" in name or "cocacola" in name or "pepsi" in name:
+        return "Läsk"
+    if "orkla" in name or "snacks" in name or "estrella" in name or "olw" in name:
+        return "Chips & snacks"
+    return "Läsk"
 
 
 def extract_category(message: str) -> Optional[str]:
     msg = message.lower()
-    if "mat och snacks" in msg:
-        return "Mat och snacks"
-    if "mejeri" in msg:
-        return "Mejeri"
-    if "dryck" in msg:
-        return "Dryck"
-    if re.search(r"\bsnacks\b", msg):
-        return "Mat och snacks"
+    if "chips" in msg or "snacks" in msg:
+        return "Chips & snacks"
+    if "läsk" in msg or "dryck" in msg or "soda" in msg:
+        return "Läsk"
     return None
 
 

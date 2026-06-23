@@ -34,7 +34,7 @@ REGRESSION_QUESTIONS = [
     },
     {
         "label": "Explicit Mejeri market share",
-        "message": "Vad är vår marknadsandel i Mejeri?",
+        "message": "Vad är vår marknadsandel i Läsk?",
         "expected_tool": "get_market_share",
         "expect_chart": True,
         "chart_slices": {"Oss", "Konkurrenter"},
@@ -135,7 +135,7 @@ PERIOD_FOLLOWUP_SCENARIOS = [
     },
     {
         "label": "Market share → 30 days",
-        "prior_message": "Vad är vår marknadsandel i Mejeri?",
+        "prior_message": "Vad är vår marknadsandel i Läsk?",
         "followup_message": "senaste 30 dagarna då?",
         "expected_tool": "get_market_share",
         "chart_type": "pie_chart",
@@ -153,7 +153,7 @@ PERIOD_FOLLOWUP_SCENARIOS = [
 FOLLOWUP_SCENARIOS = [
     {
         "label": "Diagram after market share",
-        "prior_message": "Vad är vår marknadsandel i Mejeri?",
+        "prior_message": "Vad är vår marknadsandel i Läsk?",
         "expected_tool": "get_market_share",
         "expect_chart": True,
         "chart_type": "pie_chart",
@@ -642,7 +642,7 @@ def main():
     except Exception:
         sys.exit(f"Cannot reach {BASE}. Start server: cd backend && uvicorn app.main:app --reload")
 
-    cookies, supplier_id, supplier_name = login("arla@demo.solvigo")
+    cookies, supplier_id, supplier_name = login("cocacola@demo.solvigo")
     print(f"\n{supplier_name} → {supplier_id}\n")
 
     print("── Currency formatter unit checks ──")

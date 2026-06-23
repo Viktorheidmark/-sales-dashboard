@@ -7,7 +7,7 @@ Requires the FastAPI server to be running:
 Run from the backend/ directory:
     python -m scripts.api_smoke_test
 
-Logs in as Arla Sverige and Orkla Sverige demo accounts,
+Logs in as Coca-Cola Europacific Partners Sverige and Orkla Snacks Sverige demo accounts,
 then hits every dashboard endpoint and reports pass/fail.
 """
 
@@ -61,12 +61,12 @@ def main():
         sys.exit(f"\nCould not reach {BASE}. Is the server running?\n"
                  "  cd backend && uvicorn app.main:app --reload")
 
-    nordic_cookies, nordic_id = login("arla@demo.solvigo")
-    snacks_cookies, snacks_id = login("orkla@demo.solvigo")
+    nordic_cookies, nordic_id = login("cocacola@demo.solvigo")
+    snacks_cookies, snacks_id = login("olw@demo.solvigo")
     clean_cookies, clean_id = login("cocacola@demo.solvigo")
 
-    print(f"\nArla Sverige  →  {nordic_id}")
-    print(f"Orkla Sverige  →  {snacks_id}\n")
+    print(f"\nCoca-Cola Europacific Partners Sverige  →  {nordic_id}")
+    print(f"Orkla Snacks Sverige  →  {snacks_id}\n")
 
     results = []
 
@@ -115,7 +115,7 @@ def main():
     results.append(check("GET /api/dashboard/regions (Orkla)", s, b, ["regions"]))
 
     # 11 — market-share Mejeri
-    s, b = get("/api/dashboard/market-share", nordic_cookies, {"category_name": "Mejeri"})
+    s, b = get("/api/dashboard/market-share", nordic_cookies, {"category_name": "Läsk"})
     results.append(check("GET /api/dashboard/market-share (Mejeri)", s, b,
                          ["market_share_pct", "supplier_revenue", "category_total_revenue"]))
 

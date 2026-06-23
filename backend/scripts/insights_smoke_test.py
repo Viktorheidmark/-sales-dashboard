@@ -21,8 +21,8 @@ import httpx
 BASE = "http://localhost:8000"
 TIMEOUT = 15
 
-NORDIC_EMAIL = "arla@demo.solvigo"
-SNACKS_EMAIL = "orkla@demo.solvigo"
+NORDIC_EMAIL = "cocacola@demo.solvigo"
+SNACKS_EMAIL = "olw@demo.solvigo"
 PASSWORD = "demo1234"
 
 # Synthetic chart payload — mirrors what chart_builder produces
@@ -69,16 +69,16 @@ def main():
 
     nordic_cookies, nordic_id = login(NORDIC_EMAIL)
     snacks_cookies, snacks_id = login(SNACKS_EMAIL)
-    print(f"Arla Sverige  → {nordic_id}")
-    print(f"Orkla Sverige  → {snacks_id}\n")
+    print(f"Coca-Cola Europacific Partners Sverige  → {nordic_id}")
+    print(f"Orkla Snacks Sverige  → {snacks_id}\n")
 
     results: list[bool] = []
     saved_id: str = ""
     no_chart_id: str = ""
 
-    # 1 — Login as Arla Sverige (already done above)
-    print("── Test 1: Login as Arla Sverige ──")
-    results.append(check("Login Arla Sverige", [
+    # 1 — Login as Coca-Cola Europacific Partners Sverige (already done above)
+    print("── Test 1: Login as Coca-Cola Europacific Partners Sverige ──")
+    results.append(check("Login Coca-Cola Europacific Partners Sverige", [
         ("cookie present", bool(nordic_cookies.get("session"))),
         ("supplier_id non-empty", bool(nordic_id)),
     ]))
@@ -209,9 +209,9 @@ def main():
         ("detail message present", bool(r.json().get("detail") if r.status_code == 400 else False)),
     ]))
 
-    # 9 — Login as Orkla Sverige
-    print("── Test 9: Login as Orkla Sverige ──")
-    results.append(check("Login Orkla Sverige", [
+    # 9 — Login as Orkla Snacks Sverige
+    print("── Test 9: Login as Orkla Snacks Sverige ──")
+    results.append(check("Login Orkla Snacks Sverige", [
         ("cookie present", bool(snacks_cookies.get("session"))),
         ("different supplier_id", snacks_id != nordic_id),
     ]))

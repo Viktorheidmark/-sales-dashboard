@@ -57,7 +57,7 @@ def main():
     print("── Test 1: Valid login ──")
     r = httpx.post(
         f"{BASE}/api/auth/login",
-        json={"email": "arla@demo.solvigo", "password": "demo1234"},
+        json={"email": "cocacola@demo.solvigo", "password": "demo1234"},
         timeout=TIMEOUT,
     )
     cookie_set = "session" in r.cookies
@@ -65,7 +65,7 @@ def main():
     results.append(check("Valid login", [
         ("returns 200", r.status_code == 200),
         ("session cookie set", cookie_set),
-        ("supplier_name in response", body.get("supplier_name") == "Arla Sverige"),
+        ("supplier_name in response", body.get("supplier_name") == "Coca-Cola Europacific Partners Sverige"),
         ("supplier_id in response", bool(body.get("supplier_id"))),
     ]))
     nordic_cookie = dict(r.cookies) if cookie_set else {}
@@ -75,7 +75,7 @@ def main():
     print("\n── Test 2: Wrong password ──")
     r = httpx.post(
         f"{BASE}/api/auth/login",
-        json={"email": "arla@demo.solvigo", "password": "wrongpassword"},
+        json={"email": "cocacola@demo.solvigo", "password": "wrongpassword"},
         timeout=TIMEOUT,
     )
     results.append(check("Wrong password → 401", [
@@ -100,8 +100,8 @@ def main():
     results.append(check("GET /api/auth/me (authenticated)", [
         ("returns 200", r.status_code == 200),
         ("supplier_id matches login", body.get("supplier_id") == nordic_supplier_id),
-        ("supplier_name correct", body.get("supplier_name") == "Arla Sverige"),
-        ("email correct", body.get("email") == "arla@demo.solvigo"),
+        ("supplier_name correct", body.get("supplier_name") == "Coca-Cola Europacific Partners Sverige"),
+        ("email correct", body.get("email") == "cocacola@demo.solvigo"),
     ]))
 
     # ── 5: GET /api/auth/me with no cookie ────────────────────────────────
@@ -136,7 +136,7 @@ def main():
     # Log in as Orkla to get a different supplier_id
     snacks_login = httpx.post(
         f"{BASE}/api/auth/login",
-        json={"email": "orkla@demo.solvigo", "password": "demo1234"},
+        json={"email": "olw@demo.solvigo", "password": "demo1234"},
         timeout=TIMEOUT,
     )
     snacks_supplier_id = snacks_login.json().get("supplier_id", "") if snacks_login.status_code == 200 else ""

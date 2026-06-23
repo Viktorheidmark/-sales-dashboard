@@ -7,7 +7,7 @@ from app.services.period_utils import apply_sales_over_time_period_policy
 
 class ChartBuilderTests(unittest.TestCase):
     def test_truncate_label(self):
-        long_name = "Arla Proteindryck Vanilj 500ml Extra Long Product Name"
+        long_name = "Coca-Cola Zero Sugar Lemon 33 cl Extra Long Product Name"
         truncated = _truncate_label(long_name)
         self.assertLessEqual(len(truncated), 22)
         self.assertTrue(truncated.endswith("…"))
@@ -15,8 +15,8 @@ class ChartBuilderTests(unittest.TestCase):
     def test_top_products_horizontal_with_tooltip(self):
         chart = build_chart("get_top_products", {
             "products": [
-                {"product_name": "KESO Cottage Cheese", "revenue": 7100},
-                {"product_name": "Arla Mellanmjölk 1,5%", "revenue": 5200},
+                {"product_name": "OLW Grillchips 275 g", "revenue": 7100},
+                {"product_name": "Estrella Grillchips 275 g", "revenue": 5200},
             ],
         })
         self.assertIsNotNone(chart)
