@@ -209,6 +209,8 @@ def _enrich_sales_over_time_result(parsed: dict, plan_args: dict) -> dict:
             "lookback_weeks": plan_args.get("_chart_lookback_weeks", 8),
             "original_date_range": plan_args.get("_original_date_range") or {},
         }
+    if plan_args.get("_suppress_chart"):
+        parsed["suppress_chart"] = True
     return parsed
 
 

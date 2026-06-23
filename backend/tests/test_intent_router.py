@@ -13,9 +13,11 @@ from app.services.intent_router import (
     extract_period_args,
     extract_region,
     is_diagram_followup_request,
+    is_long_term_trend_request,
     is_period_only_followup,
     plan_followup_tools,
     plan_forced_tools,
+    plan_long_term_trend_tools,
     plan_period_followup_tools,
 )
 from app.services.period_utils import completed_week_bounds
@@ -61,6 +63,8 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
 
     def test_sales_trend_last_week(self):
+        # Weekly direct question: 2-week window (prev + current completed week),
+        # chart suppressed (LLM gets comparison data, chart shown separately on request).
         plans = plan_forced_tools(
             "Hur såg försäljningen ut senaste veckan?",
             "Arla Sverige",
@@ -68,11 +72,11 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
         self.assertEqual(plans[0].args.get("granularity"), "week")
+        self.assertTrue(plans[0].args.get("_suppress_chart"))
         week_start, week_end = completed_week_bounds()
-        orig = plans[0].args.get("_original_date_range") or {}
-        self.assertEqual(orig.get("start"), week_start.isoformat())
-        self.assertEqual(orig.get("end"), week_end.isoformat())
-        self.assertTrue(plans[0].args.get("_chart_context_widened"))
+        prev_start = week_start - timedelta(days=7)
+        self.assertEqual(plans[0].args.get("start_date"), prev_start.isoformat())
+        self.assertEqual(plans[0].args.get("end_date"), week_end.isoformat())
 
     def test_sales_trend_30_days_weekly_granularity(self):
         plans = plan_forced_tools(
@@ -199,7 +203,7 @@ class IntentRouterTests(unittest.TestCase):
         )
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
 
-    def test_weekly_widen_chart_end_is_latest_completed_sunday(self):
+    def test_weekly_end_date_is_latest_completed_sunday(self):
         _, week_end = completed_week_bounds()
         plans = plan_forced_tools(
             "Hur såg försäljningen ut senaste veckan?",
@@ -209,14 +213,15 @@ class IntentRouterTests(unittest.TestCase):
         wrong_end = (week_end - timedelta(days=7)).isoformat()
         self.assertNotEqual(plans[0].args.get("end_date"), wrong_end)
 
-    def test_sales_trend_last_week_includes_context_chart(self):
+    def test_sales_trend_last_week_suppresses_chart(self):
+        # Direct weekly question must NOT auto-widen to 8 weeks.
         plans = plan_forced_tools(
             "Hur såg försäljningen ut senaste veckan?",
             "Arla Sverige",
         )
         self.assertEqual(len(plans), 1)
-        self.assertTrue(plans[0].args.get("_chart_context_widened"))
-        self.assertEqual(plans[0].args.get("_chart_lookback_weeks"), 8)
+        self.assertTrue(plans[0].args.get("_suppress_chart"))
+        self.assertFalse(plans[0].args.get("_chart_context_widened"))
 
     def test_regional_sales_routing(self):
         plans = plan_forced_tools(
@@ -235,13 +240,43 @@ class IntentRouterTests(unittest.TestCase):
         plans = plan_followup_tools("visa diagram", prior, "Arla Sverige")
         self.assertEqual(plans, [])
 
-    def test_diagram_followup_visa_diagram_after_weekly_sales(self):
+    def test_diagram_followup_visa_diagram_after_weekly_sales_is_daily_exact_week(self):
+        # "visa diagram" after weekly answer must show a 7-day daily chart for the
+        # EXACT completed week discussed — not widened to 8 weeks.
+        week_start, week_end = completed_week_bounds()
+        prev_start = week_start - timedelta(days=7)
         prior = PriorTurnContext(
             question="Hur såg försäljningen ut senaste veckan?",
             tool_calls=("get_sales_over_time",),
-            sources=({"date_range": {"start": "2026-06-16", "end": "2026-06-22"}},),
+            # sources end date is Sunday of the answered week (always a real Sunday)
+            sources=({"date_range": {"start": prev_start.isoformat(), "end": week_end.isoformat()}},),
         )
         plans = plan_followup_tools("visa diagram", prior, "Arla Sverige")
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+        # Must be daily granularity for the within-week breakdown
+        self.assertEqual(plans[0].args.get("granularity"), "day")
+        start = plans[0].args.get("start_date")
+        end = plans[0].args.get("end_date")
+        self.assertIsNotNone(start)
+        self.assertIsNotNone(end)
+        # Exactly 7 days (Mon–Sun)
+        span = (date.fromisoformat(end[:10]) - date.fromisoformat(start[:10])).days + 1
+        self.assertEqual(span, 7)
+        # End must match the Sunday in prior sources; start is 6 days earlier (Mon)
+        self.assertEqual(end[:10], week_end.isoformat())
+        self.assertEqual(start[:10], week_start.isoformat())
+
+    def test_long_term_trend_after_weekly_sales_is_8_weeks(self):
+        # Explicitly asking for trend must widen to 8 weeks.
+        week_start, week_end = completed_week_bounds()
+        prev_start = week_start - timedelta(days=7)
+        prior = PriorTurnContext(
+            question="Hur såg försäljningen ut senaste veckan?",
+            tool_calls=("get_sales_over_time",),
+            sources=({"date_range": {"start": prev_start.isoformat(), "end": week_end.isoformat()}},),
+        )
+        plans = plan_long_term_trend_tools("Visa trenden", prior, "Arla Sverige")
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
         self.assertEqual(plans[0].args.get("granularity"), "week")
@@ -249,11 +284,53 @@ class IntentRouterTests(unittest.TestCase):
         end = plans[0].args.get("end_date")
         self.assertIsNotNone(start)
         self.assertIsNotNone(end)
-        span = (
-            date.fromisoformat(end[:10])
-            - date.fromisoformat(start[:10])
-        ).days + 1
-        self.assertGreaterEqual(span, 49)
+        span = (date.fromisoformat(end[:10]) - date.fromisoformat(start[:10])).days + 1
+        self.assertGreaterEqual(span, 49)  # at least 7 completed weeks
+        self.assertTrue(plans[0].args.get("_chart_context_widened"))
+
+    def test_long_term_via_forced_tools(self):
+        # plan_forced_tools must dispatch to plan_long_term_trend_tools when prior context exists.
+        week_start, week_end = completed_week_bounds()
+        prev_start = week_start - timedelta(days=7)
+        prior = PriorTurnContext(
+            question="Hur såg försäljningen ut senaste veckan?",
+            tool_calls=("get_sales_over_time",),
+            sources=({"date_range": {"start": prev_start.isoformat(), "end": week_end.isoformat()}},),
+        )
+        for phrase in ("Visa trenden", "Visa utvecklingen över tid", "visa trend"):
+            with self.subTest(phrase=phrase):
+                plans = plan_forced_tools(phrase, "Arla Sverige", prior_context=prior)
+                self.assertEqual(len(plans), 1, msg=f"No plan for '{phrase}'")
+                self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+                self.assertTrue(plans[0].args.get("_chart_context_widened"))
+
+    def test_is_long_term_trend_request(self):
+        self.assertTrue(is_long_term_trend_request("Visa trenden"))
+        self.assertTrue(is_long_term_trend_request("Visa trend"))
+        self.assertTrue(is_long_term_trend_request("Visa utvecklingen över tid"))
+        self.assertTrue(is_long_term_trend_request("jämför med tidigare veckor"))
+        self.assertFalse(is_long_term_trend_request("visa diagram"))
+        self.assertFalse(is_long_term_trend_request("Vad är vår marknadsandel?"))
+
+    def test_30_day_trend_returns_weekly_chart_directly(self):
+        # 30-day trend should not suppress the chart.
+        plans = plan_forced_tools(
+            "Visa försäljningstrend de senaste 30 dagarna",
+            "Arla Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+        self.assertFalse(plans[0].args.get("_suppress_chart"))
+
+    def test_visa_diagram_does_not_change_period_for_non_weekly(self):
+        # "visa diagram" after a 30-day trend with chart already shown → skipped.
+        prior = PriorTurnContext(
+            question="Visa försäljningstrend de senaste 30 dagarna",
+            tool_calls=("get_sales_over_time",),
+            has_chart=True,
+        )
+        plans = plan_followup_tools("visa diagram", prior, "Arla Sverige")
+        self.assertEqual(plans, [], msg="Should not re-plan when chart already shown")
 
     def test_is_diagram_followup(self):
         self.assertTrue(is_diagram_followup_request("Visa ett diagram för det."))

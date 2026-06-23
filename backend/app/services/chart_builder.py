@@ -51,6 +51,8 @@ def _granularity_label(granularity: str) -> str:
 
 
 def _build_sales_over_time(result: dict) -> Optional[dict]:
+    if result.get("suppress_chart"):
+        return None
     result = apply_sales_over_time_period_policy(result)
     series = result.get("series") or []
     if len(series) < 2:

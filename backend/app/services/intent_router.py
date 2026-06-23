@@ -92,6 +92,18 @@ _WEEKLY_SALES_RE = re.compile(r"senaste\s+veck|hur såg försäljningen ut", re.
 
 _WEEKLY_CHART_LOOKBACK_WEEKS = 8
 
+_LONG_TERM_TREND_RE = re.compile(
+    r"("
+    r"visa\s+(trenden|trend(?:\s+över\s+tid)?)|"
+    r"(visa|se|hur\s+har).{0,40}(utveckling|trend).{0,30}(tid|veckor|månader)|"
+    r"jämför.{0,30}(tidigare|veckor|perioder)|"
+    r"senaste\s+(två|tre|fyra|2|3|4)\s+månader|"
+    r"(8|åtta)\s+veckor|"
+    r"över\s+tid"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
 _KPI_COMPARISON_RE = re.compile(
     r"(föregående period|jämfört med förra|mot föregående|periodjämförelse|periodöversikt)",
     re.IGNORECASE,
@@ -168,6 +180,30 @@ def extract_region(message: str) -> Optional[str]:
 
 def is_diagram_followup_request(message: str) -> bool:
     return bool(_DIAGRAM_FOLLOWUP_RE.search(message.strip()))
+
+
+def is_long_term_trend_request(message: str) -> bool:
+    return bool(_LONG_TERM_TREND_RE.search(message.strip()))
+
+
+def _extract_completed_week_from_prior(prior: "PriorTurnContext") -> tuple[date, date]:
+    """Return (monday, sunday) of the completed week discussed in the prior answer.
+
+    Reads the end date from prior sources.  Because weekly queries always end on
+    a completed Sunday, the date_range.end IS the Sunday of the answer week.
+    Falls back to the most-recently-completed week if sources are absent.
+    """
+    for source in prior.sources:
+        dr = source.get("date_range") if isinstance(source, dict) else None
+        if isinstance(dr, dict) and dr.get("end"):
+            try:
+                end_d = date.fromisoformat(str(dr["end"])[:10])
+                # Sunday weekday == 6
+                if end_d.weekday() == 6:
+                    return end_d - timedelta(days=6), end_d
+            except ValueError:
+                pass
+    return completed_week_bounds()
 
 
 def is_period_only_followup(message: str) -> bool:
@@ -413,6 +449,20 @@ def plan_followup_tools(
     if not primary:
         return []
 
+    # "visa diagram" after a weekly-sales answer → daily chart for the EXACT answered week.
+    # Do NOT widen to 8 weeks: the user asked to visualise the same period as the answer.
+    if primary == "get_sales_over_time" and _WEEKLY_SALES_RE.search(prior.question or ""):
+        week_start, week_end = _extract_completed_week_from_prior(prior)
+        return [ToolPlan(
+            tool_name="get_sales_over_time",
+            args={
+                "start_date": week_start.isoformat(),
+                "end_date": week_end.isoformat(),
+                "granularity": "day",
+            },
+            reason="daily chart for answered week",
+        )]
+
     args = _reconstruct_tool_args(
         primary, prior, supplier_name, start_date, end_date, message=prior.question,
     )
@@ -428,6 +478,41 @@ def plan_followup_tools(
         tool_name=primary,
         args=args,
         reason=f"follow-up chart ({primary})",
+    )]
+
+
+def plan_long_term_trend_tools(
+    message: str,
+    prior: PriorTurnContext,
+    supplier_name: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> list[ToolPlan]:
+    """Return an 8-week context chart when the user explicitly asks for long-term trend.
+
+    Only triggers when the prior question was a sales-over-time query and the
+    current message contains explicit long-term language such as 'visa trenden',
+    'visa utvecklingen över tid', 'jämför med tidigare veckor', etc.
+    """
+    if not is_long_term_trend_request(message):
+        return []
+    if not prior.tool_calls:
+        return []
+
+    primary = _primary_chart_tool(list(prior.tool_calls))
+    if primary not in ("get_sales_over_time", "get_supplier_kpis"):
+        return []
+
+    args = _reconstruct_tool_args(
+        "get_sales_over_time", prior, supplier_name, start_date, end_date,
+        message=prior.question,
+    )
+    args = _ensure_chartable_sales_window(args, prior.question)
+    args["granularity"] = "week"
+    return [ToolPlan(
+        tool_name="get_sales_over_time",
+        args=args,
+        reason="explicit long-term trend (8-week context)",
     )]
 
 
@@ -474,6 +559,11 @@ def plan_forced_tools(
         )
         if period_followup:
             return period_followup
+        long_term = plan_long_term_trend_tools(
+            msg, prior_context, supplier_name, start_date, end_date,
+        )
+        if long_term:
+            return long_term
         followup = plan_followup_tools(msg, prior_context, supplier_name, start_date, end_date)
         if followup:
             return followup
@@ -501,11 +591,15 @@ def plan_forced_tools(
         )
         if _WEEKLY_SALES_RE.search(msg) and period_args.get("completed_week"):
             week_start, week_end = completed_week_bounds()
-            args["start_date"] = week_start.isoformat()
+            # Provide current + previous completed week for comparison capability.
+            # Do NOT widen to 8 weeks — this is a factual point-in-time question,
+            # not a trend/chart request. Chart suppressed; user can request diagram.
+            prev_start = week_start - timedelta(days=7)
+            args["start_date"] = prev_start.isoformat()
             args["end_date"] = week_end.isoformat()
+            args["_suppress_chart"] = True
         args = _align_sales_over_time_weekly(args)
-        if _WEEKLY_SALES_RE.search(msg) and period_args.get("completed_week"):
-            args = _ensure_chartable_sales_window(args, msg)
+        # _ensure_chartable_sales_window only runs in plan_followup_tools (diagram requests).
         plans.append(ToolPlan(
             tool_name="get_sales_over_time",
             args=args,
