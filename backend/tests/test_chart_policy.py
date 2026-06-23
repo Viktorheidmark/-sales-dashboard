@@ -38,10 +38,23 @@ class ChartPolicyTests(unittest.TestCase):
         ]
         self.assertEqual(resolve_chart_intent(q, raw), ChartIntent.TIME_SERIES)
         charts = select_charts(q, raw)
-        self.assertGreaterEqual(len(charts), 1)
+        self.assertEqual(len(charts), 1)
         self.assertEqual(charts[0]["chart_type"], LINE_CHART)
         self.assertEqual(charts[0]["chart_role"], "primary")
         self.assertNotEqual(charts[0].get("chart_variant"), "decline_comparison")
+
+    def test_30_day_trend_excludes_secondary_period_bar(self):
+        q = "Hur har försäljningen utvecklats de senaste 30 dagarna?"
+        raw = [
+            ("get_revenue_drivers", {**self._drivers(), "_chart_intent": "drivers_data"}),
+            ("get_sales_over_time", self._weekly_series()),
+        ]
+        charts = select_charts(q, raw)
+        titles = [c.get("title") for c in charts]
+        self.assertNotIn("Jämfört med föregående period", titles)
+        self.assertNotIn("Periodjämförelse", titles)
+        bar_charts = [c for c in charts if c.get("chart_type") == BAR_CHART]
+        self.assertEqual(bar_charts, [])
 
     def test_flat_trend_still_shows_line_chart(self):
         q = "Hur har försäljningen utvecklats de senaste 30 dagarna?"
@@ -62,6 +75,17 @@ class ChartPolicyTests(unittest.TestCase):
         self.assertEqual(len(charts), 1)
         self.assertEqual(charts[0]["chart_type"], BAR_CHART)
         self.assertEqual(charts[0]["chart_variant"], "decline_comparison")
+        self.assertEqual(charts[0]["title"], "Periodjämförelse")
+
+    def test_explicit_month_comparison_primary_is_bar(self):
+        q = "Hur gick det jämfört med förra månaden?"
+        drivers = {**self._drivers(), "_chart_intent": "period_comparison"}
+        raw = [("get_revenue_drivers", drivers)]
+        self.assertEqual(resolve_chart_intent(q, raw), ChartIntent.PERIOD_COMPARISON)
+        charts = select_charts(q, raw)
+        self.assertEqual(len(charts), 1)
+        self.assertEqual(charts[0]["chart_type"], BAR_CHART)
+        self.assertEqual(charts[0]["chart_role"], "primary")
 
     def test_ranking_primary_is_horizontal_bar(self):
         q = "Vilka produkter säljer bäst i Stockholm?"

@@ -151,11 +151,6 @@ def select_charts(
             trend = build_time_series_chart(sales, force=True)
             if trend:
                 charts.append({**trend, "chart_role": "primary"})
-        drivers = tools.get("get_revenue_drivers")
-        if charts and drivers and not drivers.get("_deep_dive_focus"):
-            comparison = build_period_comparison_chart(drivers, compact=True)
-            if comparison:
-                charts.append({**comparison, "chart_role": "secondary"})
         return charts
 
     if intent == ChartIntent.PERIOD_COMPARISON:
