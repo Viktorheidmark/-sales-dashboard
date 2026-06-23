@@ -1,91 +1,17 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
-import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
 import { api } from '../../api/client'
-import type { ChartPayload, ChatResponse, DateRange, SourceMeta } from '../../api/types'
+import type { ChatResponse, DateRange, PriorTurnContext, SourceMeta } from '../../api/types'
 import { formatDate } from '../../utils/format'
-import { useChartTheme } from '../../utils/chartTheme'
+import { MiniAssistantChart } from '../charts/MiniAssistantChart'
 import {
   ANALYTICS_DATA_SOURCE,
-  formatSharePct,
   formatSourcePeriod,
-  isMarketShareChart,
   isMarketShareResponse,
-  marketShareLegendItems,
   resolveResponseDateRange,
   toolLabelSv,
   visibleResponseLimitations,
 } from '../../utils/sourcePresentation'
-
-function MarketShareLegend({ chart, supplierName }: { chart: ChartPayload; supplierName?: string }) {
-  const { chart: colors } = useChartTheme()
-  const legend = marketShareLegendItems(chart, supplierName)
-  if (!legend) return null
-
-  return (
-    <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-3 pt-3 border-t border-workspace-border/60">
-      <span className="inline-flex items-center gap-2 text-xs text-theme-body">
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colors.barPrimary }} aria-hidden />
-        {legend.supplierLabel}: {formatSharePct(legend.supplierPct)}
-      </span>
-      <span className="inline-flex items-center gap-2 text-xs text-theme-body">
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colors.pieMuted }} aria-hidden />
-        Övriga aktörer: {formatSharePct(legend.othersPct)}
-      </span>
-    </div>
-  )
-}
-
-function MiniChart({ chart, supplierName }: { chart: ChartPayload; supplierName?: string }) {
-  const { chart: colors, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
-  const showMarketShareLegend = isMarketShareChart(chart)
-
-  if (chart.chart_type === 'line_chart') {
-    return (
-      <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-          <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
-          <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={chartTooltipStyle} />
-          <Line type="monotone" dataKey={chart.y_key} stroke={colors.line} strokeWidth={2} dot={false} />
-        </LineChart>
-      </ResponsiveContainer>
-    )
-  }
-  if (chart.chart_type === 'bar_chart') {
-    return (
-      <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
-          <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
-          <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={chartTooltipStyle} />
-          <Bar dataKey={chart.y_key} fill={colors.barPrimary} radius={[3, 3, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    )
-  }
-  if (chart.chart_type === 'pie_chart') {
-    return (
-      <div>
-        <ResponsiveContainer width="100%" height={180}>
-          <PieChart>
-            <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={68} strokeWidth={0}>
-              {chart.data.map((_, i) => <Cell key={i} fill={colors.pieColors[i % colors.pieColors.length]} />)}
-            </Pie>
-            <Tooltip contentStyle={chartTooltipStyle} />
-          </PieChart>
-        </ResponsiveContainer>
-        {showMarketShareLegend && <MarketShareLegend chart={chart} supplierName={supplierName} />}
-      </div>
-    )
-  }
-  return null
-}
 
 const PROMPT_CARDS = [
   {
@@ -146,6 +72,24 @@ const markdownComponents = {
   ),
 }
 
+function buildPriorContext(messages: Message[]): PriorTurnContext | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (msg.role !== 'assistant' || !msg.response || msg.response.tool_calls.length === 0) {
+      continue
+    }
+    const priorUser = messages.slice(0, i).reverse().find(m => m.role === 'user')
+    if (!priorUser) return undefined
+    return {
+      question: priorUser.content,
+      answer: msg.response.answer,
+      tool_calls: msg.response.tool_calls,
+      sources: msg.response.sources,
+    }
+  }
+  return undefined
+}
+
 function SourceSummary({
   sources,
   fallbackDateRange,
@@ -157,12 +101,12 @@ function SourceSummary({
   const periodLabel = dateRange ? formatSourcePeriod(dateRange) : null
 
   return (
-    <div className="rounded-lg border border-workspace-border/80 bg-workspace-muted/40 px-4 py-3">
-      <p className="text-xs font-medium text-theme-muted">Datakälla</p>
-      <p className="mt-1 text-xs text-theme-body leading-relaxed">
+    <div className="rounded-lg border border-workspace-border/80 bg-workspace-muted/40 px-3 py-2">
+      <p className="text-[11px] text-theme-muted leading-snug">
+        <span className="font-medium text-theme-body">Datakälla.</span>{' '}
         {periodLabel
-          ? `Analysen bygger på försäljningsdata för perioden ${periodLabel}.`
-          : 'Analysen bygger på försäljningsdata för vald period.'}
+          ? `Försäljningsdata ${periodLabel}.`
+          : 'Försäljningsdata för vald period.'}
       </p>
     </div>
   )
@@ -316,15 +260,17 @@ function AssistantBubble({
 
       {r.chart && (
         <div className="pt-1">
-          <p className="text-xs font-medium text-theme-muted mb-1">{r.chart.title}</p>
-          {r.chart.description && !marketShare && (
-            <p className="text-xs text-theme-muted mb-3 leading-relaxed">{r.chart.description}</p>
+          {r.chart.description && (
+            <p className="text-xs text-theme-muted mb-2 leading-relaxed">{r.chart.description}</p>
           )}
           <div className="rounded-lg border border-workspace-border bg-workspace-muted/50 px-3 py-2">
-            <MiniChart chart={r.chart} supplierName={supplierName} />
+            <MiniAssistantChart chart={r.chart} supplierName={supplierName} />
           </div>
+          {r.chart.period_note && (
+            <p className="mt-1.5 text-[11px] text-theme-muted leading-snug">{r.chart.period_note}</p>
+          )}
           {marketShare && (
-            <p className="mt-2 text-xs text-theme-muted leading-relaxed">
+            <p className="mt-1.5 text-[11px] text-theme-muted leading-snug">
               Konkurrentdata visas endast på aggregerad nivå.
             </p>
           )}
@@ -420,8 +366,14 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
     }
 
     try {
+      const priorContext = buildPriorContext(messages)
       const stream = api.chatStream(
-        { message: trimmed, start_date: startDate, end_date: endDate },
+        {
+          message: trimmed,
+          start_date: startDate,
+          end_date: endDate,
+          prior_context: priorContext,
+        },
         abort.signal,
       )
 

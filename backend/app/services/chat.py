@@ -29,7 +29,23 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from app.services.guardrails import classify
 from app.services.chart_builder import pick_chart
-from app.services.intent_router import plan_forced_tools, default_category_for_supplier
+from app.services.intent_router import (
+    plan_forced_tools,
+    default_category_for_supplier,
+    prior_context_from_dict,
+    is_diagram_followup_request,
+)
+from app.services.period_utils import apply_sales_over_time_period_policy
+from app.services.currency_format import (
+    build_currency_reference_block,
+    currency_format_rules_block,
+    sanitize_answer_currency,
+)
+from app.services.response_guidance import (
+    executive_writing_rules,
+    needs_synthesis_retry,
+    synthesis_suffix,
+)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -54,10 +70,8 @@ _PLANNING_RE = re.compile(
     re.IGNORECASE,
 )
 
-_SYNTHESIS_SUFFIX = (
-    "\n\n[Instruktion: Verktygsdata är redan hämtad. Skriv slutgiltigt svar direkt på svenska "
-    "med siffrorna från verktygsresultaten. Nämn kategorin och perioden från date_range. "
-    "Beskriv inte planer, kommande steg eller att du ska hämta eller kontrollera data.]"
+_SYNTHESIS_RETRY_NOTE = (
+    "\n\n[Instruktion: Skriv om som färdigt analysresultat. Inga planeringsfraser.]"
 )
 
 
@@ -77,17 +91,17 @@ DATUMREGLER — dessa är absoluta:
 - Svara ALDRIG på numeriska försäljningsfrågor utan att först ha anropat ett verktyg och fått ett resultat.
 - Det enda giltiga affärsdatumet är det som returneras i verktygsresultatets `date_range`-fält. Uppfinn aldrig egna kalenderperioder eller årtalsreferenser.
 - När du rapporterar intäkter, trender eller produktresultat ska du alltid ange den faktiska perioden från `date_range` i svaret (t.ex. "under perioden 2026-03-23 till 2026-06-21").
-- Om verktygsresultatet visar positiva intäkter, rapportera dem exakt. Påstå aldrig att det saknas data om verktyget returnerat värden.
+- Om verktygsresultatet innehåller `analysis_note`, följ den vid trend- och jämförelsebedömningar.
 
 Regler du alltid måste följa:
 - Svara alltid på svenska, kortfattat och affärsinriktat.
 - Hitta aldrig på siffror. Gör endast påståenden som stöds av verktygsresultat.
 - Om data saknas eller frågan inte kan besvaras med tillgängliga verktyg, säg det tydligt.
 - Avslöja aldrig konkurrentdata på produkt-, kund- eller ordernivå. Konkurrentdata är alltid aggregerad.
-- Förklara osäkerhet eller begränsningar när det är relevant.
-- Föreslå praktiska nästa steg när datan stöder det.
+- Föreslå endast nästa steg som direkt stöds av verktygsdata — inga generiska marknadsförings- eller prisråd utan datastöd.
 - Skriv slutsvaret direkt. Beskriv ALDRIG vad du kommer att göra, hämta eller kontrollera.
-- Håll svar under 150 ord om inte frågan kräver mer detaljer.
+- Håll svar under 90 ord om inte användaren uttryckligen ber om mer detaljer.
+{executive_writing_rules(supplier_name)}
 """
 
 
@@ -156,6 +170,8 @@ def _record_tool_result(
     tools_used.append(tool_name)
     if not isinstance(parsed, dict):
         return
+    if tool_name == "get_sales_over_time":
+        parsed = apply_sales_over_time_period_policy(parsed)
     raw_source = parsed.get("source", "")
     sources.append({
         "tool": tool_name,
@@ -213,8 +229,29 @@ async def _execute_planned_tools(
         )
 
 
-def _tool_context_message(question: str, raw_tool_results: list[tuple[str, dict]]) -> dict:
+def _diagram_clarification_response(supplier_id: str) -> dict:
+    return {
+        "answer": (
+            "Vad vill du se i diagrammet? Till exempel marknadsandel, topprodukter i en region, "
+            "produkter i nedgång eller försäljningstrend — så kan jag visa rätt visualisering."
+        ),
+        "tool_calls": [],
+        "sources": [],
+        "chart": None,
+        "limitations": [],
+        "supplier_id": supplier_id,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+def _tool_context_message(
+    question: str,
+    raw_tool_results: list[tuple[str, dict]],
+    supplier_name: str = "",
+    tools_used: list[str] | None = None,
+) -> dict:
     payload = {name: result for name, result in raw_tool_results}
+    tool_list = tools_used or [name for name, _ in raw_tool_results]
     return {
         "role": "user",
         "content": (
@@ -222,13 +259,51 @@ def _tool_context_message(question: str, raw_tool_results: list[tuple[str, dict]
             "Svara direkt på frågan på svenska med dessa siffror.\n\n"
             f"Fråga: {question}\n\n"
             f"Verktygsresultat:\n{json.dumps(payload, ensure_ascii=False)}"
-            f"{_SYNTHESIS_SUFFIX}"
+            f"{build_currency_reference_block(raw_tool_results)}"
+            f"{currency_format_rules_block()}"
+            f"{synthesis_suffix(supplier_name, question, tool_list)}"
         ),
     }
 
 
 def _looks_like_planning(answer: str) -> bool:
     return bool(answer) and bool(_PLANNING_RE.search(answer))
+
+
+def _synthesis_retry_message(supplier_name: str, question: str, tools_used: list[str]) -> dict:
+    return {
+        "role": "user",
+        "content": (
+            "Skriv om svaret som ett färdigt analysresultat baserat på verktygsdata. "
+            "Inga planeringsfraser, inga generiska rekommendationer och inga felaktiga produktnamn "
+            "(sätt aldrig leverantörsnamnet framför product_name). "
+            "Använd korrekt valutaenhet: under 1 mkr SEK som tkr, inte mkr."
+            + synthesis_suffix(supplier_name, question, tools_used)
+            + _SYNTHESIS_RETRY_NOTE
+        ),
+    }
+
+
+async def _finalize_answer(
+    client: OpenAI,
+    model: str,
+    messages: list[dict],
+    *,
+    supplier_name: str,
+    question: str,
+    tools_used: list[str],
+    raw_tool_results: list[tuple[str, dict]],
+) -> str:
+    answer = await _synthesize_sync(client, model, messages)
+    if tools_used and (
+        _looks_like_planning(answer)
+        or needs_synthesis_retry(answer, supplier_name, tools_used, raw_tool_results)
+    ):
+        messages.append(_synthesis_retry_message(supplier_name, question, tools_used))
+        answer = await _synthesize_sync(client, model, messages)
+    if not answer.strip():
+        answer = "Jag kunde inte generera ett svar. Försök igen."
+    return answer
 
 
 def _guardrail_response(guard, supplier_id: str) -> dict:
@@ -251,8 +326,9 @@ def _final_payload(
     limitations: list[str],
     supplier_id: str,
 ) -> dict:
+    cleaned_answer = sanitize_answer_currency(answer, raw_tool_results)
     return {
-        "answer": answer,
+        "answer": cleaned_answer,
         "tool_calls": list(dict.fromkeys(tools_used)),
         "sources": sources,
         "chart": pick_chart(raw_tool_results),
@@ -355,10 +431,15 @@ async def run_chat(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     supplier_name: str = "",
+    prior_context: Optional[dict] = None,
 ) -> dict:
     guard = classify(message)
     if not guard.should_call_llm:
         return _guardrail_response(guard, supplier_id)
+
+    prior = prior_context_from_dict(prior_context)
+    if is_diagram_followup_request(message) and not prior:
+        return _diagram_clarification_response(supplier_id)
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
@@ -386,13 +467,15 @@ async def run_chat(
                 {"role": "user", "content": user_message},
             ]
 
-            forced = plan_forced_tools(message, supplier_name, start_date, end_date)
+            forced = plan_forced_tools(
+                message, supplier_name, start_date, end_date, prior_context=prior,
+            )
             if forced:
                 await _execute_planned_tools(
                     session, forced, supplier_id, start_date, end_date,
                     tools_used, sources, limitations, raw_tool_results,
                 )
-                messages.append(_tool_context_message(message, raw_tool_results))
+                messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
             else:
                 await _llm_tool_round(
                     session, client, async_client=None, model=model,
@@ -403,31 +486,25 @@ async def run_chat(
                 )
 
             if not tools_used:
-                fallback = plan_forced_tools(message, supplier_name, start_date, end_date)
+                fallback = plan_forced_tools(
+                    message, supplier_name, start_date, end_date, prior_context=prior,
+                )
                 if fallback:
                     await _execute_planned_tools(
                         session, fallback, supplier_id, start_date, end_date,
                         tools_used, sources, limitations, raw_tool_results,
                     )
-                    messages.append(_tool_context_message(message, raw_tool_results))
+                    messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
 
             if tools_used and (not messages[-1].get("content") or messages[-1]["role"] != "assistant"):
                 if messages[-1].get("role") != "user" or "Verktygsresultat" not in messages[-1].get("content", ""):
-                    messages.append(_tool_context_message(message, raw_tool_results))
+                    messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
 
-            answer = await _synthesize_sync(client, model, messages)
-            if _looks_like_planning(answer) and tools_used:
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "Skriv om svaret som ett färdigt analysresultat baserat på verktygsdata. "
-                        "Inga planeringsfraser." + _SYNTHESIS_SUFFIX
-                    ),
-                })
-                answer = await _synthesize_sync(client, model, messages)
-
-            if not answer.strip():
-                answer = "Jag kunde inte generera ett svar. Försök igen."
+            answer = await _finalize_answer(
+                client, model, messages,
+                supplier_name=supplier_name, question=message, tools_used=tools_used,
+                raw_tool_results=raw_tool_results,
+            )
 
     return _final_payload(answer, tools_used, sources, raw_tool_results, limitations, supplier_id)
 
@@ -438,6 +515,7 @@ async def stream_chat(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     supplier_name: str = "",
+    prior_context: Optional[dict] = None,
 ):
     def sse(event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -445,6 +523,11 @@ async def stream_chat(
     guard = classify(message)
     if not guard.should_call_llm:
         yield sse("complete", _guardrail_response(guard, supplier_id))
+        return
+
+    prior = prior_context_from_dict(prior_context)
+    if is_diagram_followup_request(message) and not prior:
+        yield sse("complete", _diagram_clarification_response(supplier_id))
         return
 
     try:
@@ -478,13 +561,15 @@ async def stream_chat(
                     {"role": "user", "content": user_message},
                 ]
 
-                forced = plan_forced_tools(message, supplier_name, start_date, end_date)
+                forced = plan_forced_tools(
+                    message, supplier_name, start_date, end_date, prior_context=prior,
+                )
                 if forced:
                     await _execute_planned_tools(
                         session, forced, supplier_id, start_date, end_date,
                         tools_used, sources, limitations, raw_tool_results,
                     )
-                    messages.append(_tool_context_message(message, raw_tool_results))
+                    messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
                 else:
                     await _llm_tool_round(
                         session, None, async_client=async_client, model=model,
@@ -495,18 +580,20 @@ async def stream_chat(
                     )
 
                 if not tools_used:
-                    fallback = plan_forced_tools(message, supplier_name, start_date, end_date)
+                    fallback = plan_forced_tools(
+                        message, supplier_name, start_date, end_date, prior_context=prior,
+                    )
                     if fallback:
                         await _execute_planned_tools(
                             session, fallback, supplier_id, start_date, end_date,
                             tools_used, sources, limitations, raw_tool_results,
                         )
-                        messages.append(_tool_context_message(message, raw_tool_results))
+                        messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
 
                 if tools_used:
                     last = messages[-1]
                     if last.get("role") != "user" or "Verktygsresultat" not in last.get("content", ""):
-                        messages.append(_tool_context_message(message, raw_tool_results))
+                        messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
 
                 yield sse("status", {"text": "Sammanställer svaret…"})
                 chart = pick_chart(raw_tool_results)
@@ -530,14 +617,15 @@ async def stream_chat(
 
                 full_answer = "".join(full_answer_parts)
 
-                if _looks_like_planning(full_answer) and tools_used:
-                    retry_messages = messages + [{
-                        "role": "user",
-                        "content": (
-                            "Skriv om svaret som ett färdigt analysresultat baserat på verktygsdata. "
-                            "Inga planeringsfraser." + _SYNTHESIS_SUFFIX
-                        ),
-                    }]
+                if tools_used and (
+                    _looks_like_planning(full_answer)
+                    or needs_synthesis_retry(
+                        full_answer, supplier_name, tools_used, raw_tool_results,
+                    )
+                ):
+                    retry_messages = messages + [
+                        _synthesis_retry_message(supplier_name, message, tools_used),
+                    ]
                     retry_parts: list[str] = []
                     retry_stream = await async_client.chat.completions.create(
                         model=model,

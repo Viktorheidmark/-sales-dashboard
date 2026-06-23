@@ -2,10 +2,18 @@ from typing import Any, Optional
 from pydantic import BaseModel, field_validator
 
 
+class PriorTurnContext(BaseModel):
+    question: str
+    answer: str = ""
+    tool_calls: list[str] = []
+    sources: list[dict[str, Any]] = []
+
+
 class ChatRequest(BaseModel):
     message: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    prior_context: Optional[PriorTurnContext] = None
 
     @field_validator("message")
     @classmethod

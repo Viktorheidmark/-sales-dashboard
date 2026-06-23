@@ -33,6 +33,7 @@ async def chat(
                 start_date=req.start_date,
                 end_date=req.end_date,
                 supplier_name=user.get("supplier_name", ""),
+                prior_context=req.prior_context.model_dump() if req.prior_context else None,
             ),
             timeout=_TIMEOUT_SECONDS,
         )
@@ -81,6 +82,7 @@ async def chat_stream(
                 start_date=req.start_date,
                 end_date=req.end_date,
                 supplier_name=user.get("supplier_name", ""),
+                prior_context=req.prior_context.model_dump() if req.prior_context else None,
             ):
                 yield chunk
         except asyncio.CancelledError:

@@ -88,10 +88,23 @@ export function marketShareLegendItems(
   }
 }
 
+const INCOMPLETE_PERIOD_RE =
+  /ofullständig|exkluderats|pågående\s+(vecka|månad)|pågående\s+\w+\s+är/i
+
+export function isIncompletePeriodLimitation(text: string): boolean {
+  return INCOMPLETE_PERIOD_RE.test(text)
+}
+
 export function visibleResponseLimitations(
   limitations: string[],
   response: Pick<ChatResponse, 'tool_calls' | 'chart'>,
 ): string[] {
-  if (!isMarketShareResponse(response)) return limitations
-  return limitations.filter(l => !isAggregateCompetitorLimitation(l))
+  let filtered = limitations
+  if (isMarketShareResponse(response)) {
+    filtered = filtered.filter(l => !isAggregateCompetitorLimitation(l))
+  }
+  if (response.chart?.period_note) {
+    filtered = filtered.filter(l => !isIncompletePeriodLimitation(l))
+  }
+  return filtered
 }

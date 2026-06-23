@@ -1,57 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
 import { api } from '../api/client'
-import type { ChartPayload, InsightDetail, InsightSummary } from '../api/types'
+import type { InsightDetail, InsightSummary } from '../api/types'
 import { PageHeader } from '../components/layout/PageHeader'
-import { useChartTheme } from '../utils/chartTheme'
-
-function MiniChart({ chart }: { chart: ChartPayload }) {
-  const { chart: colors, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
-
-  if (chart.chart_type === 'line_chart') {
-    return (
-      <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-          <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
-          <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={chartTooltipStyle} />
-          <Line type="monotone" dataKey={chart.y_key} stroke={colors.line} strokeWidth={2} dot={false} />
-        </LineChart>
-      </ResponsiveContainer>
-    )
-  }
-  if (chart.chart_type === 'bar_chart') {
-    return (
-      <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={chart.data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
-          <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
-          <YAxis tick={chartAxisTickSm} tickLine={false} axisLine={false} width={48} />
-          <Tooltip contentStyle={chartTooltipStyle} />
-          <Bar dataKey={chart.y_key} fill={colors.barPrimary} radius={[3, 3, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    )
-  }
-  if (chart.chart_type === 'pie_chart') {
-    return (
-      <ResponsiveContainer width="100%" height={180}>
-        <PieChart>
-          <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={72} strokeWidth={0}>
-            {chart.data.map((_, i) => <Cell key={i} fill={colors.pieColors[i % colors.pieColors.length]} />)}
-          </Pie>
-          <Tooltip contentStyle={chartTooltipStyle} />
-        </PieChart>
-      </ResponsiveContainer>
-    )
-  }
-  return null
-}
+import { MiniAssistantChart } from '../components/charts/MiniAssistantChart'
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -281,7 +233,7 @@ export function InsightsPage() {
                       {detail.chart.description && (
                         <p className="text-xs text-theme-muted mb-2">{detail.chart.description}</p>
                       )}
-                      <MiniChart chart={detail.chart} />
+                      <MiniAssistantChart chart={detail.chart} />
                     </div>
                   )}
 

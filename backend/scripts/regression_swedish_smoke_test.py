@@ -29,7 +29,8 @@ REGRESSION_QUESTIONS = [
         "expected_tool": "get_market_share",
         "expect_chart": True,
         "chart_slices": {"Oss", "Konkurrenter"},
-        "must_not_contain": ["Skånemejerier", "kund", "order"],
+        "must_not_contain": ["Skånemejerier", "kund", "order", "ert märke"],
+        "must_contain_supplier": True,
     },
     {
         "label": "Explicit Mejeri market share",
@@ -38,6 +39,7 @@ REGRESSION_QUESTIONS = [
         "expect_chart": True,
         "chart_slices": {"Oss", "Konkurrenter"},
         "must_not_contain": ["Skånemejerier"],
+        "must_contain_supplier": True,
     },
     {
         "label": "Top products in Stockholm",
@@ -45,7 +47,102 @@ REGRESSION_QUESTIONS = [
         "expected_tool": "get_top_products",
         "expect_chart": True,
         "chart_slices": None,
+        "must_not_contain": ["marknadsföring", "överväg att fokusera"],
+        "must_contain_supplier": False,
+    },
+    {
+        "label": "Sales trend 90 days — incomplete period",
+        "message": "Hur har försäljningen utvecklats de senaste 90 dagarna?",
+        "expected_tool": "get_sales_over_time",
+        "expect_chart": True,
+        "chart_slices": None,
+        "must_not_contain": ["intäktsförsäljning", "kraftig nedgång", "kraftigt fall"],
+        "must_contain_supplier": True,
+        "incomplete_period_safe": True,
+    },
+    {
+        "label": "Focus next period — grounded advisory",
+        "message": "Vad borde vi fokusera på nästa period?",
+        "expected_tool": "get_declining_products",
+        "expect_chart": True,
+        "chart_slices": None,
         "must_not_contain": [],
+        "must_contain_supplier": False,
+        "grounded_advisory": True,
+    },
+    {
+        "label": "Declining products — material decline prioritized",
+        "message": "Vilken produkt minskade mest de senaste 30 dagarna?",
+        "expected_tool": "get_declining_products",
+        "expect_chart": True,
+        "chart_slices": None,
+        "must_not_contain": [],
+        "must_contain_supplier": False,
+        "declining_priority": True,
+    },
+]
+
+PERIOD_FOLLOWUP_SCENARIOS = [
+    {
+        "label": "Sales trend → 30 days",
+        "prior_message": "Hur såg försäljningen ut senaste veckan?",
+        "followup_message": "senaste 30 dagarna då?",
+        "expected_tool": "get_sales_over_time",
+        "chart_type": "line_chart",
+    },
+    {
+        "label": "Market share → 30 days",
+        "prior_message": "Vad är vår marknadsandel i Mejeri?",
+        "followup_message": "senaste 30 dagarna då?",
+        "expected_tool": "get_market_share",
+        "chart_type": "pie_chart",
+    },
+    {
+        "label": "Top products Stockholm → 30 days",
+        "prior_message": "Vilka produkter säljer bäst i Stockholm?",
+        "followup_message": "senaste 30 dagarna då?",
+        "expected_tool": "get_top_products",
+        "chart_type": "bar_chart",
+        "expect_region": "Stockholm",
+    },
+]
+
+FOLLOWUP_SCENARIOS = [
+    {
+        "label": "Diagram after market share",
+        "prior_message": "Vad är vår marknadsandel i Mejeri?",
+        "expected_tool": "get_market_share",
+        "expect_chart": True,
+        "chart_type": "pie_chart",
+    },
+    {
+        "label": "Diagram after Stockholm top products",
+        "prior_message": "Vilka produkter säljer bäst i Stockholm?",
+        "expected_tool": "get_top_products",
+        "expect_chart": True,
+        "chart_type": "bar_chart",
+    },
+    {
+        "label": "Diagram after declining product",
+        "prior_message": "Vilken produkt minskade mest de senaste 30 dagarna?",
+        "expected_tool": "get_declining_products",
+        "expect_chart": True,
+        "chart_type": "bar_chart",
+    },
+    {
+        "label": "Diagram after weekly sales trend",
+        "prior_message": "Hur såg försäljningen ut senaste veckan?",
+        "followup_message": "visa diagram",
+        "expected_tool": "get_sales_over_time",
+        "expect_chart": True,
+        "chart_type": "line_chart",
+    },
+    {
+        "label": "Diagram after period comparison",
+        "prior_message": "Hur ser försäljningen ut jämfört med föregående period?",
+        "expected_tool": "get_sales_over_time",
+        "expect_chart": True,
+        "chart_type": "line_chart",
     },
 ]
 
@@ -55,8 +152,56 @@ PLANNING_PHRASES = [
     "kommer att kontrollera",
 ]
 
+UNSUPPORTED_RECOMMENDATION_RE = re.compile(
+    r"(stärka marknadsföringen|sänk priset|lagerproblem|"
+    r"öka marknadsföringsbudgeten|satsa mer på marknadsföring|"
+    r"kundpreferenser|överväg strategier|prissättning|"
+    r"marknadsföringsinsatser|lageroptimering|"
+    r"överväg att fokusera på marknadsföring|"
+    r"överväg att analysera|"
+    r"analysera specifika produktprestationer|vidta strategier|"
+    r"kampanj|distribution|lageråtgärd|prisändring|"
+    r"tillväxtmöjligheter|framgångsfaktorer|tillväxtområden|"
+    r"identifiera potentiella)",
+    re.IGNORECASE,
+)
 
-def login(email: str) -> tuple[dict, str]:
+FORBIDDEN_MARKET_SHARE_PHRASES = ("en aktör", "dominerar marknaden", "representeras av")
+
+SUPPLIER_PRODUCT_CONCAT_RE = re.compile(
+    r"arla sverige\s+(iced|mellanmjölk|standardmjölk|keso)",
+    re.IGNORECASE,
+)
+
+
+def _has_unsupported_recommendation(answer: str) -> bool:
+    return bool(UNSUPPORTED_RECOMMENDATION_RE.search(answer))
+
+
+def _misnames_product(answer: str) -> bool:
+    return bool(SUPPLIER_PRODUCT_CONCAT_RE.search(answer))
+
+
+DECIMAL_HEAVY_CURRENCY = re.compile(r"\d{2,}\s\d{3}[,\.]\d")
+
+
+def _currency_formatter_examples() -> bool:
+    from app.services.currency_format import format_compact_sek
+
+    return (
+        format_compact_sek(75619) == "75,6 tkr"
+        and format_compact_sek(52358.6) == "52,4 tkr"
+        and format_compact_sek(971.1) == "971 kr"
+        and format_compact_sek(1200000) == "1,2 mkr"
+    )
+
+
+def _no_mislabeled_tkr_as_mkr(answer: str) -> bool:
+    """Catch tkr-scale amounts wrongly shown as mkr (e.g. 75,6 mkr for 75 619 SEK)."""
+    return not bool(re.search(r"(?<!\d)(\d{1,2},\d)\s*mkr", answer, re.IGNORECASE))
+
+
+def login(email: str) -> tuple[dict, str, str]:
     r = httpx.post(
         f"{BASE}/api/auth/login",
         json={"email": email, "password": "demo1234"},
@@ -64,13 +209,17 @@ def login(email: str) -> tuple[dict, str]:
     )
     if r.status_code != 200:
         sys.exit(f"Login failed: HTTP {r.status_code}")
-    return dict(r.cookies), r.json()["supplier_id"]
+    body = r.json()
+    return dict(r.cookies), body["supplier_id"], body.get("supplier_name", "")
 
 
-def chat(cookies: dict, message: str) -> dict:
+def chat(cookies: dict, message: str, prior_context: dict | None = None) -> dict:
+    body: dict = {"message": message}
+    if prior_context:
+        body["prior_context"] = prior_context
     r = httpx.post(
         f"{BASE}/api/chat",
-        json={"message": message},
+        json=body,
         cookies=cookies,
         timeout=TIMEOUT,
     )
@@ -78,13 +227,16 @@ def chat(cookies: dict, message: str) -> dict:
     return r.json()
 
 
-def consume_stream(cookies: dict, message: str) -> list[dict]:
+def consume_stream(cookies: dict, message: str, prior_context: dict | None = None) -> list[dict]:
+    body: dict = {"message": message}
+    if prior_context:
+        body["prior_context"] = prior_context
     events: list[dict] = []
     buf = ""
     with httpx.stream(
         "POST",
         f"{BASE}/api/chat/stream",
-        json={"message": message},
+        json=body,
         cookies=cookies,
         timeout=TIMEOUT,
         headers={"Accept": "text/event-stream"},
@@ -117,7 +269,67 @@ def complete_from_stream(events: list[dict]) -> dict:
     return {}
 
 
-def assert_case(label: str, result: dict, spec: dict, supplier_id: str) -> bool:
+def _incomplete_period_safe(result: dict, answer: str) -> bool:
+    lower = answer.lower()
+    chart = result.get("chart") or {}
+    period_note = chart.get("period_note") or ""
+
+    if period_note:
+        if any(tok in lower for tok in ["pågående", "ofullständig", "exkluderats"]):
+            return False
+        return True
+
+    if "senaste avslutade vecka" in lower:
+        if any(tok in lower for tok in ["pågående vecka", "ofullständig", "exkluderats"]):
+            return False
+        return True
+
+    limitations = " ".join(result.get("limitations", [])).lower()
+    sources_lim = " ".join(
+        lim
+        for s in result.get("sources", [])
+        for lim in (s.get("limitations") or [])
+    ).lower()
+    combined = f"{lower} {limitations} {sources_lim}"
+    if any(tok in combined for tok in ["pågående", "ofullständig", "exkluderats"]):
+        return True
+    if any(tok in lower for tok in ["kraftig nedgång", "kraftigt fall", "stort fall"]):
+        return False
+    return True
+
+
+def _chart_labels_readable(chart: dict | None) -> bool:
+    if not chart:
+        return True
+    if chart.get("layout") != "horizontal":
+        return False
+    if chart.get("tooltip_key") != "product_name":
+        return False
+    for row in chart.get("data", []):
+        if not row.get("product_name"):
+            return False
+    return True
+
+
+def _declining_prioritizes_material(chart: dict | None) -> bool:
+    if not chart or chart.get("source_tool") != "get_declining_products":
+        return True
+    rows = chart.get("data") or []
+    if not rows:
+        return False
+    first = rows[0].get("revenue_change_pct")
+    if first is None:
+        return True
+    return float(first) <= -5.0
+
+
+def assert_case(
+    label: str,
+    result: dict,
+    spec: dict,
+    supplier_id: str,
+    supplier_name: str = "",
+) -> bool:
     answer = result.get("answer", "")
     lower = answer.lower()
     chart = result.get("chart")
@@ -136,20 +348,62 @@ def assert_case(label: str, result: dict, spec: dict, supplier_id: str) -> bool:
         ),
     ]
 
-    if spec["chart_slices"]:
+    if spec.get("chart_slices"):
         checks.append((
             "chart has expected slices",
             spec["chart_slices"].issubset(chart_names),
         ))
 
-    for forbidden in spec["must_not_contain"]:
-        checks.append((f"no leak '{forbidden}'", forbidden.lower() not in lower))
+    for forbidden in spec.get("must_not_contain", []):
+        checks.append((f"no '{forbidden}'", forbidden.lower() not in lower))
+
+    if spec.get("must_contain_supplier") and supplier_name:
+        checks.append((
+            f"uses supplier name ({supplier_name})",
+            supplier_name.lower() in lower,
+        ))
+
+    if spec.get("grounded_advisory"):
+        pass  # covered by global unsupported recommendation check
+
+    if spec.get("declining_priority") or spec.get("grounded_advisory"):
+        checks.append(("product names not prefixed with supplier", not _misnames_product(answer)))
+
+    if spec["expected_tool"] == "get_top_products":
+        checks.append(("product names not prefixed with supplier", not _misnames_product(answer)))
+
+    if spec.get("incomplete_period_safe"):
+        checks.append(("incomplete period handled safely", _incomplete_period_safe(result, answer)))
+        if chart and chart.get("period_note"):
+            checks.append(("period note on chart", True))
+            checks.append((
+                "no duplicate incomplete warning in answer",
+                not any(tok in lower for tok in ["pågående", "ofullständig", "exkluderats"]),
+            ))
+
+    if spec.get("declining_priority"):
+        checks.append(("declining chart prioritizes material drop", _declining_prioritizes_material(chart)))
+        if chart:
+            checks.append(("declining chart horizontal", chart.get("layout") == "horizontal"))
 
     if spec["expected_tool"] == "get_market_share":
         checks.append((
             "answer mentions share/percentage or Mejeri",
             any(tok in lower for tok in ["%", "procent", "andel", "mejeri"]),
         ))
+        for phrase in FORBIDDEN_MARKET_SHARE_PHRASES:
+            checks.append((f"no '{phrase}'", phrase not in lower))
+
+    if spec["expected_tool"] == "get_top_products" and chart:
+        checks.append(("top products chart readable labels", _chart_labels_readable(chart)))
+
+    checks.append((
+        "no decimal-heavy currency formatting",
+        not bool(DECIMAL_HEAVY_CURRENCY.search(answer)),
+    ))
+
+    checks.append(("no unsupported generic recommendations", not _has_unsupported_recommendation(answer)))
+    checks.append(("no mislabeled tkr as mkr", _no_mislabeled_tkr_as_mkr(answer)))
 
     all_ok = True
     for desc, ok in checks:
@@ -164,21 +418,89 @@ def assert_case(label: str, result: dict, spec: dict, supplier_id: str) -> bool:
     return all_ok
 
 
+def assert_period_followup(
+    label: str,
+    result: dict,
+    spec: dict,
+    supplier_id: str,
+) -> bool:
+    chart = result.get("chart")
+    checks = [
+        ("answer non-empty", bool(result.get("answer", "").strip())),
+        ("expected tool called", spec["expected_tool"] in result.get("tool_calls", [])),
+        ("not wrong market-share tool",
+         spec["expected_tool"] == "get_market_share" or "get_market_share" not in result.get("tool_calls", [])),
+        ("chart present", chart is not None),
+        ("supplier scope preserved", result.get("supplier_id") == supplier_id),
+    ]
+    if spec.get("chart_type"):
+        checks.append(("expected chart type", chart and chart.get("chart_type") == spec["chart_type"]))
+    if spec["expected_tool"] == "get_market_share":
+        checks.append(("chart is market share", chart is None or chart.get("source_tool") == "get_market_share"))
+    if spec["expected_tool"] == "get_sales_over_time":
+        checks.append(("chart is sales trend", chart is None or chart.get("source_tool") == "get_sales_over_time"))
+
+    all_ok = True
+    for desc, ok in checks:
+        print(f"  {PASS if ok else FAIL} {desc}")
+        if not ok:
+            all_ok = False
+    marker = PASS if all_ok else FAIL
+    print(f"{marker} {label}")
+    if result.get("answer"):
+        preview = result["answer"][:180].replace("\n", " ")
+        print(f"     Answer: {preview}{'…' if len(result['answer']) > 180 else ''}")
+    return all_ok
+
+
+def assert_followup(
+    label: str,
+    result: dict,
+    spec: dict,
+    supplier_id: str,
+) -> bool:
+    chart = result.get("chart")
+    checks = [
+        ("answer non-empty", bool(result.get("answer", "").strip())),
+        ("expected tool called", spec["expected_tool"] in result.get("tool_calls", [])),
+        ("chart present", chart is not None),
+        ("supplier scope preserved", result.get("supplier_id") == supplier_id),
+    ]
+    if spec.get("chart_type"):
+        checks.append(("expected chart type", chart and chart.get("chart_type") == spec["chart_type"]))
+    if spec["expected_tool"] == "get_market_share":
+        checks.append(("not generic sales trend only", chart is None or chart.get("source_tool") == "get_market_share"))
+
+    all_ok = True
+    for desc, ok in checks:
+        print(f"  {PASS if ok else FAIL} {desc}")
+        if not ok:
+            all_ok = False
+    marker = PASS if all_ok else FAIL
+    print(f"{marker} {label}")
+    return all_ok
+
+
 def main():
     try:
         httpx.get(f"{BASE}/health", timeout=5).raise_for_status()
     except Exception:
         sys.exit(f"Cannot reach {BASE}. Start server: cd backend && uvicorn app.main:app --reload")
 
-    cookies, supplier_id = login("arla@demo.solvigo")
-    print(f"\nArla Sverige → {supplier_id}\n")
+    cookies, supplier_id, supplier_name = login("arla@demo.solvigo")
+    print(f"\n{supplier_name} → {supplier_id}\n")
 
-    results = []
+    print("── Currency formatter unit checks ──")
+    formatter_ok = _currency_formatter_examples()
+    print(f"  {PASS if formatter_ok else FAIL} compact SEK examples (tkr/mkr)")
+    results = [formatter_ok]
 
     for spec in REGRESSION_QUESTIONS:
         print(f"── Non-streaming: {spec['label']} ──")
         result = chat(cookies, spec["message"])
-        results.append(assert_case(f"POST /api/chat — {spec['label']}", result, spec, supplier_id))
+        results.append(assert_case(
+            f"POST /api/chat — {spec['label']}", result, spec, supplier_id, supplier_name,
+        ))
 
         print(f"\n── Streaming: {spec['label']} ──")
         events = consume_stream(cookies, spec["message"])
@@ -188,7 +510,41 @@ def main():
         print(f"  {PASS if has_complete else FAIL} complete event received")
         print(f"  {PASS if has_delta else FAIL} delta events received")
         results.append(has_complete and has_delta)
-        results.append(assert_case(f"POST /api/chat/stream — {spec['label']}", stream_result, spec, supplier_id))
+        results.append(assert_case(
+            f"POST /api/chat/stream — {spec['label']}", stream_result, spec, supplier_id, supplier_name,
+        ))
+
+    for scenario in PERIOD_FOLLOWUP_SCENARIOS:
+        print(f"\n── Period follow-up: {scenario['label']} ──")
+        prior = chat(cookies, scenario["prior_message"])
+        prior_context = {
+            "question": scenario["prior_message"],
+            "answer": prior.get("answer", ""),
+            "tool_calls": prior.get("tool_calls", []),
+            "sources": prior.get("sources", []),
+        }
+        followup = chat(cookies, scenario["followup_message"], prior_context)
+        results.append(assert_period_followup(
+            f"Period follow-up — {scenario['label']}", followup, scenario, supplier_id,
+        ))
+
+    for scenario in FOLLOWUP_SCENARIOS:
+        print(f"\n── Follow-up: {scenario['label']} ──")
+        prior = chat(cookies, scenario["prior_message"])
+        prior_context = {
+            "question": scenario["prior_message"],
+            "answer": prior.get("answer", ""),
+            "tool_calls": prior.get("tool_calls", []),
+            "sources": prior.get("sources", []),
+        }
+        followup = chat(
+            cookies,
+            scenario.get("followup_message", "Visa ett diagram för det."),
+            prior_context,
+        )
+        results.append(assert_followup(
+            f"Follow-up diagram — {scenario['label']}", followup, scenario, supplier_id,
+        ))
 
     passed = sum(1 for r in results if r)
     total = len(results)

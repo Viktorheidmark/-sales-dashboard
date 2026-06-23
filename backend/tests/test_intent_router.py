@@ -4,13 +4,21 @@ Run: python -m unittest tests.test_intent_router
 """
 
 import unittest
+from datetime import date
 
 from app.services.intent_router import (
+    PriorTurnContext,
     default_category_for_supplier,
     extract_category,
+    extract_period_args,
     extract_region,
+    is_diagram_followup_request,
+    is_period_only_followup,
+    plan_followup_tools,
     plan_forced_tools,
+    plan_period_followup_tools,
 )
+from app.services.period_utils import completed_week_bounds
 
 
 class IntentRouterTests(unittest.TestCase):
@@ -43,6 +51,179 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_top_products")
         self.assertEqual(plans[0].args["region"], "Stockholm")
+
+    def test_sales_trend_90_days(self):
+        plans = plan_forced_tools(
+            "Hur har försäljningen utvecklats de senaste 90 dagarna?",
+            "Arla Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+
+    def test_sales_trend_last_week(self):
+        plans = plan_forced_tools(
+            "Hur såg försäljningen ut senaste veckan?",
+            "Arla Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+        self.assertEqual(plans[0].args.get("granularity"), "week")
+        week_start, week_end = completed_week_bounds()
+        self.assertEqual(plans[0].args.get("start_date"), week_start.isoformat())
+        self.assertEqual(plans[0].args.get("end_date"), week_end.isoformat())
+
+    def test_sales_trend_30_days_weekly_granularity(self):
+        plans = plan_forced_tools(
+            "Hur har försäljningen utvecklats senaste 30 dagarna?",
+            "Arla Sverige",
+        )
+        self.assertEqual(plans[0].args.get("granularity"), "week")
+
+    def test_period_followup_sales_trend(self):
+        prior = PriorTurnContext(
+            question="Hur såg försäljningen ut senaste veckan?",
+            tool_calls=("get_sales_over_time",),
+            sources=({"date_range": {"start": "2026-06-16", "end": "2026-06-22"}},),
+        )
+        self.assertTrue(is_period_only_followup("senaste 30 dagarna då?"))
+        plans = plan_period_followup_tools(
+            "senaste 30 dagarna då?",
+            prior,
+            "Arla Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+        self.assertIn("start_date", plans[0].args)
+        self.assertIn("end_date", plans[0].args)
+        self.assertEqual(plans[0].args.get("granularity"), "week")
+
+    def test_period_followup_market_share(self):
+        prior = PriorTurnContext(
+            question="Vad är vår marknadsandel i Mejeri?",
+            tool_calls=("get_market_share",),
+        )
+        plans = plan_forced_tools(
+            "senaste 30 dagarna då?",
+            "Arla Sverige",
+            prior_context=prior,
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_market_share")
+        self.assertEqual(plans[0].args["category_name"], "Mejeri")
+
+    def test_period_followup_top_products_stockholm(self):
+        prior = PriorTurnContext(
+            question="Vilka produkter säljer bäst i Stockholm?",
+            tool_calls=("get_top_products",),
+        )
+        plans = plan_forced_tools(
+            "senaste 30 dagarna då?",
+            "Arla Sverige",
+            prior_context=prior,
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_top_products")
+        self.assertEqual(plans[0].args["region"], "Stockholm")
+
+    def test_period_followup_not_subject_change(self):
+        prior = PriorTurnContext(
+            question="Hur såg försäljningen ut senaste veckan?",
+            tool_calls=("get_sales_over_time",),
+        )
+        plans = plan_forced_tools(
+            "Vad är vår marknadsandel i Mejeri?",
+            "Arla Sverige",
+            prior_context=prior,
+        )
+        self.assertEqual(plans[0].tool_name, "get_market_share")
+
+    def test_focus_question_forces_declining(self):
+        plans = plan_forced_tools(
+            "Vad borde vi fokusera på nästa period?",
+            "Arla Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_declining_products")
+
+    def test_diagram_followup_market_share(self):
+        prior = PriorTurnContext(
+            question="Vad är vår marknadsandel i Mejeri?",
+            tool_calls=("get_market_share",),
+            sources=({"date_range": {"start": "2026-03-25", "end": "2026-06-23"}},),
+        )
+        plans = plan_followup_tools(
+            "Visa ett diagram för det.",
+            prior,
+            "Arla Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_market_share")
+        self.assertEqual(plans[0].args["category_name"], "Mejeri")
+
+    def test_diagram_followup_top_products_stockholm(self):
+        prior = PriorTurnContext(
+            question="Vilka produkter säljer bäst i Stockholm?",
+            tool_calls=("get_top_products",),
+        )
+        plans = plan_followup_tools(
+            "Visa ett diagram för det",
+            prior,
+            "Arla Sverige",
+        )
+        self.assertEqual(plans[0].tool_name, "get_top_products")
+        self.assertEqual(plans[0].args["region"], "Stockholm")
+
+    def test_diagram_followup_declining_products(self):
+        prior = PriorTurnContext(
+            question="Vilken produkt minskade mest de senaste 30 dagarna?",
+            tool_calls=("get_declining_products",),
+        )
+        plans = plan_followup_tools(
+            "Visa diagram för det",
+            prior,
+            "Arla Sverige",
+        )
+        self.assertEqual(plans[0].tool_name, "get_declining_products")
+
+    def test_diagram_followup_kpi_maps_to_sales_trend(self):
+        prior = PriorTurnContext(
+            question="Hur ser försäljningen ut jämfört med föregående period?",
+            tool_calls=("get_supplier_kpis",),
+        )
+        plans = plan_followup_tools(
+            "Visa ett diagram för det.",
+            prior,
+            "Arla Sverige",
+        )
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+
+    def test_diagram_followup_visa_diagram_after_weekly_sales(self):
+        prior = PriorTurnContext(
+            question="Hur såg försäljningen ut senaste veckan?",
+            tool_calls=("get_sales_over_time",),
+            sources=({"date_range": {"start": "2026-06-16", "end": "2026-06-22"}},),
+        )
+        plans = plan_followup_tools("visa diagram", prior, "Arla Sverige")
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+        self.assertEqual(plans[0].args.get("granularity"), "week")
+        start = plans[0].args.get("start_date")
+        end = plans[0].args.get("end_date")
+        self.assertIsNotNone(start)
+        self.assertIsNotNone(end)
+        span = (
+            date.fromisoformat(end[:10])
+            - date.fromisoformat(start[:10])
+        ).days + 1
+        self.assertGreaterEqual(span, 49)
+
+    def test_is_diagram_followup(self):
+        self.assertTrue(is_diagram_followup_request("Visa ett diagram för det."))
+        self.assertTrue(is_diagram_followup_request("visa diagram"))
+        self.assertTrue(is_diagram_followup_request("visa graf"))
+        self.assertTrue(is_diagram_followup_request("kan du visa det i graf?"))
+        self.assertTrue(is_diagram_followup_request("visa ett diagram"))
+        self.assertFalse(is_diagram_followup_request("Vad är vår marknadsandel?"))
 
     def test_extract_category_and_region(self):
         self.assertEqual(extract_category("Marknadsandel i Dryck"), "Dryck")

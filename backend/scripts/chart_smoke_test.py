@@ -70,11 +70,15 @@ def main():
         ("chart is not null", chart is not None),
         ("chart_type is line_chart", chart.get("chart_type") == "line_chart" if chart else False),
         ("chart has ≥2 data rows", len(chart.get("data", [])) >= 2 if chart else False),
+        (
+            "period_note when incomplete month excluded",
+            chart.get("period_note") is not None if chart else False,
+        ),
         ("source_tool matches", chart.get("source_tool") == "get_sales_over_time" if chart else False),
         ("supplier_id scoped", r.get("supplier_id") == supplier_id),
     ]))
 
-    # 2 — Top products → bar chart
+    # 2 — Top products → horizontal bar chart
     print("\n── Test 2: Top products ──")
     r = chat(cookies, "Vilka produkter säljer bäst?")
     chart = r.get("chart")
@@ -82,6 +86,8 @@ def main():
         ("get_top_products used", "get_top_products" in r.get("tool_calls", [])),
         ("chart is not null", chart is not None),
         ("chart_type is bar_chart", chart.get("chart_type") == "bar_chart" if chart else False),
+        ("horizontal layout", chart.get("layout") == "horizontal" if chart else False),
+        ("tooltip_key for full names", chart.get("tooltip_key") == "product_name" if chart else False),
         ("chart has ≥2 data rows", len(chart.get("data", [])) >= 2 if chart else False),
         ("source_tool matches", chart.get("source_tool") == "get_top_products" if chart else False),
         ("supplier_id scoped", r.get("supplier_id") == supplier_id),
@@ -115,7 +121,7 @@ def main():
         ("supplier_id scoped", r.get("supplier_id") == supplier_id),
     ]))
 
-    # 5 — Declining products → bar chart
+    # 5 — Declining products → horizontal bar chart
     print("\n── Test 5: Declining products ──")
     r = chat(cookies, "Visa produkter som tappar mest")
     chart = r.get("chart")
@@ -123,7 +129,8 @@ def main():
         ("get_declining_products used", "get_declining_products" in r.get("tool_calls", [])),
         ("chart is not null", chart is not None),
         ("chart_type is bar_chart", chart.get("chart_type") == "bar_chart" if chart else False),
-        ("chart has ≥2 data rows", len(chart.get("data", [])) >= 2 if chart else False),
+        ("horizontal layout", chart.get("layout") == "horizontal" if chart else False),
+        ("chart has ≥1 material row", len(chart.get("data", [])) >= 1 if chart else False),
         ("source_tool matches", chart.get("source_tool") == "get_declining_products" if chart else False),
         ("supplier_id scoped", r.get("supplier_id") == supplier_id),
     ]))

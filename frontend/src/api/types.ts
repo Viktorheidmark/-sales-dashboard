@@ -32,12 +32,24 @@ export interface ChartPayload {
   y_key: string
   source_tool: string
   generated_from_row_count: number
+  layout?: 'horizontal' | 'vertical'
+  period_note?: string
+  emphasis_index?: number
+  tooltip_key?: string
+}
+
+export interface PriorTurnContext {
+  question: string
+  answer?: string
+  tool_calls: string[]
+  sources?: SourceMeta[]
 }
 
 export interface ChatRequest {
   message: string
   start_date?: string
   end_date?: string
+  prior_context?: PriorTurnContext
 }
 
 // --- /api/insights ---

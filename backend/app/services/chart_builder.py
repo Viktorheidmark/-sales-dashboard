@@ -11,45 +11,48 @@ Rules:
 
 from typing import Optional
 
+from app.services.period_utils import apply_sales_over_time_period_policy
 
-# Chart type constants — kept in sync with frontend ChartPayload.chart_type
 LINE_CHART = "line_chart"
 BAR_CHART = "bar_chart"
 PIE_CHART = "pie_chart"
 
-# Priority order when multiple tools were called in one turn.
-# First matching tool with ≥2 usable rows wins.
 CHART_PRIORITY = [
     "get_sales_over_time",
     "get_market_share",
     "get_top_products",
     "get_sales_by_region",
     "get_declining_products",
-    # get_supplier_kpis intentionally absent → no chart
 ]
+
+_LABEL_MAX = 22
+_DECLINE_CHART_THRESHOLD_PCT = -5.0
+
+
+def _truncate_label(text: str, max_len: int = _LABEL_MAX) -> str:
+    text = (text or "").strip()
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
 
 
 def _shorten_period(period: str, granularity: str) -> str:
-    """
-    Convert DATE_TRUNC output to a readable axis label.
-    month → "2026-03", week/day → keep as-is (YYYY-MM-DD).
-    """
     if granularity == "month" and len(period) == 10:
-        return period[:7]   # "2026-01-01" → "2026-01"
+        return period[:7]
     return period
 
 
-# ---------------------------------------------------------------------------
-# Per-tool builders
-# ---------------------------------------------------------------------------
+def _granularity_label(granularity: str) -> str:
+    return {"day": "dag", "week": "vecka", "month": "månad"}.get(granularity, granularity)
+
 
 def _build_sales_over_time(result: dict) -> Optional[dict]:
+    result = apply_sales_over_time_period_policy(result)
     series = result.get("series") or []
     if len(series) < 2:
         return None
     granularity = result.get("granularity", "month")
-    dr = result.get("date_range", {})
-    title = f"Försäljningstrend {dr.get('start', '')} → {dr.get('end', '')}"
+    gran_label = _granularity_label(granularity)
     data = [
         {"label": _shorten_period(p["period"], granularity), "revenue": p["revenue"]}
         for p in series
@@ -57,15 +60,24 @@ def _build_sales_over_time(result: dict) -> Optional[dict]:
     ]
     if len(data) < 2:
         return None
+
+    period_note = None
+    period_analysis = result.get("period_analysis") or {}
+    if period_analysis.get("completed_week_label"):
+        period_note = period_analysis["completed_week_label"]
+    elif period_analysis.get("excluded_incomplete_period"):
+        period_note = f"Pågående {gran_label} exkluderad från diagrammet."
+
     return {
         "chart_type": LINE_CHART,
-        "title": title,
-        "description": f"Intäkt per {granularity}",
+        "title": "Omsättningstrend",
+        "description": f"Omsättning per {gran_label} (fullständiga perioder)",
         "x_key": "label",
         "y_key": "revenue",
         "data": data,
         "source_tool": "get_sales_over_time",
         "generated_from_row_count": len(data),
+        "period_note": period_note,
     }
 
 
@@ -73,22 +85,36 @@ def _build_top_products(result: dict) -> Optional[dict]:
     products = result.get("products") or []
     if len(products) < 2:
         return None
-    data = [
-        {"product_name": p["product_name"], "revenue": p["revenue"]}
-        for p in products
-        if p.get("revenue") is not None
-    ]
+    data = []
+    for p in products:
+        if p.get("revenue") is None:
+            continue
+        name = p["product_name"]
+        data.append({
+            "product_name": name,
+            "display_label": _truncate_label(name),
+            "revenue": p["revenue"],
+        })
     if len(data) < 2:
         return None
+
+    region = result.get("region_filter")
+    subtitle = "Omsättning per produkt"
+    if region:
+        subtitle = f"Omsättning per produkt · {region}"
+
     return {
         "chart_type": BAR_CHART,
-        "title": f"Topp {len(data)} produkter efter intäkt",
-        "description": "Rankade efter intäkt under perioden",
-        "x_key": "product_name",
+        "layout": "horizontal",
+        "title": "Topprodukter",
+        "description": subtitle,
+        "x_key": "display_label",
         "y_key": "revenue",
+        "tooltip_key": "product_name",
         "data": data,
         "source_tool": "get_top_products",
         "generated_from_row_count": len(data),
+        "emphasis_index": 0,
     }
 
 
@@ -103,23 +129,23 @@ def _build_sales_by_region(result: dict) -> Optional[dict]:
     ]
     if len(data) < 2:
         return None
-    dr = result.get("date_range", {})
     return {
         "chart_type": BAR_CHART,
-        "title": f"Försäljning per region",
-        "description": f"Intäkt per region ({dr.get('start', '')} → {dr.get('end', '')})",
+        "layout": "horizontal",
+        "title": "Regional försäljning",
+        "description": "Omsättning per region",
         "x_key": "region",
         "y_key": "revenue",
         "data": data,
         "source_tool": "get_sales_by_region",
         "generated_from_row_count": len(data),
+        "emphasis_index": 0,
     }
 
 
 def _build_market_share(result: dict) -> Optional[dict]:
     sup_rev = result.get("supplier_revenue")
     comp_rev = result.get("competitor_aggregate_revenue")
-    # Need both slices to make a meaningful pie
     if sup_rev is None or comp_rev is None:
         return None
     if (sup_rev + comp_rev) <= 0:
@@ -131,8 +157,8 @@ def _build_market_share(result: dict) -> Optional[dict]:
     ]
     return {
         "chart_type": PIE_CHART,
-        "title": f"Marknadsandel: {category}",
-        "description": "Vår intäkt vs. aggregerade konkurrenter",
+        "title": "Marknadsandel",
+        "description": f"Fördelning i {category}",
         "x_key": "name",
         "y_key": "revenue",
         "data": data,
@@ -143,26 +169,36 @@ def _build_market_share(result: dict) -> Optional[dict]:
 
 def _build_declining_products(result: dict) -> Optional[dict]:
     products = result.get("products") or []
-    if len(products) < 2:
-        return None
     data = []
     for p in products:
-        # Prefer pct change; fall back to absolute change
-        value = p.get("revenue_change_pct") if p.get("revenue_change_pct") is not None else p.get("revenue_change")
-        if value is not None:
-            data.append({"product_name": p["product_name"], "revenue_change_pct": value})
-    if len(data) < 2:
+        value = p.get("revenue_change_pct")
+        if value is None:
+            value = p.get("revenue_change")
+        if value is None:
+            continue
+        if isinstance(value, (int, float)) and value > _DECLINE_CHART_THRESHOLD_PCT:
+            continue
+        name = p["product_name"]
+        data.append({
+            "product_name": name,
+            "display_label": _truncate_label(name),
+            "revenue_change_pct": value,
+        })
+    if len(data) < 1:
         return None
     days = result.get("comparison_days", 30)
     return {
         "chart_type": BAR_CHART,
-        "title": f"Produkter med störst nedgång (senaste {days} dagar)",
-        "description": "Procentuell intäktförändring vs. föregående period (negativa värden = minskning)",
-        "x_key": "product_name",
+        "layout": "horizontal",
+        "title": "Produkter i nedgång",
+        "description": f"Omsättningsförändring % · senaste {days} dagar",
+        "x_key": "display_label",
         "y_key": "revenue_change_pct",
+        "tooltip_key": "product_name",
         "data": data,
         "source_tool": "get_declining_products",
         "generated_from_row_count": len(data),
+        "emphasis_index": 0,
     }
 
 
@@ -175,12 +211,7 @@ _BUILDERS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 def build_chart(tool_name: str, result: dict) -> Optional[dict]:
-    """Build a chart payload for a single MCP tool result. Returns None if not applicable."""
     builder = _BUILDERS.get(tool_name)
     if builder is None:
         return None
@@ -191,13 +222,6 @@ def build_chart(tool_name: str, result: dict) -> Optional[dict]:
 
 
 def pick_chart(tool_results: list[tuple[str, dict]]) -> Optional[dict]:
-    """
-    Select the single best chart from a list of (tool_name, parsed_result) pairs.
-
-    Priority order follows CHART_PRIORITY — the first tool in that list that
-    produces a valid chart (≥2 rows) wins. At most one chart is returned.
-    """
-    # Build a lookup: tool_name → list of results (a tool may be called multiple times)
     by_tool: dict[str, list[dict]] = {}
     for name, result in tool_results:
         by_tool.setdefault(name, []).append(result)
