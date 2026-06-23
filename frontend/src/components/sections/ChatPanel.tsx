@@ -5,12 +5,43 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { api } from '../../api/client'
-import type { ChatResponse, ChartPayload, SourceMeta } from '../../api/types'
+import type { ChartPayload, ChatResponse, DateRange, SourceMeta } from '../../api/types'
 import { formatDate } from '../../utils/format'
 import { useChartTheme } from '../../utils/chartTheme'
+import {
+  ANALYTICS_DATA_SOURCE,
+  formatSharePct,
+  formatSourcePeriod,
+  isMarketShareChart,
+  isMarketShareResponse,
+  marketShareLegendItems,
+  resolveResponseDateRange,
+  toolLabelSv,
+  visibleResponseLimitations,
+} from '../../utils/sourcePresentation'
 
-function MiniChart({ chart }: { chart: ChartPayload }) {
+function MarketShareLegend({ chart, supplierName }: { chart: ChartPayload; supplierName?: string }) {
+  const { chart: colors } = useChartTheme()
+  const legend = marketShareLegendItems(chart, supplierName)
+  if (!legend) return null
+
+  return (
+    <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-3 pt-3 border-t border-workspace-border/60">
+      <span className="inline-flex items-center gap-2 text-xs text-theme-body">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colors.barPrimary }} aria-hidden />
+        {legend.supplierLabel}: {formatSharePct(legend.supplierPct)}
+      </span>
+      <span className="inline-flex items-center gap-2 text-xs text-theme-body">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colors.pieMuted }} aria-hidden />
+        Övriga aktörer: {formatSharePct(legend.othersPct)}
+      </span>
+    </div>
+  )
+}
+
+function MiniChart({ chart, supplierName }: { chart: ChartPayload; supplierName?: string }) {
   const { chart: colors, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
+  const showMarketShareLegend = isMarketShareChart(chart)
 
   if (chart.chart_type === 'line_chart') {
     return (
@@ -40,14 +71,17 @@ function MiniChart({ chart }: { chart: ChartPayload }) {
   }
   if (chart.chart_type === 'pie_chart') {
     return (
-      <ResponsiveContainer width="100%" height={180}>
-        <PieChart>
-          <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={68} strokeWidth={0}>
-            {chart.data.map((_, i) => <Cell key={i} fill={colors.pieColors[i % colors.pieColors.length]} />)}
-          </Pie>
-          <Tooltip contentStyle={chartTooltipStyle} />
-        </PieChart>
-      </ResponsiveContainer>
+      <div>
+        <ResponsiveContainer width="100%" height={180}>
+          <PieChart>
+            <Pie data={chart.data} dataKey={chart.y_key} nameKey={chart.x_key} cx="50%" cy="50%" outerRadius={68} strokeWidth={0}>
+              {chart.data.map((_, i) => <Cell key={i} fill={colors.pieColors[i % colors.pieColors.length]} />)}
+            </Pie>
+            <Tooltip contentStyle={chartTooltipStyle} />
+          </PieChart>
+        </ResponsiveContainer>
+        {showMarketShareLegend && <MarketShareLegend chart={chart} supplierName={supplierName} />}
+      </div>
     )
   }
   return null
@@ -112,11 +146,71 @@ const markdownComponents = {
   ),
 }
 
-function ToolBadge({ name }: { name: string }) {
+function SourceSummary({
+  sources,
+  fallbackDateRange,
+}: {
+  sources: SourceMeta[]
+  fallbackDateRange?: DateRange
+}) {
+  const dateRange = resolveResponseDateRange(sources, fallbackDateRange)
+  const periodLabel = dateRange ? formatSourcePeriod(dateRange) : null
+
   return (
-    <span className="inline-flex items-center text-[11px] bg-workspace-muted text-theme-muted border border-workspace-border rounded-md px-2 py-0.5">
-      {name.replace('get_', '').replace(/_/g, ' ')}
-    </span>
+    <div className="rounded-lg border border-workspace-border/80 bg-workspace-muted/40 px-4 py-3">
+      <p className="text-xs font-medium text-theme-muted">Datakälla</p>
+      <p className="mt-1 text-xs text-theme-body leading-relaxed">
+        {periodLabel
+          ? `Analysen bygger på försäljningsdata för perioden ${periodLabel}.`
+          : 'Analysen bygger på försäljningsdata för vald period.'}
+      </p>
+    </div>
+  )
+}
+
+function TechnicalSourceDetails({
+  sources,
+  fallbackDateRange,
+}: {
+  sources: SourceMeta[]
+  fallbackDateRange?: DateRange
+}) {
+  return (
+    <details className="group/tech">
+      <summary className="text-xs text-theme-muted cursor-pointer select-none hover:text-theme-body list-none flex items-center gap-1 w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded">
+        <span className="transition-transform group-open/tech:rotate-90 text-theme-faint">›</span>
+        Visa tekniska detaljer
+      </summary>
+      <div className="mt-3 pl-3 border-l border-workspace-border/60">
+        <p className="text-xs font-medium text-theme-muted mb-3">Analysinformation</p>
+        <div className="space-y-4">
+          {sources.map((s, i) => {
+            const period =
+              s.date_range?.start && s.date_range?.end
+                ? s.date_range
+                : fallbackDateRange
+
+            return (
+              <div
+                key={i}
+                className={`space-y-1.5 text-xs text-theme-muted leading-relaxed ${
+                  i > 0 ? 'pt-4 border-t border-workspace-border/50' : ''
+                }`}
+              >
+                <p className="font-medium text-theme-body">{toolLabelSv(s.tool)}</p>
+                {s.generated_at && (
+                  <p>Data uppdaterad: {formatDate(s.generated_at)}</p>
+                )}
+                {period?.start && period?.end && (
+                  <p>Analysperiod: {formatSourcePeriod(period)}</p>
+                )}
+                <p>Datakälla: {ANALYTICS_DATA_SOURCE}</p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </details>
   )
 }
 
@@ -144,7 +238,15 @@ function LoadingDots() {
   )
 }
 
-function AssistantBubble({ msg }: { msg: Message }) {
+function AssistantBubble({
+  msg,
+  supplierName,
+  fallbackDateRange,
+}: {
+  msg: Message
+  supplierName?: string
+  fallbackDateRange?: DateRange
+}) {
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
   const handleSave = async () => {
@@ -201,6 +303,8 @@ function AssistantBubble({ msg }: { msg: Message }) {
 
   const r = msg.response!
   const isGrounded = r.tool_calls.length > 0
+  const marketShare = isMarketShareResponse(r)
+  const displayLimitations = visibleResponseLimitations(r.limitations, r)
 
   return (
     <article className="max-w-2xl space-y-5">
@@ -213,58 +317,33 @@ function AssistantBubble({ msg }: { msg: Message }) {
       {r.chart && (
         <div className="pt-1">
           <p className="text-xs font-medium text-theme-muted mb-1">{r.chart.title}</p>
-          {r.chart.description && (
+          {r.chart.description && !marketShare && (
             <p className="text-xs text-theme-muted mb-3 leading-relaxed">{r.chart.description}</p>
           )}
           <div className="rounded-lg border border-workspace-border bg-workspace-muted/50 px-3 py-2">
-            <MiniChart chart={r.chart} />
+            <MiniChart chart={r.chart} supplierName={supplierName} />
           </div>
+          {marketShare && (
+            <p className="mt-2 text-xs text-theme-muted leading-relaxed">
+              Konkurrentdata visas endast på aggregerad nivå.
+            </p>
+          )}
         </div>
       )}
 
-      {r.limitations.length > 0 && (
+      {displayLimitations.length > 0 && (
         <div className="space-y-1">
-          {r.limitations.map((l, i) => (
-            <p key={i} className="text-xs text-amber-400/90 leading-relaxed">⚠ {l}</p>
+          {displayLimitations.map((l, i) => (
+            <p key={i} className="text-xs text-amber-600 dark:text-amber-400/90 leading-relaxed">⚠ {l}</p>
           ))}
         </div>
       )}
 
       {isGrounded && (
-        <details className="group/sources">
-          <summary className="text-xs text-theme-muted cursor-pointer select-none hover:text-theme-body list-none flex items-center gap-1 w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded">
-            <span className="transition-transform group-open/sources:rotate-90 text-theme-faint">›</span>
-            Källor och metodik
-          </summary>
-          <div className="mt-3 space-y-2 pl-3 border-l border-workspace-border">
-            <p className="text-xs text-theme-muted leading-relaxed">
-              Svar grundat i analyserad demodata.
-            </p>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {r.tool_calls.map(t => <ToolBadge key={t} name={t} />)}
-            </div>
-            {r.sources.map((s, i) => (
-              <div key={i} className="text-xs text-theme-muted space-y-0.5">
-                <p>
-                  <span className="font-medium text-theme-body">{s.tool}</span>
-                  {s.source && <span className="text-theme-muted"> · {s.source}</span>}
-                </p>
-                {s.generated_at && (
-                  <p className="text-theme-muted">Beräknad: {formatDate(s.generated_at)}</p>
-                )}
-                {s.row_count !== undefined && (
-                  <p className="text-theme-muted">{s.row_count} rader</p>
-                )}
-                {s.date_range && (
-                  <p className="text-theme-muted">Period: {s.date_range.start} → {s.date_range.end}</p>
-                )}
-                {s.limitations?.map((l, j) => (
-                  <p key={j} className="text-amber-400/90">⚠ {l}</p>
-                ))}
-              </div>
-            ))}
-          </div>
-        </details>
+        <div className="space-y-3 pt-1">
+          <SourceSummary sources={r.sources} fallbackDateRange={fallbackDateRange} />
+          <TechnicalSourceDetails sources={r.sources} fallbackDateRange={fallbackDateRange} />
+        </div>
       )}
 
       {isGrounded && (
@@ -463,7 +542,14 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
                   </p>
                 </div>
               ) : (
-                <AssistantBubble key={msg.id} msg={msg} />
+                <AssistantBubble
+                  key={msg.id}
+                  msg={msg}
+                  supplierName={supplierName}
+                  fallbackDateRange={
+                    startDate && endDate ? { start: startDate, end: endDate } : undefined
+                  }
+                />
               )
             ))}
             <div ref={bottomRef} />
