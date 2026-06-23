@@ -7,6 +7,7 @@ class PriorTurnContext(BaseModel):
     answer: str = ""
     tool_calls: list[str] = []
     sources: list[dict[str, Any]] = []
+    has_chart: bool = False
 
 
 class ChatRequest(BaseModel):

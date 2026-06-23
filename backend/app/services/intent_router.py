@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Optional
 
-from app.services.period_utils import completed_week_bounds
+from app.services.period_utils import align_weekly_query_bounds, completed_week_bounds
 
 CATEGORIES = ("Mejeri", "Dryck", "Mat och snacks")
 KNOWN_REGIONS = ("Stockholm", "Göteborg", "Malmö", "Uppsala", "Online")
@@ -53,7 +53,16 @@ _SALES_TREND_RE = re.compile(
 )
 
 _DECLINING_RE = re.compile(
-    r"(nedgång|minskat|fallit|sjunk|produkt.{0,30}(minsk|nedgång))",
+    r"(nedgång|minskat|fallit|sjunk|tappat|produkt.{0,30}(minsk|nedgång|tapp))",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_SALES_BY_REGION_RE = re.compile(
+    r"("
+    r"vilken\s+region|"
+    r"region.{0,50}(mest|störst|högst|intäkt|försäljning|omsättning)|"
+    r"(mest|störst|högst).{0,50}(region|intäkt)"
+    r")",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -125,6 +134,7 @@ class PriorTurnContext:
     answer: str = ""
     tool_calls: tuple[str, ...] = ()
     sources: tuple[dict[str, Any], ...] = ()
+    has_chart: bool = False
 
 
 def default_category_for_supplier(supplier_name: str) -> str:
@@ -259,11 +269,29 @@ def _granularity_from_date_range(
     return "month"
 
 
+def _align_sales_over_time_weekly(args: dict) -> dict:
+    if args.get("granularity") != "week":
+        return args
+    start_s = args.get("start_date")
+    end_s = args.get("end_date")
+    if not start_s or not end_s:
+        return args
+    aligned = align_weekly_query_bounds(start_s, end_s)
+    out = {**args, "start_date": aligned["start"], "end_date": aligned["end"]}
+    if start_s != aligned["start"]:
+        out["_requested_start_date"] = start_s
+    return out
+
+
 def _ensure_chartable_sales_window(args: dict, prior_question: str) -> dict:
     """Widen sales-over-time range so line charts have at least two buckets."""
     end_s = args.get("end_date")
     if not end_s:
         return args
+    original_range = {
+        "start": args.get("start_date"),
+        "end": args.get("end_date"),
+    }
     end_d = date.fromisoformat(end_s[:10])
     start_s = args.get("start_date")
     start_d = date.fromisoformat(start_s[:10]) if start_s else end_d
@@ -271,16 +299,22 @@ def _ensure_chartable_sales_window(args: dict, prior_question: str) -> dict:
 
     granularity = args.get("granularity") or _granularity_from_date_range(start_s, end_s, prior_question)
 
-    if granularity == "week" and span < 49:
-        _, chart_end = completed_week_bounds(end_d)
+    if granularity == "week" and _needs_weekly_context_widen(args, prior_question, span):
+        # Anchor to real today — not end_d (a completed Sunday misread as "today"
+        # would shift chart_end one week too early).
+        _, chart_end = completed_week_bounds()
         chart_start = chart_end - timedelta(days=7 * _WEEKLY_CHART_LOOKBACK_WEEKS - 1)
         chart_start = chart_start - timedelta(days=chart_start.weekday())
-        return {
+        widened = {
             **args,
             "start_date": chart_start.isoformat(),
             "end_date": chart_end.isoformat(),
             "granularity": "week",
+            "_chart_context_widened": True,
+            "_original_date_range": original_range,
+            "_chart_lookback_weeks": _WEEKLY_CHART_LOOKBACK_WEEKS,
         }
+        return _align_sales_over_time_weekly(widened)
 
     if granularity == "day" and span < 14:
         return {
@@ -299,6 +333,17 @@ def _ensure_chartable_sales_window(args: dict, prior_question: str) -> dict:
         }
 
     return args
+
+
+def _needs_weekly_context_widen(args: dict, prior_question: str, span: int) -> bool:
+    """Widen to 8 completed weeks only for single-week summary questions."""
+    if args.get("completed_week"):
+        return True
+    if span <= 7:
+        return True
+    if _WEEKLY_SALES_RE.search(prior_question) and span <= 14:
+        return True
+    return False
 
 
 def _primary_chart_tool(tool_calls: list[str]) -> Optional[str]:
@@ -346,6 +391,7 @@ def _reconstruct_tool_args(
             args.get("end_date"),
             period_message,
         )
+        args = _align_sales_over_time_weekly(args)
     return args
 
 
@@ -357,6 +403,8 @@ def plan_followup_tools(
     end_date: Optional[str] = None,
 ) -> list[ToolPlan]:
     if not is_diagram_followup_request(message):
+        return []
+    if prior.has_chart:
         return []
     if not prior.tool_calls:
         return []
@@ -455,10 +503,22 @@ def plan_forced_tools(
             week_start, week_end = completed_week_bounds()
             args["start_date"] = week_start.isoformat()
             args["end_date"] = week_end.isoformat()
+        args = _align_sales_over_time_weekly(args)
+        if _WEEKLY_SALES_RE.search(msg) and period_args.get("completed_week"):
+            args = _ensure_chartable_sales_window(args, msg)
         plans.append(ToolPlan(
             tool_name="get_sales_over_time",
             args=args,
             reason="sales trend",
+        ))
+        return plans
+
+    if _SALES_BY_REGION_RE.search(msg) and not _TOP_PRODUCTS_RE.search(msg):
+        args = _date_args(start_date, end_date)
+        plans.append(ToolPlan(
+            tool_name="get_sales_by_region",
+            args=args,
+            reason="regional sales comparison",
         ))
         return plans
 
@@ -521,4 +581,5 @@ def prior_context_from_dict(data: Optional[dict]) -> Optional[PriorTurnContext]:
         answer=data.get("answer") or "",
         tool_calls=tool_calls,
         sources=sources,
+        has_chart=bool(data.get("has_chart")),
     )

@@ -4,7 +4,7 @@ Run: python -m unittest tests.test_intent_router
 """
 
 import unittest
-from datetime import date
+from datetime import date, timedelta
 
 from app.services.intent_router import (
     PriorTurnContext,
@@ -69,8 +69,10 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
         self.assertEqual(plans[0].args.get("granularity"), "week")
         week_start, week_end = completed_week_bounds()
-        self.assertEqual(plans[0].args.get("start_date"), week_start.isoformat())
-        self.assertEqual(plans[0].args.get("end_date"), week_end.isoformat())
+        orig = plans[0].args.get("_original_date_range") or {}
+        self.assertEqual(orig.get("start"), week_start.isoformat())
+        self.assertEqual(orig.get("end"), week_end.isoformat())
+        self.assertTrue(plans[0].args.get("_chart_context_widened"))
 
     def test_sales_trend_30_days_weekly_granularity(self):
         plans = plan_forced_tools(
@@ -196,6 +198,42 @@ class IntentRouterTests(unittest.TestCase):
             "Arla Sverige",
         )
         self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+
+    def test_weekly_widen_chart_end_is_latest_completed_sunday(self):
+        _, week_end = completed_week_bounds()
+        plans = plan_forced_tools(
+            "Hur såg försäljningen ut senaste veckan?",
+            "Arla Sverige",
+        )
+        self.assertEqual(plans[0].args.get("end_date"), week_end.isoformat())
+        wrong_end = (week_end - timedelta(days=7)).isoformat()
+        self.assertNotEqual(plans[0].args.get("end_date"), wrong_end)
+
+    def test_sales_trend_last_week_includes_context_chart(self):
+        plans = plan_forced_tools(
+            "Hur såg försäljningen ut senaste veckan?",
+            "Arla Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertTrue(plans[0].args.get("_chart_context_widened"))
+        self.assertEqual(plans[0].args.get("_chart_lookback_weeks"), 8)
+
+    def test_regional_sales_routing(self):
+        plans = plan_forced_tools(
+            "Vilken region genererar mest intäkter?",
+            "Arla Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_by_region")
+
+    def test_redundant_diagram_followup_skipped_when_chart_shown(self):
+        prior = PriorTurnContext(
+            question="Vad är vår marknadsandel i Mejeri?",
+            tool_calls=("get_market_share",),
+            has_chart=True,
+        )
+        plans = plan_followup_tools("visa diagram", prior, "Arla Sverige")
+        self.assertEqual(plans, [])
 
     def test_diagram_followup_visa_diagram_after_weekly_sales(self):
         prior = PriorTurnContext(

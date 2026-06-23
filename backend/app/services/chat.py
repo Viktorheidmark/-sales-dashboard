@@ -44,6 +44,7 @@ from app.services.currency_format import (
 from app.services.response_guidance import (
     executive_writing_rules,
     needs_synthesis_retry,
+    sanitize_trend_wording,
     synthesis_suffix,
 )
 
@@ -187,6 +188,30 @@ def _record_tool_result(
     raw_tool_results.append((tool_name, parsed))
 
 
+def _strip_internal_tool_args(args: dict) -> dict:
+    return {k: v for k, v in args.items() if not str(k).startswith("_")}
+
+
+def _enrich_sales_over_time_result(parsed: dict, plan_args: dict) -> dict:
+    if not isinstance(parsed, dict):
+        return parsed
+    mcp_start = plan_args.get("start_date")
+    mcp_end = plan_args.get("end_date")
+    if mcp_start and mcp_end:
+        qdr: dict = {"start": mcp_start, "end": mcp_end}
+        if plan_args.get("_requested_start_date"):
+            qdr["requested_start"] = plan_args["_requested_start_date"]
+        parsed["query_date_range"] = qdr
+        parsed["analysis_reference_date"] = plan_args.get("_analysis_reference_end") or mcp_end
+    if plan_args.get("_chart_context_widened"):
+        parsed["chart_context"] = {
+            "widened": True,
+            "lookback_weeks": plan_args.get("_chart_lookback_weeks", 8),
+            "original_date_range": plan_args.get("_original_date_range") or {},
+        }
+    return parsed
+
+
 async def _invoke_mcp_tool(
     session: ClientSession,
     tool_name: str,
@@ -197,7 +222,7 @@ async def _invoke_mcp_tool(
 ) -> dict:
     if tool_name not in ALLOWED_TOOLS:
         return {"error": f"Tool '{tool_name}' is not permitted."}
-    args = _inject_supplier_scope(tool_name, raw_args, supplier_id)
+    args = _inject_supplier_scope(tool_name, _strip_internal_tool_args(raw_args), supplier_id)
     if start_date and "start_date" not in args:
         args["start_date"] = start_date
     if end_date and "end_date" not in args:
@@ -223,6 +248,8 @@ async def _execute_planned_tools(
         parsed = await _invoke_mcp_tool(
             session, plan.tool_name, plan.args, supplier_id, start_date, end_date,
         )
+        if plan.tool_name == "get_sales_over_time":
+            parsed = _enrich_sales_over_time_result(parsed, plan.args)
         _record_tool_result(
             plan.tool_name, parsed, supplier_id,
             tools_used, sources, limitations, raw_tool_results,
@@ -235,6 +262,18 @@ def _diagram_clarification_response(supplier_id: str) -> dict:
             "Vad vill du se i diagrammet? Till exempel marknadsandel, topprodukter i en region, "
             "produkter i nedgång eller försäljningstrend — så kan jag visa rätt visualisering."
         ),
+        "tool_calls": [],
+        "sources": [],
+        "chart": None,
+        "limitations": [],
+        "supplier_id": supplier_id,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+def _diagram_already_shown_response(supplier_id: str) -> dict:
+    return {
+        "answer": "Diagrammet visas redan ovan.",
         "tool_calls": [],
         "sources": [],
         "chart": None,
@@ -327,6 +366,7 @@ def _final_payload(
     supplier_id: str,
 ) -> dict:
     cleaned_answer = sanitize_answer_currency(answer, raw_tool_results)
+    cleaned_answer = sanitize_trend_wording(cleaned_answer, raw_tool_results)
     return {
         "answer": cleaned_answer,
         "tool_calls": list(dict.fromkeys(tools_used)),
@@ -440,6 +480,8 @@ async def run_chat(
     prior = prior_context_from_dict(prior_context)
     if is_diagram_followup_request(message) and not prior:
         return _diagram_clarification_response(supplier_id)
+    if prior and is_diagram_followup_request(message) and prior.has_chart:
+        return _diagram_already_shown_response(supplier_id)
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
@@ -528,6 +570,9 @@ async def stream_chat(
     prior = prior_context_from_dict(prior_context)
     if is_diagram_followup_request(message) and not prior:
         yield sse("complete", _diagram_clarification_response(supplier_id))
+        return
+    if prior and is_diagram_followup_request(message) and prior.has_chart:
+        yield sse("complete", _diagram_already_shown_response(supplier_id))
         return
 
     try:

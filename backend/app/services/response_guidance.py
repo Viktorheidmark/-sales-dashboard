@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import re
 
+from app.services.intent_router import is_diagram_followup_request
+
 _FORBIDDEN_PHRASES = (
     "utvecklats enligt följande",
     "detta innebär att",
@@ -53,6 +55,64 @@ _DECLINING_RE = re.compile(r"nedgång|minskat|fallit|tappar|sjunk", re.I)
 _TREND_RE = re.compile(r"trend|utvecklat|försäljning.*90|senaste 90|senaste \d+ dag", re.I)
 _WEEKLY_SALES_RE = re.compile(r"senaste\s+veck|hur såg försäljningen ut", re.I)
 _FOCUS_RE = re.compile(r"fokusera|prioritera|nästa period|vad borde|vad bör", re.I)
+_STRONG_DECLINE_RE = re.compile(r"nedåtgående\s+trend", re.I)
+_VISADE_NEDGANG_RE = re.compile(
+    r"\bvisade\s+en\s+nedåtgående\s+trend\s+(under\s+perioden)",
+    re.IGNORECASE,
+)
+_HAR_NEDGANG_RE = re.compile(r"\bhar\s+en\s+nedåtgående\s+trend\b", re.IGNORECASE)
+_DOUBLE_PERIOD_RE = re.compile(
+    r"\bvarierade\s+under\s+perioden\s+under\s+perioden\b",
+    re.IGNORECASE,
+)
+
+
+def _soft_trend_phrase(series: list[dict]) -> str:
+    revs = [float(p.get("revenue") or 0) for p in series if p.get("revenue") is not None]
+    if len(revs) >= 2 and max(revs) > revs[-1]:
+        return "De senaste avslutade veckorna låg lägre än periodens topp"
+    return "Försäljningen varierade under perioden"
+
+
+def is_sustained_revenue_decline(series: list[dict]) -> bool:
+    revs = [float(p.get("revenue") or 0) for p in series if p.get("revenue") is not None]
+    if len(revs) < 4:
+        if len(revs) >= 3 and revs[-1] < revs[-2] < revs[-3]:
+            return False
+        return False
+    peak = max(revs)
+    peak_idx = revs.index(peak)
+    tail = revs[peak_idx + 1:]
+    if len(tail) < 3:
+        return False
+    return all(r < peak for r in tail) and all(
+        tail[i] <= tail[i - 1] for i in range(1, len(tail))
+    )
+
+
+def sanitize_trend_wording(
+    answer: str,
+    raw_tool_results: list[tuple[str, dict]] | None = None,
+) -> str:
+    if not claims_unsupported_strong_decline(answer, raw_tool_results):
+        return answer
+
+    out = _VISADE_NEDGANG_RE.sub(r"varierade \1", answer)
+    out = _HAR_NEDGANG_RE.sub("varierade under perioden", out)
+    out = _STRONG_DECLINE_RE.sub("varierade under perioden", out)
+    return _DOUBLE_PERIOD_RE.sub("varierade under perioden", out)
+
+
+def claims_unsupported_strong_decline(
+    answer: str,
+    raw_tool_results: list[tuple[str, dict]] | None,
+) -> bool:
+    if not _STRONG_DECLINE_RE.search(answer or ""):
+        return False
+    for name, result in raw_tool_results or []:
+        if name == "get_sales_over_time":
+            return not is_sustained_revenue_decline(result.get("series") or [])
+    return True
 
 
 def executive_writing_rules(supplier_name: str) -> str:
@@ -116,27 +176,46 @@ FRÅGETYP: Produkter i nedgång
 - Inga antaganden om pris, lager, kampanj eller marknadsföring.
 """
 
+    if "get_sales_over_time" in tools and is_diagram_followup_request(q):
+        return f"""
+FRÅGETYP: Diagramuppföljning (försäljning)
+- Om chart_context.widened är true: förklara att diagrammet visar flera avslutade veckor för sammanhang
+  (t.ex. "de senaste 8 avslutade veckorna") — INTE som om det vore svaret på en enveckasfråga.
+- Behåll fokus på den vecka som användaren frågade om tidigare via original_date_range; hänvisa kort till den.
+- Använd date_range och analysed_range_label för diagrammets faktiska period.
+- Max 2–3 meningar om mönstret i diagrammet.
+- Använd INTE "nedåtgående trend" om variationen är blandad.
+"""
+
     if "get_sales_over_time" in tools and _WEEKLY_SALES_RE.search(q):
         return f"""
 FRÅGETYP: Senaste avslutade veckan
 - Börja med exakt period från completed_week_label i verktygsresultat, eller date_range om etiketten saknas
   (t.ex. "Senaste avslutade vecka: 16–22 juni 2026").
 - Ange omsättning, antal ordrar och sålda enheter för den veckan (från serien).
-- En kort observation — t.ex. jämförelse mot föregående fullständiga vecka om data finns.
+- En kort mening om jämförelse: om weekly_comparison_available är false eller comparison_note finns,
+  avsluta med exakt comparison_note-texten (affärsspråk om saknad jämförelsevecka).
+  Om två eller fler fullständiga veckor finns: en kort jämförelse mot föregående fullständiga vecka.
 - Nämn leverantören ("{name}") en gång.
-- Ingen rekommendation och ingen uppmaning att analysera längre perioder.
-- Om completed_week_label finns: skriv inte lång förklaring om ofullständig pågående vecka (notis visas under diagrammet).
+- Max cirka 60 ord. Ingen rekommendation.
+- Nämn ALDRIG pågående vecka, serien, ofullständig period, exkludering eller intern databehandling.
 """
 
     if "get_sales_over_time" in tools or _TREND_RE.search(q):
         return f"""
 FRÅGETYP: Försäljningstrend
 - Nämn leverantören ("{name}") minst en gång.
-- Ange den faktiska perioden från date_range i verktygsresultat.
+- Ange den faktiska perioden från analysed_range_label eller date_range i verktygsresultat.
 - Beskriv övergripande riktning utifrån fullständiga perioder — ingen månad-för-månad- eller dag-för-dag-lista
   om användaren inte bett om det.
 - För cirka 15–90 dagar: beskriv veckovis utveckling (inte dag-för-dag).
 - För över 90 dagar: beskriv månadsvis utveckling.
+- TRENDSPRÅK: Använd "nedåtgående trend" endast vid tydlig och ihållande nedgång över jämförbara
+  fullständiga perioder (minst två lägre veckor/månader efter toppen).
+- Vid blandad utveckling: "Försäljningen varierade under perioden.",
+  "De senaste avslutade veckorna låg lägre än slutet av maj.",
+  "Utvecklingen är svagare jämfört med periodens topp."
+- Dra aldrig slutsats om bred nedgång från en ofullständig gränsvecka.
 - Om analysis_note eller completed_week_label finns: nämn INTE ofullständig period i brödtexten (notis under diagrammet).
 - Dra inga slutsatser om kraftig nedgång från ofullständig period.
 - Ingen avslutande rekommendation, uppföljning eller "överväg att analysera".
@@ -194,6 +273,8 @@ def needs_synthesis_retry(
     if not (answer or "").strip():
         return False
     if has_unsupported_recommendation(answer) or misnames_product(answer, supplier_name):
+        return True
+    if claims_unsupported_strong_decline(answer, raw_tool_results):
         return True
     if raw_tool_results:
         from app.services.currency_format import sanitize_answer_currency

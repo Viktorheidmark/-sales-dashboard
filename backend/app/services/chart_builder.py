@@ -11,7 +11,11 @@ Rules:
 
 from typing import Optional
 
-from app.services.period_utils import apply_sales_over_time_period_policy
+from app.services.period_utils import (
+    apply_sales_over_time_period_policy,
+    format_date_range_sv,
+    format_date_sv,
+)
 
 LINE_CHART = "line_chart"
 BAR_CHART = "bar_chart"
@@ -61,17 +65,39 @@ def _build_sales_over_time(result: dict) -> Optional[dict]:
     if len(data) < 2:
         return None
 
-    period_note = None
+    chart_context = result.get("chart_context") or {}
     period_analysis = result.get("period_analysis") or {}
-    if period_analysis.get("completed_week_label"):
-        period_note = period_analysis["completed_week_label"]
-    elif period_analysis.get("excluded_incomplete_period"):
-        period_note = f"Pågående {gran_label} exkluderad från diagrammet."
+    widened = chart_context.get("widened")
+    lookback_weeks = chart_context.get("lookback_weeks", 8)
+
+    if widened and granularity == "week":
+        orig = chart_context.get("original_date_range") or {}
+        week_end = orig.get("end") or (result.get("date_range") or {}).get("end")
+        if not week_end and data:
+            from datetime import date, timedelta
+            last_monday = date.fromisoformat(str(data[-1]["label"])[:10])
+            week_end = (last_monday + timedelta(days=6)).isoformat()
+        title = "Utveckling inför senaste avslutade vecka"
+        end_label = format_date_sv(week_end) if week_end else "senaste avslutade vecka"
+        description = (
+            f"{lookback_weeks} avslutade veckor fram till och med {end_label}"
+        )
+        period_note = description
+    else:
+        title = "Omsättningstrend"
+        description = f"Omsättning per {gran_label} (fullständiga perioder)"
+        period_note = None
+        if period_analysis.get("analysed_range_label"):
+            period_note = period_analysis["analysed_range_label"]
+        elif period_analysis.get("completed_week_label"):
+            period_note = period_analysis["completed_week_label"]
+        elif period_analysis.get("excluded_incomplete_period"):
+            period_note = f"Pågående {gran_label} exkluderad från diagrammet."
 
     return {
         "chart_type": LINE_CHART,
-        "title": "Omsättningstrend",
-        "description": f"Omsättning per {gran_label} (fullständiga perioder)",
+        "title": title,
+        "description": description,
         "x_key": "label",
         "y_key": "revenue",
         "data": data,

@@ -41,6 +41,73 @@ class ChartBuilderTests(unittest.TestCase):
         self.assertEqual(names, ["Big Drop"])
         self.assertEqual(chart["layout"], "horizontal")
 
+    def test_widened_weekly_chart_title(self):
+        result = apply_sales_over_time_period_policy({
+            "granularity": "week",
+            "series": [
+                {"period": "2026-04-20", "revenue": 100},
+                {"period": "2026-04-27", "revenue": 120},
+                {"period": "2026-05-04", "revenue": 110},
+            ],
+            "date_range": {"start": "2026-04-20", "end": "2026-05-10"},
+            "query_date_range": {"start": "2026-04-20", "end": "2026-05-10"},
+            "chart_context": {
+                "widened": True,
+                "lookback_weeks": 8,
+                "original_date_range": {"start": "2026-06-15", "end": "2026-06-21"},
+            },
+            "limitations": [],
+        })
+        chart = build_chart("get_sales_over_time", result)
+        self.assertIsNotNone(chart)
+        assert chart is not None
+        self.assertEqual(chart["title"], "Utveckling inför senaste avslutade vecka")
+        self.assertIn("8 avslutade veckor fram till och med", chart["description"])
+        self.assertIn("avslutade veckor", chart["description"].lower())
+
+    def test_direct_weekly_chart_final_point_matches_answer_week(self):
+        week_mondays = [
+            "2026-04-27",
+            "2026-05-04",
+            "2026-05-11",
+            "2026-05-18",
+            "2026-05-25",
+            "2026-06-01",
+            "2026-06-08",
+            "2026-06-15",
+        ]
+        series = [
+            {"period": monday, "revenue": 100.0 + i}
+            for i, monday in enumerate(week_mondays)
+        ]
+        raw = {
+            "granularity": "week",
+            "series": series,
+            "date_range": {"start": week_mondays[0], "end": "2026-06-21"},
+            "query_date_range": {"start": week_mondays[0], "end": "2026-06-21"},
+            "chart_context": {
+                "widened": True,
+                "lookback_weeks": 8,
+                "original_date_range": {"start": "2026-06-15", "end": "2026-06-21"},
+            },
+            "limitations": [],
+        }
+        chart = build_chart("get_sales_over_time", raw)
+        self.assertIsNotNone(chart)
+        assert chart is not None
+        policy = apply_sales_over_time_period_policy(raw)
+        self.assertEqual(policy["date_range"]["end"], "2026-06-21")
+        self.assertEqual(chart["data"][-1]["label"], "2026-06-15")
+        self.assertEqual(chart["data"][-2]["label"], "2026-06-08")
+        self.assertEqual(
+            chart["description"],
+            "8 avslutade veckor fram till och med 21 juni 2026",
+        )
+        self.assertEqual(
+            chart["period_note"],
+            "8 avslutade veckor fram till och med 21 juni 2026",
+        )
+
     def test_sales_over_time_period_note_when_incomplete(self):
         today = date.today()
         period_start = today.replace(day=1).isoformat()

@@ -4,11 +4,13 @@ import unittest
 from datetime import date
 
 from app.services.period_utils import (
+    align_weekly_query_bounds,
     apply_sales_over_time_period_policy,
     completed_week_bounds,
     completed_week_label,
     current_period_start,
     filter_incomplete_series,
+    first_complete_week_monday,
     format_week_range_sv,
     series_date_range,
 )
@@ -18,6 +20,31 @@ class PeriodUtilsTests(unittest.TestCase):
     def test_current_month_start(self):
         ref = date(2026, 6, 23)
         self.assertEqual(current_period_start("month", ref), "2026-06-01")
+
+    def test_first_complete_week_monday(self):
+        self.assertEqual(first_complete_week_monday(date(2026, 5, 24)), date(2026, 5, 25))
+        self.assertEqual(first_complete_week_monday(date(2026, 5, 25)), date(2026, 5, 25))
+
+    def test_align_weekly_query_bounds(self):
+        ref = date(2026, 6, 25)
+        aligned = align_weekly_query_bounds("2026-05-24", "2026-06-25", ref)
+        self.assertEqual(aligned["start"], "2026-05-25")
+        self.assertEqual(aligned["end"], "2026-06-21")
+
+    def test_excludes_partial_start_week(self):
+        series = [
+            {"period": "2026-05-18", "revenue": 50.0},
+            {"period": "2026-05-25", "revenue": 100.0},
+            {"period": "2026-06-01", "revenue": 110.0},
+            {"period": "2026-06-22", "revenue": 20.0},
+        ]
+        ref = date(2026, 6, 25)
+        completed, meta = filter_incomplete_series(
+            series, "week", ref, query_start="2026-05-24",
+        )
+        self.assertEqual(completed[0]["period"], "2026-05-25")
+        self.assertTrue(meta.get("excluded_partial_start_week"))
+        self.assertEqual(completed[-1]["period"], "2026-06-01")
 
     def test_completed_week_bounds(self):
         ref = date(2026, 6, 22)  # Monday — new week just started
@@ -30,6 +57,12 @@ class PeriodUtilsTests(unittest.TestCase):
         mon, sun = completed_week_bounds(ref)
         self.assertEqual(mon, date(2026, 6, 15))
         self.assertEqual(sun, date(2026, 6, 21))
+
+    def test_completed_week_bounds_sunday_reference_is_week_before(self):
+        """A completed Sunday must not be passed as reference — it shifts back one week."""
+        mon, sun = completed_week_bounds(date(2026, 6, 21))
+        self.assertEqual(mon, date(2026, 6, 8))
+        self.assertEqual(sun, date(2026, 6, 14))
 
     def test_format_week_range_sv(self):
         self.assertEqual(
@@ -52,31 +85,50 @@ class PeriodUtilsTests(unittest.TestCase):
 
     def test_excludes_incomplete_week_without_long_note(self):
         series = [
-            {"period": "2026-06-16", "revenue": 100.0, "orders": 10, "units": 50},
-            {"period": "2026-06-23", "revenue": 20.0, "orders": 2, "units": 5},
+            {"period": "2026-06-15", "revenue": 100.0, "orders": 10, "units": 50},
+            {"period": "2026-06-22", "revenue": 20.0, "orders": 2, "units": 5},
         ]
         ref = date(2026, 6, 25)
         completed, meta = filter_incomplete_series(series, "week", ref)
         self.assertEqual(len(completed), 1)
-        self.assertEqual(completed[0]["period"], "2026-06-16")
+        self.assertEqual(completed[0]["period"], "2026-06-15")
         self.assertTrue(meta.get("excluded_incomplete_period"))
         self.assertNotIn("analysis_note", meta)
-        self.assertEqual(meta.get("completed_week_label"), completed_week_label("2026-06-16"))
+        self.assertEqual(meta.get("completed_week_label"), completed_week_label("2026-06-15"))
 
     def test_apply_policy_aligns_date_range(self):
         result = {
             "granularity": "week",
             "series": [
-                {"period": "2026-06-16", "revenue": 100.0, "orders": 10, "units": 50},
-                {"period": "2026-06-23", "revenue": 20.0, "orders": 2, "units": 5},
+                {"period": "2026-06-15", "revenue": 100.0, "orders": 10, "units": 50},
+                {"period": "2026-06-22", "revenue": 20.0, "orders": 2, "units": 5},
             ],
-            "date_range": {"start": "2026-06-16", "end": "2026-06-25"},
+            "date_range": {"start": "2026-06-15", "end": "2026-06-25"},
+            "query_date_range": {"start": "2026-06-15", "end": "2026-06-25"},
             "limitations": [],
         }
         out = apply_sales_over_time_period_policy(result)
         self.assertEqual(len(out["series"]), 1)
-        self.assertEqual(out["date_range"], {"start": "2026-06-16", "end": "2026-06-22"})
+        self.assertEqual(out["date_range"], {"start": "2026-06-15", "end": "2026-06-21"})
         self.assertIn("completed_week_label", out)
+
+    def test_single_completed_week_no_false_incomplete_warning(self):
+        result = {
+            "granularity": "week",
+            "series": [
+                {"period": "2026-06-15", "revenue": 100.0, "orders": 10, "units": 50},
+            ],
+            "date_range": {"start": "2026-06-15", "end": "2026-06-21"},
+            "query_date_range": {"start": "2026-06-15", "end": "2026-06-21"},
+            "limitations": [],
+        }
+        out = apply_sales_over_time_period_policy(result)
+        self.assertEqual(len(out["series"]), 1)
+        self.assertIn("completed_week_label", out)
+        self.assertNotIn("analysis_note", out)
+        self.assertFalse(any("pågående" in l for l in out.get("limitations", [])))
+        self.assertEqual(out.get("weekly_comparison_available"), False)
+        self.assertIn("jämförbar veckodata", out.get("comparison_note", ""))
 
     def test_apply_policy_adds_analysis_note(self):
         result = {
@@ -93,10 +145,10 @@ class PeriodUtilsTests(unittest.TestCase):
         self.assertTrue(any("exkluderats" in l for l in out["limitations"]))
 
     def test_series_date_range_week(self):
-        series = [{"period": "2026-06-16", "revenue": 1}]
+        series = [{"period": "2026-06-15", "revenue": 1}]
         self.assertEqual(
             series_date_range(series, "week"),
-            {"start": "2026-06-16", "end": "2026-06-22"},
+            {"start": "2026-06-15", "end": "2026-06-21"},
         )
 
 

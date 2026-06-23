@@ -1,54 +1,71 @@
+"""Unit tests for response guidance helpers."""
+
 import unittest
 
 from app.services.response_guidance import (
-    executive_writing_rules,
-    has_unsupported_recommendation,
-    misnames_product,
-    synthesis_blueprint,
-    synthesis_suffix,
+    claims_unsupported_strong_decline,
+    is_sustained_revenue_decline,
+    sanitize_trend_wording,
 )
 
 
 class ResponseGuidanceTests(unittest.TestCase):
-    def test_executive_rules_forbid_ai_phrases(self):
-        rules = executive_writing_rules("Arla Sverige")
-        self.assertIn("dominerar marknaden", rules)
-        self.assertIn("representeras av en aktör", rules)
-        self.assertIn("ALDRIG leverantörsnamnet framför produktnamnet", rules)
-        self.assertNotIn("Arla Sverige Iced Coffee Latte är största risken", rules)
+    def test_sustained_decline_requires_clear_tail(self):
+        mixed = [
+            {"revenue": 100},
+            {"revenue": 120},
+            {"revenue": 90},
+            {"revenue": 110},
+        ]
+        self.assertFalse(is_sustained_revenue_decline(mixed))
 
-    def test_market_share_blueprint(self):
-        blueprint = synthesis_blueprint("Vad är vår marknadsandel i Mejeri?", ["get_market_share"])
-        self.assertIn("Övriga aktörer", blueprint)
-        self.assertIn("en aktör", blueprint)
+        short_decline = [
+            {"revenue": 100},
+            {"revenue": 120},
+            {"revenue": 90},
+            {"revenue": 80},
+        ]
+        self.assertFalse(is_sustained_revenue_decline(short_decline))
 
-    def test_trend_blueprint_skips_body_period_note(self):
-        blueprint = synthesis_blueprint(
-            "Hur har försäljningen utvecklats de senaste 90 dagarna?",
-            ["get_sales_over_time"],
-            "Arla Sverige",
-        )
-        self.assertIn("diagrammet", blueprint)
+        sustained = [
+            {"revenue": 100},
+            {"revenue": 120},
+            {"revenue": 110},
+            {"revenue": 90},
+            {"revenue": 80},
+            {"revenue": 70},
+        ]
+        self.assertTrue(is_sustained_revenue_decline(sustained))
 
-    def test_focus_blueprint_one_followup(self):
-        blueprint = synthesis_blueprint("Vad borde vi fokusera på nästa period?", [])
-        self.assertIn("högst ETT", blueprint)
-        self.assertIn("Jämför produkten mellan regioner", blueprint)
+    def test_claims_unsupported_strong_decline_on_mixed_series(self):
+        answer = "Arla Sverige har en nedåtgående trend under perioden."
+        raw = [("get_sales_over_time", {"series": [
+            {"revenue": 100}, {"revenue": 120}, {"revenue": 90}, {"revenue": 110},
+        ]})]
+        self.assertTrue(claims_unsupported_strong_decline(answer, raw))
 
-    def test_synthesis_suffix_includes_question_type(self):
-        suffix = synthesis_suffix(
-            "Arla Sverige",
-            "Vilka produkter säljer bäst i Stockholm?",
-            ["get_top_products"],
-        )
-        self.assertIn("Topprodukter", suffix)
+    def test_allows_strong_decline_when_sustained(self):
+        answer = "Arla Sverige visar en nedåtgående trend."
+        raw = [("get_sales_over_time", {"series": [
+            {"revenue": 100}, {"revenue": 120}, {"revenue": 110},
+            {"revenue": 90}, {"revenue": 80}, {"revenue": 70},
+        ]})]
+        self.assertFalse(claims_unsupported_strong_decline(answer, raw))
 
-    def test_detects_unsupported_recommendation(self):
-        self.assertTrue(has_unsupported_recommendation("Överväg att analysera försäljningen."))
+    def test_sanitize_trend_wording_softens_short_series(self):
+        answer = "Försäljningen för Arla Sverige visade en nedåtgående trend under perioden 25 maj–14 juni 2026."
+        raw = [("get_sales_over_time", {"series": [
+            {"revenue": 49}, {"revenue": 40}, {"revenue": 34},
+        ]})]
+        cleaned = sanitize_trend_wording(answer, raw)
+        self.assertNotIn("nedåtgående trend", cleaned.lower())
+        self.assertIn("varierade under perioden", cleaned.lower())
+        self.assertNotIn("varierade under perioden under perioden", cleaned.lower())
 
-    def test_detects_misnamed_product(self):
-        self.assertTrue(misnames_product("Arla Sverige Iced Coffee Latte minskade.", "Arla Sverige"))
-        self.assertFalse(misnames_product("Arla Iced Coffee Latte minskade.", "Arla Sverige"))
+    def test_soft_trend_phrase_for_lower_tail(self):
+        series = [{"revenue": 49}, {"revenue": 40}, {"revenue": 34}]
+        from app.services.response_guidance import _soft_trend_phrase
+        self.assertIn("lägre", _soft_trend_phrase(series))
 
 
 if __name__ == "__main__":

@@ -40,6 +40,19 @@ REGRESSION_QUESTIONS = [
         "chart_slices": {"Oss", "Konkurrenter"},
         "must_not_contain": ["Skånemejerier"],
         "must_contain_supplier": True,
+        "direct_chart": True,
+        "chart_type": "pie_chart",
+    },
+    {
+        "label": "Regional sales ranking",
+        "message": "Vilken region genererar mest intäkter?",
+        "expected_tool": "get_sales_by_region",
+        "expect_chart": True,
+        "chart_slices": None,
+        "must_not_contain": [],
+        "must_contain_supplier": True,
+        "direct_chart": True,
+        "chart_type": "bar_chart",
     },
     {
         "label": "Top products in Stockholm",
@@ -49,6 +62,34 @@ REGRESSION_QUESTIONS = [
         "chart_slices": None,
         "must_not_contain": ["marknadsföring", "överväg att fokusera"],
         "must_contain_supplier": False,
+        "direct_chart": True,
+        "chart_type": "bar_chart",
+    },
+    {
+        "label": "Sales trend 30 days — complete weeks only",
+        "message": "Hur har försäljningen utvecklats de senaste 30 dagarna?",
+        "expected_tool": "get_sales_over_time",
+        "expect_chart": True,
+        "chart_slices": None,
+        "must_not_contain": ["nedåtgående trend"],
+        "must_contain_supplier": True,
+        "weekly_complete_weeks": True,
+        "direct_chart": True,
+        "chart_type": "line_chart",
+    },
+    {
+        "label": "Last completed week summary",
+        "message": "Hur såg försäljningen ut senaste veckan?",
+        "expected_tool": "get_sales_over_time",
+        "expect_chart": True,
+        "chart_type": "line_chart",
+        "chart_slices": None,
+        "must_not_contain": ["pågående vecka", "serien", "ofullständig", "exkluderats"],
+        "must_contain": ["senaste avslutade vecka"],
+        "must_contain_supplier": True,
+        "weekly_completed_answer": True,
+        "direct_chart": True,
+        "widened_weekly_chart": True,
     },
     {
         "label": "Sales trend 90 days — incomplete period",
@@ -79,6 +120,8 @@ REGRESSION_QUESTIONS = [
         "must_not_contain": [],
         "must_contain_supplier": False,
         "declining_priority": True,
+        "direct_chart": True,
+        "chart_type": "bar_chart",
     },
 ]
 
@@ -134,8 +177,8 @@ FOLLOWUP_SCENARIOS = [
         "prior_message": "Hur såg försäljningen ut senaste veckan?",
         "followup_message": "visa diagram",
         "expected_tool": "get_sales_over_time",
-        "expect_chart": True,
-        "chart_type": "line_chart",
+        "expect_chart": False,
+        "redundant_diagram": True,
     },
     {
         "label": "Diagram after period comparison",
@@ -269,6 +312,74 @@ def complete_from_stream(events: list[dict]) -> dict:
     return {}
 
 
+def _chart_first_last_labels(chart: dict | None) -> tuple[str | None, str | None]:
+    data = (chart or {}).get("data") or []
+    if not data:
+        return None, None
+    return str(data[0].get("label", ""))[:10], str(data[-1].get("label", ""))[:10]
+
+
+def _source_matches_chart_range(result: dict) -> bool:
+    chart = result.get("chart")
+    sources = result.get("sources", [])
+    if not chart or not sources:
+        return True
+    dr = sources[0].get("date_range")
+    first, last = _chart_first_last_labels(chart)
+    if not dr or not first:
+        return True
+    if dr.get("start", "")[:10] != first:
+        return False
+    if last:
+        from datetime import date, timedelta
+        last_sunday = (date.fromisoformat(last) + timedelta(days=6)).isoformat()
+        if dr.get("end", "")[:10] != last_sunday:
+            return False
+    return True
+
+
+def _weekly_complete_weeks_only(result: dict) -> bool:
+    from datetime import date
+    from app.services.period_utils import completed_week_bounds
+
+    chart = result.get("chart")
+    sources = result.get("sources", [])
+    if not chart or not sources:
+        return True
+    dr = sources[0].get("date_range")
+    if not dr:
+        return True
+    start = date.fromisoformat(dr["start"][:10])
+    if start.weekday() != 0:
+        return False
+    end = date.fromisoformat(dr["end"][:10])
+    _, completed_end = completed_week_bounds()
+    if end > completed_end:
+        return False
+    first, _ = _chart_first_last_labels(chart)
+    if first and first < dr["start"][:10]:
+        return False
+    return _source_matches_chart_range(result)
+
+
+def _widened_chart_labeled(result: dict) -> bool:
+    chart = result.get("chart") or {}
+    combined = f"{chart.get('title', '')} {chart.get('description', '')}".lower()
+    return "utveckling inför" in combined and "avslutade veckor" in combined
+
+
+def _weekly_completed_answer_safe(result: dict, answer: str) -> bool:
+    lower = answer.lower()
+    if "senaste avslutade vecka" not in lower:
+        return False
+    if any(tok in lower for tok in ["pågående vecka", "serien", "ofullständig", "exkluderats"]):
+        return False
+    limitations = " ".join(result.get("limitations", [])).lower()
+    if any(tok in limitations for tok in ["pågående", "serien", "jämförelseperiod", "ofullständig"]):
+        return False
+    return True
+
+
 def _incomplete_period_safe(result: dict, answer: str) -> bool:
     lower = answer.lower()
     chart = result.get("chart") or {}
@@ -357,6 +468,9 @@ def assert_case(
     for forbidden in spec.get("must_not_contain", []):
         checks.append((f"no '{forbidden}'", forbidden.lower() not in lower))
 
+    for required in spec.get("must_contain", []):
+        checks.append((f"contains '{required}'", required.lower() in lower))
+
     if spec.get("must_contain_supplier") and supplier_name:
         checks.append((
             f"uses supplier name ({supplier_name})",
@@ -380,6 +494,37 @@ def assert_case(
                 "no duplicate incomplete warning in answer",
                 not any(tok in lower for tok in ["pågående", "ofullständig", "exkluderats"]),
             ))
+
+    if spec.get("weekly_complete_weeks"):
+        checks.append(("complete weeks only", _weekly_complete_weeks_only(result)))
+        checks.append(("source matches chart range", _source_matches_chart_range(result)))
+
+    if spec.get("weekly_completed_answer"):
+        checks.append(("weekly completed answer safe", _weekly_completed_answer_safe(result, answer)))
+        checks.append((
+            "no incomplete-period limitation shown",
+            not any(
+                tok in " ".join(result.get("limitations", [])).lower()
+                for tok in ["pågående", "serien", "jämförelseperiod"]
+            ),
+        ))
+
+    if spec.get("direct_chart"):
+        checks.append(("direct chart on first answer", chart is not None))
+        checks.append((
+            "chart source tool matches",
+            chart is not None and chart.get("source_tool") == spec["expected_tool"],
+        ))
+
+    if spec.get("chart_type"):
+        checks.append((
+            "expected chart type",
+            chart is not None and chart.get("chart_type") == spec["chart_type"],
+        ))
+
+    if spec.get("widened_weekly_chart"):
+        checks.append(("widened weekly chart labeled", _widened_chart_labeled(result)))
+        checks.append(("source matches chart range", _source_matches_chart_range(result)))
 
     if spec.get("declining_priority"):
         checks.append(("declining chart prioritizes material drop", _declining_prioritizes_material(chart)))
@@ -468,6 +613,16 @@ def assert_followup(
     ]
     if spec.get("chart_type"):
         checks.append(("expected chart type", chart and chart.get("chart_type") == spec["chart_type"]))
+    if spec.get("widened_chart"):
+        checks.append(("widened chart labeled", _widened_chart_labeled(result)))
+        checks.append(("source matches chart range", _source_matches_chart_range(result)))
+    if spec.get("redundant_diagram"):
+        checks.append(("no duplicate chart", chart is None))
+        checks.append(("no tool re-fetch", len(result.get("tool_calls", [])) == 0))
+        checks.append((
+            "redundant diagram message",
+            "redan ovan" in result.get("answer", "").lower(),
+        ))
     if spec["expected_tool"] == "get_market_share":
         checks.append(("not generic sales trend only", chart is None or chart.get("source_tool") == "get_market_share"))
 
@@ -522,6 +677,7 @@ def main():
             "answer": prior.get("answer", ""),
             "tool_calls": prior.get("tool_calls", []),
             "sources": prior.get("sources", []),
+            "has_chart": prior.get("chart") is not None,
         }
         followup = chat(cookies, scenario["followup_message"], prior_context)
         results.append(assert_period_followup(
@@ -536,6 +692,7 @@ def main():
             "answer": prior.get("answer", ""),
             "tool_calls": prior.get("tool_calls", []),
             "sources": prior.get("sources", []),
+            "has_chart": prior.get("chart") is not None,
         }
         followup = chat(
             cookies,

@@ -43,6 +43,7 @@ export interface PriorTurnContext {
   answer?: string
   tool_calls: string[]
   sources?: SourceMeta[]
+  has_chart?: boolean
 }
 
 export interface ChatRequest {

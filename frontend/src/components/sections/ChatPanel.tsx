@@ -85,6 +85,7 @@ function buildPriorContext(messages: Message[]): PriorTurnContext | undefined {
       answer: msg.response.answer,
       tool_calls: msg.response.tool_calls,
       sources: msg.response.sources,
+      has_chart: msg.response.chart != null,
     }
   }
   return undefined
@@ -260,6 +261,9 @@ function AssistantBubble({
 
       {r.chart && (
         <div className="pt-1">
+          {r.chart.title && (
+            <p className="text-xs font-semibold text-theme-body mb-1 leading-snug">{r.chart.title}</p>
+          )}
           {r.chart.description && (
             <p className="text-xs text-theme-muted mb-2 leading-relaxed">{r.chart.description}</p>
           )}
