@@ -166,6 +166,16 @@ FRÅGETYP: Topprodukter
 - Lista inte fler än två produkter i text; diagrammet visar resten.
 """
 
+    if "get_revenue_drivers" in tools:
+        return """
+FRÅGETYP: Omsättningsutveckling (30 dagar)
+- Börja med total omsättningsförändring mellan senaste och föregående 30-dagarsperiod (absolut och %).
+- Nämn ordrar och enheter om de förstärker bilden.
+- Lyft största positiva produktbidrag och största negativa produktbidrag med exakta product_name.
+- Nämn region med starkast respektive svagast förändring om datan finns.
+- Max 4 korta meningar. Ingen rekommendation.
+"""
+
     if "get_declining_products" in tools or _DECLINING_RE.search(q):
         return """
 FRÅGETYP: Produkter i nedgång

@@ -20,6 +20,7 @@ from mcp_server.db import get_session
 from mcp_server.query_helpers import (
     query_declining_products,
     query_market_share,
+    query_revenue_drivers,
     query_sales_by_region,
     query_sales_over_time,
     query_supplier_kpis,
@@ -232,6 +233,41 @@ def get_declining_products(
     db = get_session()
     try:
         return query_declining_products(db, sid, days, limit)
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool 7 — Revenue drivers (product and region contribution vs prior period)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_revenue_drivers(
+    supplier_id: str,
+    days: int = 30,
+    limit: int = 5,
+) -> dict:
+    """
+    Return which supplier products and regions drove revenue change versus a
+    comparable prior period. Only supplier-scoped data is returned — no
+    competitor product names or details are exposed.
+
+    days controls the comparison window (default 30, max 365).
+    limit controls how many gainers/losers to return in each category (max 20).
+
+    Returns: current_period totals, prior_period totals, gainers (top revenue
+    gainers by absolute change), losers (biggest revenue declines), region_gainers,
+    region_losers.
+    """
+    sid = _validate_supplier_id(supplier_id)
+    if not (1 <= days <= 365):
+        raise ValueError("days must be between 1 and 365.")
+    if not (1 <= limit <= 20):
+        raise ValueError("limit must be between 1 and 20.")
+
+    db = get_session()
+    try:
+        return query_revenue_drivers(db, sid, days, limit)
     finally:
         db.close()
 

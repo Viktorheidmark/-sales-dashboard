@@ -4,6 +4,7 @@ import { api } from '../../api/client'
 import type { ChatResponse, DateRange, PriorTurnContext, SourceMeta } from '../../api/types'
 import { formatDate } from '../../utils/format'
 import { MiniAssistantChart } from '../charts/MiniAssistantChart'
+import { DeepDivePanel } from '../charts/DeepDivePanel'
 import {
   ANALYTICS_DATA_SOURCE,
   formatSourcePeriod,
@@ -15,14 +16,14 @@ import {
 
 const PROMPT_CARDS = [
   {
-    label: 'Produkt i nedgång',
-    sub: 'Vilken produkt minskade mest de senaste 30 dagarna?',
-    prompt: 'Vilken produkt minskade mest de senaste 30 dagarna?',
+    label: '30-dagars utveckling',
+    sub: 'Hur har försäljningen utvecklats de senaste 30 dagarna?',
+    prompt: 'Hur har försäljningen utvecklats de senaste 30 dagarna?',
   },
   {
-    label: 'Försäljningstrend',
-    sub: 'Visa försäljningstrend de senaste 90 dagarna',
-    prompt: 'Visa försäljningstrend de senaste 90 dagarna',
+    label: 'Produkt i nedgång',
+    sub: 'Vilken produkt har tappat mest de senaste 30 dagarna?',
+    prompt: 'Vilken produkt har tappat mest de senaste 30 dagarna?',
   },
   {
     label: 'Starkaste region',
@@ -31,8 +32,8 @@ const PROMPT_CARDS = [
   },
   {
     label: 'Marknadsandel',
-    sub: 'Vad är vår marknadsandel i Mejeri?',
-    prompt: 'Vad är vår marknadsandel i Mejeri?',
+    sub: 'Hur stor är vår marknadsandel?',
+    prompt: 'Hur stor är vår marknadsandel?',
   },
 ]
 
@@ -183,14 +184,53 @@ function LoadingDots() {
   )
 }
 
+function ChartBlock({
+  chart,
+  supplierName,
+}: {
+  chart: NonNullable<ChatResponse['chart']>
+  supplierName?: string
+}) {
+  const selfContained = chart.chart_type === 'insight_card' || chart.chart_type === 'empty_state'
+  const isSecondary = chart.chart_role === 'secondary' || chart.compact
+  if (selfContained) {
+    return <MiniAssistantChart chart={chart} supplierName={supplierName} />
+  }
+  return (
+    <div className={isSecondary ? 'opacity-95' : ''}>
+      {chart.title && (
+        <p className={`font-semibold text-theme-body mb-1 leading-snug ${isSecondary ? 'text-[11px]' : 'text-xs'}`}>
+          {chart.title}
+        </p>
+      )}
+      {chart.description && (
+        <p className={`text-theme-muted mb-2 leading-relaxed ${isSecondary ? 'text-[11px]' : 'text-xs'}`}>
+          {chart.description}
+        </p>
+      )}
+      <div className={`rounded-lg border border-workspace-border bg-workspace-muted/50 px-3 py-2 ${isSecondary ? 'max-w-sm' : ''}`}>
+        <MiniAssistantChart chart={chart} supplierName={supplierName} compact={isSecondary} />
+      </div>
+      {chart.stability_note && (
+        <p className="mt-1.5 text-[11px] text-theme-muted leading-snug italic">{chart.stability_note}</p>
+      )}
+      {chart.period_note && (
+        <p className="mt-1.5 text-[11px] text-theme-muted leading-snug">{chart.period_note}</p>
+      )}
+    </div>
+  )
+}
+
 function AssistantBubble({
   msg,
   supplierName,
   fallbackDateRange,
+  onSendMessage,
 }: {
   msg: Message
   supplierName?: string
   fallbackDateRange?: DateRange
+  onSendMessage: (text: string) => void
 }) {
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
@@ -248,7 +288,6 @@ function AssistantBubble({
 
   const r = msg.response!
   const isGrounded = r.tool_calls.length > 0
-  const marketShare = isMarketShareResponse(r)
   const displayLimitations = visibleResponseLimitations(r.limitations, r)
 
   return (
@@ -259,25 +298,57 @@ function AssistantBubble({
         </ReactMarkdown>
       </div>
 
+      {!r.chart && r.tool_calls.includes('get_sales_over_time') && !r.deep_dive && (
+        <div className="flex items-center gap-4 pt-1">
+          <button
+            onClick={() => onSendMessage('Visa diagram')}
+            className="text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+          >
+            Visa diagram →
+          </button>
+          <button
+            onClick={() => onSendMessage('Visa trenden')}
+            className="text-xs text-theme-muted hover:text-theme-body focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+          >
+            Visa trend →
+          </button>
+        </div>
+      )}
+
       {r.chart && (
         <div className="pt-1">
-          {r.chart.title && (
-            <p className="text-xs font-semibold text-theme-body mb-1 leading-snug">{r.chart.title}</p>
-          )}
-          {r.chart.description && (
-            <p className="text-xs text-theme-muted mb-2 leading-relaxed">{r.chart.description}</p>
-          )}
-          <div className="rounded-lg border border-workspace-border bg-workspace-muted/50 px-3 py-2">
-            <MiniAssistantChart chart={r.chart} supplierName={supplierName} />
-          </div>
-          {r.chart.period_note && (
-            <p className="mt-1.5 text-[11px] text-theme-muted leading-snug">{r.chart.period_note}</p>
-          )}
-          {marketShare && (
+          <ChartBlock chart={r.chart} supplierName={supplierName} />
+          {isMarketShareResponse(r) && (
             <p className="mt-1.5 text-[11px] text-theme-muted leading-snug">
               Konkurrentdata visas endast på aggregerad nivå.
             </p>
           )}
+        </div>
+      )}
+
+      {(r.charts ?? []).map((extraChart, i) => (
+        <div key={`chart-${i}`} className="pt-1">
+          <ChartBlock chart={extraChart} supplierName={supplierName} />
+        </div>
+      ))}
+
+      {r.deep_dive && (
+        <div className="pt-1">
+          <DeepDivePanel deepDive={r.deep_dive} />
+        </div>
+      )}
+
+      {(r.follow_up_actions ?? []).length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {r.follow_up_actions!.map((action) => (
+            <button
+              key={action.label}
+              onClick={() => onSendMessage(action.message)}
+              className="text-xs px-2.5 py-1 rounded-full border border-workspace-border bg-workspace-surface text-theme-body hover:border-brand-400/60 hover:text-brand-600 dark:hover:text-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+            >
+              {action.label}
+            </button>
+          ))}
         </div>
       )}
 
@@ -398,6 +469,9 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             tool_calls: event.tool_calls,
             sources: event.sources,
             chart: event.chart,
+            charts: event.charts,
+            deep_dive: event.deep_dive,
+            follow_up_actions: event.follow_up_actions,
             limitations: event.limitations,
             supplier_id: event.supplier_id,
             generated_at: event.generated_at,
@@ -505,6 +579,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
                   fallbackDateRange={
                     startDate && endDate ? { start: startDate, end: endDate } : undefined
                   }
+                  onSendMessage={sendMessage}
                 />
               )
             ))}

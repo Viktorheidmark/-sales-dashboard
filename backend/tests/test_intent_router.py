@@ -81,12 +81,42 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(plans[0].args.get("start_date"), prev_start.isoformat())
         self.assertEqual(plans[0].args.get("end_date"), week_end.isoformat())
 
+    def test_sales_trend_30_days_deep_dive(self):
+        plans = plan_forced_tools(
+            "Hur har försäljningen utvecklats de senaste 30 dagarna?",
+            "Coca-Cola Europacific Partners Sverige",
+        )
+        self.assertEqual(len(plans), 2)
+        self.assertEqual(plans[0].tool_name, "get_revenue_drivers")
+        self.assertEqual(plans[1].tool_name, "get_sales_over_time")
+        self.assertEqual(plans[1].args.get("_chart_intent"), "time_series")
+        self.assertTrue(plans[1].args.get("_force_time_series"))
+
+    def test_period_comparison_routes_to_revenue_drivers(self):
+        plans = plan_forced_tools(
+            "Jämför senaste 30 dagarna med föregående 30 dagar",
+            "Coca-Cola Europacific Partners Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_revenue_drivers")
+        self.assertEqual(plans[0].args.get("_chart_intent"), "period_comparison")
+
     def test_sales_trend_30_days_weekly_granularity(self):
         plans = plan_forced_tools(
             "Hur har försäljningen utvecklats senaste 30 dagarna?",
             "Coca-Cola Europacific Partners Sverige",
         )
-        self.assertEqual(plans[0].args.get("granularity"), "week")
+        self.assertEqual(plans[0].tool_name, "get_revenue_drivers")
+        self.assertEqual(plans[1].args.get("granularity"), "week")
+
+    def test_product_decline_30_days(self):
+        plans = plan_forced_tools(
+            "Vilken produkt har tappat mest de senaste 30 dagarna?",
+            "Orkla Snacks Sverige",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_declining_products")
+        self.assertEqual(plans[0].args.get("days"), 30)
 
     def test_period_followup_sales_trend(self):
         prior = PriorTurnContext(

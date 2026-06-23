@@ -18,6 +18,7 @@ CATEGORIES = ("Läsk", "Chips & snacks")
 KNOWN_REGIONS = ("Stockholm", "Göteborg", "Malmö", "Uppsala", "Västerås", "Örebro", "Linköping", "Helsingborg")
 
 CHART_TOOL_PRIORITY = [
+    "get_revenue_drivers",
     "get_market_share",
     "get_top_products",
     "get_declining_products",
@@ -105,7 +106,13 @@ _LONG_TERM_TREND_RE = re.compile(
 )
 
 _KPI_COMPARISON_RE = re.compile(
-    r"(föregående period|jämfört med förra|mot föregående|periodjämförelse|periodöversikt)",
+    r"(föregående period|jämfört med förra|mot föregående|periodjämförelse|periodöversikt|"
+    r"jämför.{0,30}(senaste|föregående|förra)|bättre än föregående)",
+    re.IGNORECASE,
+)
+
+_TIME_SERIES_INTENT_RE = re.compile(
+    r"(utvecklat|utveckling|trend|över\s+tid|vecka\s+för\s+vecka|dag\s+för\s+dag|försäljningstrend)",
     re.IGNORECASE,
 )
 
@@ -130,7 +137,47 @@ _PERIOD_RETAINED_TOOLS = frozenset({
     "get_top_products",
     "get_declining_products",
     "get_market_share",
+    "get_revenue_drivers",
 })
+
+_REVENUE_30D_DEEP_DIVE_RE = re.compile(
+    r"("
+    r"hur\s+har\s+.{0,30}(försäljning|utvecklat|utveckling).{0,40}senaste\s+30\s+dag|"
+    r"(försäljningen|försäljning).{0,20}(utvecklat|utveckling).{0,40}senaste\s+30\s+dag"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_PRODUCT_DECLINE_30D_RE = re.compile(
+    r"(produkt|produkter).{0,40}(tappat|minskat|nedgång|fallit|sjunk).{0,40}senaste\s+30\s+dag|"
+    r"senaste\s+30\s+dag.{0,40}(produkt|produkter).{0,40}(tappat|minskat|nedgång)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_DRIVER_GAINERS_FOLLOWUP_RE = re.compile(
+    r"produkter\s+som\s+drev\s+ökningen|drev\s+ökningen",
+    re.IGNORECASE,
+)
+_DRIVER_LOSERS_FOLLOWUP_RE = re.compile(
+    r"produkter\s+som\s+tappade|som\s+tappade",
+    re.IGNORECASE,
+)
+_DRIVER_REGIONS_FOLLOWUP_RE = re.compile(
+    r"utveckling\s+per\s+region|per\s+region",
+    re.IGNORECASE,
+)
+_PRODUCT_REGION_DECLINE_FOLLOWUP_RE = re.compile(
+    r"tappet\s+per\s+region",
+    re.IGNORECASE,
+)
+_PRODUCT_TREND_FOLLOWUP_RE = re.compile(
+    r"produktens\s+utveckling|utveckling\s+över\s+tid",
+    re.IGNORECASE,
+)
+_PRODUCT_COMPARE_FOLLOWUP_RE = re.compile(
+    r"jämför\s+.+\s+med\s+övriga\s+produkter|övriga\s+produkter",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -417,6 +464,25 @@ def _reconstruct_tool_args(
     elif tool_name == "get_declining_products":
         args["days"] = period_args.get("days", 30)
         args["limit"] = 5
+        if prior and "get_declining_products" in prior.tool_calls:
+            q_lower = (message or q).lower()
+            if _PRODUCT_REGION_DECLINE_FOLLOWUP_RE.search(q_lower):
+                args["_deep_dive_focus"] = "regions"
+            elif _PRODUCT_TREND_FOLLOWUP_RE.search(q_lower):
+                args["_deep_dive_focus"] = "product_trend"
+            elif _PRODUCT_COMPARE_FOLLOWUP_RE.search(q_lower):
+                args["_deep_dive_focus"] = "portfolio"
+    elif tool_name == "get_revenue_drivers":
+        args["days"] = period_args.get("days", 30)
+        args["limit"] = 5
+        if prior and "get_revenue_drivers" in prior.tool_calls:
+            q_lower = (message or q).lower()
+            if _DRIVER_GAINERS_FOLLOWUP_RE.search(q_lower):
+                args["_deep_dive_focus"] = "gainers"
+            elif _DRIVER_LOSERS_FOLLOWUP_RE.search(q_lower):
+                args["_deep_dive_focus"] = "losers"
+            elif _DRIVER_REGIONS_FOLLOWUP_RE.search(q_lower):
+                args["_deep_dive_focus"] = "regions"
     elif tool_name == "get_sales_over_time":
         args["granularity"] = _granularity_from_date_range(
             args.get("start_date"),
@@ -535,6 +601,49 @@ def plan_period_followup_tools(
     )]
 
 
+def plan_deep_dive_followup_tools(
+    message: str,
+    prior: PriorTurnContext,
+    supplier_name: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> list[ToolPlan]:
+    if not prior.tool_calls:
+        return []
+
+    msg = message.strip()
+    period_args = extract_period_args(msg)
+    days = period_args.get("days", 30)
+
+    if "get_revenue_drivers" in prior.tool_calls:
+        if _DRIVER_GAINERS_FOLLOWUP_RE.search(msg) or _DRIVER_LOSERS_FOLLOWUP_RE.search(msg) or _DRIVER_REGIONS_FOLLOWUP_RE.search(msg):
+            args = {"days": days, "limit": 5}
+            if _DRIVER_GAINERS_FOLLOWUP_RE.search(msg):
+                args["_deep_dive_focus"] = "gainers"
+            elif _DRIVER_LOSERS_FOLLOWUP_RE.search(msg):
+                args["_deep_dive_focus"] = "losers"
+            else:
+                args["_deep_dive_focus"] = "regions"
+            return [ToolPlan("get_revenue_drivers", args, reason="revenue drivers follow-up")]
+
+    if "get_declining_products" in prior.tool_calls:
+        if (
+            _PRODUCT_REGION_DECLINE_FOLLOWUP_RE.search(msg)
+            or _PRODUCT_TREND_FOLLOWUP_RE.search(msg)
+            or _PRODUCT_COMPARE_FOLLOWUP_RE.search(msg)
+        ):
+            args = {"days": days, "limit": 5}
+            if _PRODUCT_REGION_DECLINE_FOLLOWUP_RE.search(msg):
+                args["_deep_dive_focus"] = "regions"
+            elif _PRODUCT_TREND_FOLLOWUP_RE.search(msg):
+                args["_deep_dive_focus"] = "product_trend"
+            else:
+                args["_deep_dive_focus"] = "portfolio"
+            return [ToolPlan("get_declining_products", args, reason="product decline follow-up")]
+
+    return []
+
+
 def plan_forced_tools(
     message: str,
     supplier_name: str,
@@ -550,6 +659,11 @@ def plan_forced_tools(
     plans: list[ToolPlan] = []
 
     if prior_context:
+        deep_followup = plan_deep_dive_followup_tools(
+            msg, prior_context, supplier_name, start_date, end_date,
+        )
+        if deep_followup:
+            return deep_followup
         period_followup = plan_period_followup_tools(
             msg, prior_context, supplier_name, start_date, end_date,
         )
@@ -577,6 +691,50 @@ def plan_forced_tools(
         ))
         return plans
 
+    if _PRODUCT_DECLINE_30D_RE.search(msg):
+        args = _date_args(start_date, end_date)
+        args.update({"days": 30, "limit": 5})
+        plans.append(ToolPlan(
+            tool_name="get_declining_products",
+            args=args,
+            reason="product decline deep dive (30 days)",
+        ))
+        return plans
+
+    if _REVENUE_30D_DEEP_DIVE_RE.search(msg):
+        period_args = extract_period_args(msg) or {"days": 30}
+        days = period_args.get("days", 30)
+        today = date.today()
+        trend_start = (today - timedelta(days=days)).isoformat()
+        trend_end = today.isoformat()
+        plans.append(ToolPlan(
+            tool_name="get_revenue_drivers",
+            args={"days": days, "limit": 5, "_chart_intent": "drivers_data"},
+            reason="30-day revenue drivers deep dive",
+        ))
+        plans.append(ToolPlan(
+            tool_name="get_sales_over_time",
+            args={
+                "start_date": trend_start,
+                "end_date": trend_end,
+                "granularity": "week",
+                "_chart_intent": "time_series",
+                "_force_time_series": True,
+            },
+            reason="weekly trend for 30-day development question",
+        ))
+        return plans
+
+    if _KPI_COMPARISON_RE.search(msg) and not _TIME_SERIES_INTENT_RE.search(msg):
+        period_args = extract_period_args(msg) or {"days": 30}
+        days = period_args.get("days", 30)
+        plans.append(ToolPlan(
+            tool_name="get_revenue_drivers",
+            args={"days": days, "limit": 5, "_chart_intent": "period_comparison"},
+            reason="explicit period comparison",
+        ))
+        return plans
+
     if _SALES_TREND_RE.search(msg):
         period_args = extract_period_args(msg)
         args = period_args if period_args else _date_args(start_date, end_date)
@@ -587,13 +745,11 @@ def plan_forced_tools(
         )
         if _WEEKLY_SALES_RE.search(msg) and period_args.get("completed_week"):
             week_start, week_end = completed_week_bounds()
-            # Provide current + previous completed week for comparison capability.
-            # Do NOT widen to 8 weeks — this is a factual point-in-time question,
-            # not a trend/chart request. Chart suppressed; user can request diagram.
             prev_start = week_start - timedelta(days=7)
             args["start_date"] = prev_start.isoformat()
             args["end_date"] = week_end.isoformat()
             args["_suppress_chart"] = True
+            args["_chart_intent"] = "weekly_kpi"
         args = _align_sales_over_time_weekly(args)
         # _ensure_chartable_sales_window only runs in plan_followup_tools (diagram requests).
         plans.append(ToolPlan(
@@ -631,7 +787,7 @@ def plan_forced_tools(
         ))
         return plans
 
-    if _TOP_PRODUCTS_RE.search(msg):
+    if _TOP_PRODUCTS_RE.search(msg) and not _DECLINING_RE.search(msg):
         region = extract_region(msg)
         if region:
             args = _date_args(start_date, end_date)

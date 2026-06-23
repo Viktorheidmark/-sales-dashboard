@@ -28,7 +28,8 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from app.services.guardrails import classify
-from app.services.chart_builder import pick_chart
+from app.services.chart_builder import pick_charts
+from app.services.deep_dive_builder import build_deep_dive, build_follow_up_actions
 from app.services.intent_router import (
     plan_forced_tools,
     default_category_for_supplier,
@@ -64,6 +65,7 @@ ALLOWED_TOOLS = {
     "get_sales_by_region",
     "get_market_share",
     "get_declining_products",
+    "get_revenue_drivers",
 }
 
 _PLANNING_RE = re.compile(
@@ -192,6 +194,17 @@ def _strip_internal_tool_args(args: dict) -> dict:
     return {k: v for k, v in args.items() if not str(k).startswith("_")}
 
 
+def _enrich_planned_tool_result(tool_name: str, parsed: dict, plan_args: dict) -> dict:
+    if not isinstance(parsed, dict):
+        return parsed
+    for key in ("_deep_dive_focus", "_chart_intent", "_force_time_series"):
+        if plan_args.get(key) is not None:
+            parsed[key] = plan_args[key]
+    if tool_name == "get_sales_over_time":
+        parsed = _enrich_sales_over_time_result(parsed, plan_args)
+    return parsed
+
+
 def _enrich_sales_over_time_result(parsed: dict, plan_args: dict) -> dict:
     if not isinstance(parsed, dict):
         return parsed
@@ -250,8 +263,7 @@ async def _execute_planned_tools(
         parsed = await _invoke_mcp_tool(
             session, plan.tool_name, plan.args, supplier_id, start_date, end_date,
         )
-        if plan.tool_name == "get_sales_over_time":
-            parsed = _enrich_sales_over_time_result(parsed, plan.args)
+        parsed = _enrich_planned_tool_result(plan.tool_name, parsed, plan.args)
         _record_tool_result(
             plan.tool_name, parsed, supplier_id,
             tools_used, sources, limitations, raw_tool_results,
@@ -267,6 +279,9 @@ def _diagram_clarification_response(supplier_id: str) -> dict:
         "tool_calls": [],
         "sources": [],
         "chart": None,
+        "charts": [],
+        "deep_dive": None,
+        "follow_up_actions": [],
         "limitations": [],
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -279,6 +294,9 @@ def _diagram_already_shown_response(supplier_id: str) -> dict:
         "tool_calls": [],
         "sources": [],
         "chart": None,
+        "charts": [],
+        "deep_dive": None,
+        "follow_up_actions": [],
         "limitations": [],
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -353,6 +371,9 @@ def _guardrail_response(guard, supplier_id: str) -> dict:
         "tool_calls": [],
         "sources": [],
         "chart": None,
+        "charts": [],
+        "deep_dive": None,
+        "follow_up_actions": [],
         "limitations": guard.limitations,
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -366,14 +387,21 @@ def _final_payload(
     raw_tool_results: list[tuple[str, dict]],
     limitations: list[str],
     supplier_id: str,
+    question: str = "",
 ) -> dict:
     cleaned_answer = sanitize_answer_currency(answer, raw_tool_results)
     cleaned_answer = sanitize_trend_wording(cleaned_answer, raw_tool_results)
+    all_charts = pick_charts(raw_tool_results, question)
+    deep_dive = build_deep_dive(raw_tool_results)
+    follow_ups = build_follow_up_actions(deep_dive, "")
     return {
         "answer": cleaned_answer,
         "tool_calls": list(dict.fromkeys(tools_used)),
         "sources": sources,
-        "chart": pick_chart(raw_tool_results),
+        "chart": all_charts[0] if all_charts else None,
+        "charts": all_charts[1:] if len(all_charts) > 1 else [],
+        "deep_dive": deep_dive,
+        "follow_up_actions": follow_ups,
         "limitations": list(set(limitations)),
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -550,7 +578,7 @@ async def run_chat(
                 raw_tool_results=raw_tool_results,
             )
 
-    return _final_payload(answer, tools_used, sources, raw_tool_results, limitations, supplier_id)
+    return _final_payload(answer, tools_used, sources, raw_tool_results, limitations, supplier_id, message)
 
 
 async def stream_chat(
@@ -643,7 +671,6 @@ async def stream_chat(
                         messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
 
                 yield sse("status", {"text": "Sammanställer svaret…"})
-                chart = pick_chart(raw_tool_results)
 
                 full_answer_parts: list[str] = []
                 final_stream = await async_client.chat.completions.create(
@@ -691,8 +718,10 @@ async def stream_chat(
                     full_answer = "Jag kunde inte generera ett svar. Försök igen."
 
                 yield sse("complete", {
-                    **_final_payload(full_answer, tools_used, sources, raw_tool_results, limitations, supplier_id),
-                    "chart": chart,
+                    **_final_payload(
+                        full_answer, tools_used, sources, raw_tool_results,
+                        limitations, supplier_id, message,
+                    ),
                 })
 
     except Exception:

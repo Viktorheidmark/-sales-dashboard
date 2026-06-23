@@ -33,6 +33,7 @@ from mcp_server.query_helpers import (
     query_data_status,
     query_declining_products,
     query_market_share,
+    query_revenue_drivers,
     query_sales_by_region,
     query_sales_over_time,
     query_supplier_kpis,
@@ -192,6 +193,21 @@ def get_declining_products(
     db = get_session()
     try:
         return query_declining_products(db, sid, d, lim)
+    finally:
+        db.close()
+
+
+def get_revenue_drivers(
+    supplier_id: str,
+    days: int = 30,
+    limit: int = 5,
+) -> dict:
+    sid = _validate_supplier_id(supplier_id)
+    d = _validate_days(days)
+    lim = _validate_limit(limit, max_val=20)
+    db = get_session()
+    try:
+        return query_revenue_drivers(db, sid, d, lim)
     finally:
         db.close()
 

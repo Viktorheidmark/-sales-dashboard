@@ -26,7 +26,7 @@ export function presetToDates(preset: DatePreset): {
 
 export function defaultCategory(supplierName: string): string {
   const name = supplierName.toLowerCase()
-  if (name.includes('coca-cola') || name.includes('cocacola')) return 'Dryck'
-  if (name.includes('orkla')) return 'Mat och snacks'
-  return 'Mejeri'
+  if (name.includes('coca-cola') || name.includes('cocacola') || name.includes('pepsi')) return 'Läsk'
+  if (name.includes('orkla') || name.includes('snacks') || name.includes('estrella') || name.includes('olw')) return 'Chips & snacks'
+  return 'Läsk'
 }

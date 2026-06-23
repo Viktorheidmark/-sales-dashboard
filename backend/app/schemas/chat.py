@@ -42,6 +42,9 @@ class ChatResponse(BaseModel):
     tool_calls: list[str]
     sources: list[SourceMeta]
     chart: Optional[Any] = None
+    charts: list[Any] = []
+    deep_dive: Optional[Any] = None
+    follow_up_actions: list[dict[str, str]] = []
     limitations: list[str]
     supplier_id: str
     generated_at: str

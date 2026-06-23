@@ -6,7 +6,7 @@ import { Card, CardHeader, CardBody } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
 import { ErrorState } from '../ui/ErrorState'
 
-const CATEGORIES = ['Mejeri', 'Dryck', 'Mat och snacks']
+const CATEGORIES = ['Läsk', 'Chips & snacks']
 
 interface MarketShareProps {
   data: MarketShareResponse | null

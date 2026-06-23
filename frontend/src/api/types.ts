@@ -23,8 +23,18 @@ export interface SourceMeta {
   limitations?: string[]
 }
 
+export interface ChartHighlights {
+  peak_label: string
+  peak_revenue: number
+  trough_label: string
+  trough_revenue: number
+  first_revenue: number
+  last_revenue: number
+  change_pct: number
+}
+
 export interface ChartPayload {
-  chart_type: 'line_chart' | 'bar_chart' | 'pie_chart'
+  chart_type: 'line_chart' | 'bar_chart' | 'pie_chart' | 'insight_card' | 'empty_state'
   title: string
   description: string
   data: Record<string, unknown>[]
@@ -36,6 +46,60 @@ export interface ChartPayload {
   period_note?: string
   emphasis_index?: number
   tooltip_key?: string
+  highlights?: ChartHighlights
+  chart_variant?: 'decline_comparison'
+  chart_role?: 'primary' | 'secondary'
+  compact?: boolean
+  stability_note?: string
+}
+
+export interface DeepDivePeriodTotals {
+  start?: string
+  end?: string
+  total_revenue: number
+  total_orders: number
+  total_units: number
+}
+
+export interface DeepDiveDriver {
+  rank: number
+  product_name?: string
+  region?: string
+  current_period_revenue: number
+  prior_period_revenue: number
+  revenue_change: number
+  revenue_change_pct?: number | null
+}
+
+export interface DeepDivePeriodSummary {
+  current: DeepDivePeriodTotals
+  prior: DeepDivePeriodTotals
+  revenue_change: number
+  revenue_change_pct: number | null
+  orders_change: number
+  units_change: number
+}
+
+export interface DeepDivePayload {
+  kind: 'revenue_development' | 'product_decline'
+  comparison_days: number
+  period_summary: DeepDivePeriodSummary | null
+  top_gainers?: DeepDiveDriver[]
+  top_losers?: DeepDiveDriver[]
+  strongest_region?: DeepDiveDriver | null
+  weakest_region?: DeepDiveDriver | null
+  focus_product?: {
+    product_name: string
+    sku?: string
+    top_regions?: DeepDiveDriver[]
+  } | null
+  portfolio_comparison?: DeepDiveDriver[]
+  relatively_stable?: boolean
+}
+
+export interface FollowUpAction {
+  label: string
+  message: string
 }
 
 export interface PriorTurnContext {
@@ -94,6 +158,9 @@ export interface ChatResponse {
   tool_calls: string[]
   sources: SourceMeta[]
   chart?: ChartPayload | null
+  charts?: ChartPayload[]
+  deep_dive?: DeepDivePayload | null
+  follow_up_actions?: FollowUpAction[]
   limitations: string[]
   supplier_id: string
   generated_at: string

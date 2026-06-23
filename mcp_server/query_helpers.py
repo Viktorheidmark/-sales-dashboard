@@ -401,7 +401,17 @@ def query_declining_products(
                                   THEN oi.revenue ELSE 0 END), 0)              AS latest_revenue,
                 COALESCE(SUM(CASE WHEN o.order_date >= :prior_start
                                    AND o.order_date <  :latest_start
-                                  THEN oi.revenue ELSE 0 END), 0)              AS prior_revenue
+                                  THEN oi.revenue ELSE 0 END), 0)              AS prior_revenue,
+                COUNT(DISTINCT CASE WHEN o.order_date >= :latest_start
+                                    THEN o.id END)                               AS latest_orders,
+                COALESCE(SUM(CASE WHEN o.order_date >= :latest_start
+                                  THEN oi.quantity ELSE 0 END), 0)               AS latest_units,
+                COUNT(DISTINCT CASE WHEN o.order_date >= :prior_start
+                                     AND o.order_date < :latest_start
+                                    THEN o.id END)                               AS prior_orders,
+                COALESCE(SUM(CASE WHEN o.order_date >= :prior_start
+                                   AND o.order_date < :latest_start
+                                  THEN oi.quantity ELSE 0 END), 0)             AS prior_units
             FROM order_items oi
             JOIN orders   o ON o.id  = oi.order_id
             JOIN products p ON p.id  = oi.product_id
@@ -445,7 +455,92 @@ def query_declining_products(
             "prior_period_revenue": prior,
             "revenue_change": round(change, 2),
             "revenue_change_pct": change_pct,
+            "latest_period_orders": int(r.latest_orders),
+            "prior_period_orders": int(r.prior_orders),
+            "latest_period_units": int(r.latest_units),
+            "prior_period_units": int(r.prior_units),
         })
+
+    focus_regions: list[dict] = []
+    focus_weekly_series: list[dict] = []
+    if products:
+        focus_name = products[0]["product_name"]
+        region_rows = db.execute(
+            text("""
+                SELECT
+                    r.name AS region,
+                    COALESCE(SUM(CASE WHEN o.order_date >= :latest_start
+                                      THEN oi.revenue ELSE 0 END), 0) AS current_revenue,
+                    COALESCE(SUM(CASE WHEN o.order_date >= :prior_start
+                                       AND o.order_date < :latest_start
+                                      THEN oi.revenue ELSE 0 END), 0) AS prior_revenue
+                FROM order_items oi
+                JOIN orders    o  ON o.id  = oi.order_id
+                JOIN products  p  ON p.id  = oi.product_id
+                JOIN brands    b  ON b.id  = p.brand_id
+                JOIN customers cu ON cu.id = o.customer_id
+                JOIN regions   r  ON r.id  = cu.region_id
+                WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+                  AND p.name = :product_name
+                  AND o.order_date >= :prior_start
+                  AND o.order_date <  :today + INTERVAL '1 day'
+                GROUP BY r.name
+                ORDER BY (
+                    COALESCE(SUM(CASE WHEN o.order_date >= :latest_start THEN oi.revenue ELSE 0 END), 0)
+                    - COALESCE(SUM(CASE WHEN o.order_date >= :prior_start
+                                         AND o.order_date < :latest_start
+                                        THEN oi.revenue ELSE 0 END), 0)
+                ) ASC
+                LIMIT 5
+            """),
+            {
+                "supplier_id": supplier_id,
+                "product_name": focus_name,
+                "today": today,
+                "latest_start": latest_start,
+                "prior_start": prior_start,
+            },
+        ).fetchall()
+        for i, rr in enumerate(region_rows, start=1):
+            curr = _float(rr.current_revenue) or 0.0
+            prior_r = _float(rr.prior_revenue) or 0.0
+            ch = round(curr - prior_r, 2)
+            focus_regions.append({
+                "rank": i,
+                "region": rr.region,
+                "current_period_revenue": curr,
+                "prior_period_revenue": prior_r,
+                "revenue_change": ch,
+                "revenue_change_pct": round(100.0 * ch / prior_r, 2) if prior_r > 0 else None,
+            })
+
+        series_rows = db.execute(
+            text("""
+                SELECT
+                    DATE_TRUNC('week', o.order_date)::date AS period,
+                    COALESCE(SUM(oi.revenue), 0)            AS revenue
+                FROM order_items oi
+                JOIN orders   o ON o.id  = oi.order_id
+                JOIN products p ON p.id  = oi.product_id
+                JOIN brands   b ON b.id  = p.brand_id
+                WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+                  AND p.name = :product_name
+                  AND o.order_date >= :prior_start
+                  AND o.order_date <  :today + INTERVAL '1 day'
+                GROUP BY DATE_TRUNC('week', o.order_date)
+                ORDER BY period
+            """),
+            {
+                "supplier_id": supplier_id,
+                "product_name": focus_name,
+                "today": today,
+                "prior_start": prior_start,
+            },
+        ).fetchall()
+        focus_weekly_series = [
+            {"period": _to_iso(r.period), "revenue": _float(r.revenue) or 0.0}
+            for r in series_rows
+        ]
 
     return {
         "supplier_id": supplier_id,
@@ -453,6 +548,8 @@ def query_declining_products(
         "latest_period": {"start": _to_iso(latest_start), "end": _to_iso(today)},
         "prior_period": {"start": _to_iso(prior_start), "end": _to_iso(latest_start)},
         "products": products,
+        "focus_product_regions": focus_regions,
+        "focus_product_weekly_series": focus_weekly_series,
         "source": "MCP:get_declining_products",
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "row_count": len(products),
@@ -461,7 +558,175 @@ def query_declining_products(
 
 
 # ---------------------------------------------------------------------------
-# 7. Data status
+# 7. Revenue drivers — product and region contribution vs prior period
+# ---------------------------------------------------------------------------
+
+_DRIVER_TOTALS_SQL = """
+    SELECT
+        COALESCE(SUM(CASE WHEN o.order_date >= :current_start THEN oi.revenue  ELSE 0 END), 0) AS current_revenue,
+        COUNT(DISTINCT CASE WHEN o.order_date >= :current_start THEN o.id END)                  AS current_orders,
+        COALESCE(SUM(CASE WHEN o.order_date >= :current_start THEN oi.quantity ELSE 0 END), 0) AS current_units,
+        COALESCE(SUM(CASE WHEN o.order_date <  :current_start THEN oi.revenue  ELSE 0 END), 0) AS prior_revenue,
+        COUNT(DISTINCT CASE WHEN o.order_date <  :current_start THEN o.id END)                  AS prior_orders,
+        COALESCE(SUM(CASE WHEN o.order_date <  :current_start THEN oi.quantity ELSE 0 END), 0) AS prior_units
+    FROM order_items oi
+    JOIN orders   o ON o.id  = oi.order_id
+    JOIN products p ON p.id  = oi.product_id
+    JOIN brands   b ON b.id  = p.brand_id
+    WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+      AND o.order_date >= :prior_start
+      AND o.order_date <  :today + INTERVAL '1 day'
+"""
+
+_DRIVER_PRODUCTS_SQL = """
+    SELECT
+        p.name  AS product_name,
+        p.sku,
+        COALESCE(SUM(CASE WHEN o.order_date >= :current_start THEN oi.revenue ELSE 0 END), 0) AS current_revenue,
+        COALESCE(SUM(CASE WHEN o.order_date <  :current_start THEN oi.revenue ELSE 0 END), 0) AS prior_revenue
+    FROM order_items oi
+    JOIN orders   o ON o.id  = oi.order_id
+    JOIN products p ON p.id  = oi.product_id
+    JOIN brands   b ON b.id  = p.brand_id
+    WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+      AND o.order_date >= :prior_start
+      AND o.order_date <  :today + INTERVAL '1 day'
+    GROUP BY p.id, p.name, p.sku
+    ORDER BY (
+        COALESCE(SUM(CASE WHEN o.order_date >= :current_start THEN oi.revenue ELSE 0 END), 0)
+        - COALESCE(SUM(CASE WHEN o.order_date <  :current_start THEN oi.revenue ELSE 0 END), 0)
+    ) DESC
+"""
+
+_DRIVER_REGIONS_SQL = """
+    SELECT
+        r.name  AS region,
+        COALESCE(SUM(CASE WHEN o.order_date >= :current_start THEN oi.revenue ELSE 0 END), 0) AS current_revenue,
+        COALESCE(SUM(CASE WHEN o.order_date <  :current_start THEN oi.revenue ELSE 0 END), 0) AS prior_revenue
+    FROM order_items oi
+    JOIN orders    o  ON o.id  = oi.order_id
+    JOIN products  p  ON p.id  = oi.product_id
+    JOIN brands    b  ON b.id  = p.brand_id
+    JOIN customers cu ON cu.id = o.customer_id
+    JOIN regions   r  ON r.id  = cu.region_id
+    WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+      AND o.order_date >= :prior_start
+      AND o.order_date <  :today + INTERVAL '1 day'
+    GROUP BY r.name
+    ORDER BY (
+        COALESCE(SUM(CASE WHEN o.order_date >= :current_start THEN oi.revenue ELSE 0 END), 0)
+        - COALESCE(SUM(CASE WHEN o.order_date <  :current_start THEN oi.revenue ELSE 0 END), 0)
+    ) DESC
+"""
+
+
+def query_revenue_drivers(
+    db: Session,
+    supplier_id: str,
+    days: int = 30,
+    limit: int = 5,
+) -> dict:
+    """
+    Return per-product and per-region revenue contribution versus a comparable prior period.
+
+    current_period : [today - days,      today]
+    prior_period   : [today - 2*days,    today - days)
+
+    Only supplier-owned products are included. No competitor data.
+    """
+    days = max(1, min(days, 365))
+    limit = max(1, min(limit, 20))
+    today = datetime.now(tz=timezone.utc).date()
+    current_start = today - timedelta(days=days)
+    prior_start = today - timedelta(days=days * 2)
+
+    params = {
+        "supplier_id": supplier_id,
+        "today": today,
+        "current_start": current_start,
+        "prior_start": prior_start,
+    }
+
+    totals = db.execute(text(_DRIVER_TOTALS_SQL), params).fetchone()
+    product_rows = db.execute(text(_DRIVER_PRODUCTS_SQL), params).fetchall()
+    region_rows = db.execute(text(_DRIVER_REGIONS_SQL), params).fetchall()
+
+    def _prod(r, rank: int) -> dict:
+        curr = _float(r.current_revenue) or 0.0
+        prior = _float(r.prior_revenue) or 0.0
+        change = round(curr - prior, 2)
+        change_pct = round(100.0 * change / prior, 2) if prior > 0 else None
+        return {
+            "rank": rank,
+            "product_name": r.product_name,
+            "sku": r.sku,
+            "current_period_revenue": curr,
+            "prior_period_revenue": prior,
+            "revenue_change": change,
+            "revenue_change_pct": change_pct,
+        }
+
+    def _reg(r, rank: int) -> dict:
+        curr = _float(r.current_revenue) or 0.0
+        prior = _float(r.prior_revenue) or 0.0
+        change = round(curr - prior, 2)
+        change_pct = round(100.0 * change / prior, 2) if prior > 0 else None
+        return {
+            "rank": rank,
+            "region": r.region,
+            "current_period_revenue": curr,
+            "prior_period_revenue": prior,
+            "revenue_change": change,
+            "revenue_change_pct": change_pct,
+        }
+
+    all_prods = [_prod(r, i + 1) for i, r in enumerate(product_rows)]
+    all_regs = [_reg(r, i + 1) for i, r in enumerate(region_rows)]
+
+    gainers = [p for p in all_prods if p["revenue_change"] > 0][:limit]
+    losers = sorted(
+        [p for p in all_prods if p["revenue_change"] < 0],
+        key=lambda p: p["revenue_change"],
+    )[:limit]
+    region_gainers = [r for r in all_regs if r["revenue_change"] > 0][:limit]
+    region_losers = sorted(
+        [r for r in all_regs if r["revenue_change"] < 0],
+        key=lambda r: r["revenue_change"],
+    )[:limit]
+
+    curr_rev = _float(totals.current_revenue) or 0.0
+    prior_rev = _float(totals.prior_revenue) or 0.0
+
+    return {
+        "supplier_id": supplier_id,
+        "comparison_days": days,
+        "current_period": {
+            "start": _to_iso(current_start),
+            "end": _to_iso(today),
+            "total_revenue": round(curr_rev, 2),
+            "total_orders": int(totals.current_orders),
+            "total_units": int(totals.current_units),
+        },
+        "prior_period": {
+            "start": _to_iso(prior_start),
+            "end": _to_iso(current_start - timedelta(days=1)),
+            "total_revenue": round(prior_rev, 2),
+            "total_orders": int(totals.prior_orders),
+            "total_units": int(totals.prior_units),
+        },
+        "gainers": gainers,
+        "losers": losers,
+        "region_gainers": region_gainers,
+        "region_losers": region_losers,
+        "source": "MCP:get_revenue_drivers",
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "row_count": len(all_prods),
+        "limitations": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 8. Data status
 # ---------------------------------------------------------------------------
 
 def query_data_status(
