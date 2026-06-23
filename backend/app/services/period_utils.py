@@ -8,6 +8,7 @@ history exists.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -17,6 +18,16 @@ WEEKLY_COMPARISON_UNAVAILABLE_NOTE = (
     "Det finns inte tillräckligt med jämförbar veckodata i den valda perioden "
     "för att bedöma utvecklingen mot föregående vecka."
 )
+
+DEFAULT_DATASET_LOOKBACK_DAYS = 730  # matches seed_demo_data.HISTORY_DAYS
+
+_THIS_YEAR_RE = re.compile(
+    r"(detta\s+år|i\s+år|hittills\s+i\s+år|från\s+början\s+av\s+året)",
+    re.IGNORECASE,
+)
+_LAST_YEAR_RE = re.compile(r"förra\s+året", re.IGNORECASE)
+_FULL_PERIOD_RE = re.compile(r"över\s+hela\s+perioden", re.IGNORECASE)
+_ROLLING_YEAR_RE = re.compile(r"senaste\s+året", re.IGNORECASE)
 
 _MONTHS_SV = (
     "januari", "februari", "mars", "april", "maj", "juni",
@@ -31,6 +42,120 @@ def completed_week_bounds(reference: Optional[date] = None) -> tuple[date, date]
     last_sunday = current_monday - timedelta(days=1)
     last_monday = last_sunday - timedelta(days=6)
     return last_monday, last_sunday
+
+
+def latest_completed_date(reference: Optional[date] = None) -> date:
+    """Latest day with complete transactional data (demo seed ends yesterday)."""
+    ref = reference or datetime.now(tz=timezone.utc).date()
+    return ref - timedelta(days=1)
+
+
+def default_data_bounds(reference: Optional[date] = None) -> tuple[date, date]:
+    end = latest_completed_date(reference)
+    start = end - timedelta(days=DEFAULT_DATASET_LOOKBACK_DAYS - 1)
+    return start, end
+
+
+def clamp_date_range(start: date, end: date, data_min: date, data_max: date) -> tuple[date, date]:
+    start = max(start, data_min)
+    end = min(end, data_max)
+    if start > end:
+        start = end
+    return start, end
+
+
+def resolve_period_range(
+    message: str,
+    reference: Optional[date] = None,
+    data_min: Optional[date] = None,
+    data_max: Optional[date] = None,
+) -> dict:
+    """Derive start_date/end_date from relative Swedish period phrases."""
+    today = reference or datetime.now(tz=timezone.utc).date()
+    if data_min is None or data_max is None:
+        default_min, default_max = default_data_bounds(today)
+        data_min = data_min or default_min
+        data_max = data_max or default_max
+
+    completed_end = min(latest_completed_date(today), data_max)
+    msg = message.lower()
+
+    if _FULL_PERIOD_RE.search(msg):
+        start, end = clamp_date_range(data_min, data_max, data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": (end - start).days + 1,
+        }
+
+    if _LAST_YEAR_RE.search(msg):
+        year = today.year - 1
+        start, end = clamp_date_range(date(year, 1, 1), date(year, 12, 31), data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": (end - start).days + 1,
+        }
+
+    if _THIS_YEAR_RE.search(msg):
+        start, end = clamp_date_range(date(today.year, 1, 1), completed_end, data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": (end - start).days + 1,
+        }
+
+    if _ROLLING_YEAR_RE.search(msg):
+        end = completed_end
+        start, end = clamp_date_range(end - timedelta(days=364), end, data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": (end - start).days + 1,
+        }
+
+    match = re.search(r"senaste\s+(\d+)\s+dag", msg)
+    if match:
+        days = int(match.group(1))
+        end = completed_end
+        start, end = clamp_date_range(end - timedelta(days=days - 1), end, data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": days,
+        }
+
+    if re.search(r"senaste\s+veck", msg):
+        week_start, week_end = completed_week_bounds(today)
+        week_start, week_end = clamp_date_range(week_start, week_end, data_min, data_max)
+        return {
+            "start_date": week_start.isoformat(),
+            "end_date": week_end.isoformat(),
+            "days": (week_end - week_start).days + 1,
+            "completed_week": True,
+        }
+
+    if re.search(r"senaste\s+90", msg):
+        days = 90
+        end = completed_end
+        start, end = clamp_date_range(end - timedelta(days=days - 1), end, data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": days,
+        }
+
+    if re.search(r"senaste\s+180", msg):
+        days = 180
+        end = completed_end
+        start, end = clamp_date_range(end - timedelta(days=days - 1), end, data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": days,
+        }
+
+    return {}
 
 
 def is_partial_start_week(week_monday: date | str, query_start: date) -> bool:

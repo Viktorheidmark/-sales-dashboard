@@ -57,6 +57,20 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(plans[0].tool_name, "get_top_products")
         self.assertEqual(plans[0].args["region"], "Stockholm")
 
+    def test_all_products_this_year_overrides_ui_default_window(self):
+        plans = plan_forced_tools(
+            "Jämför försäljningen för alla produkter vi har över detta år",
+            "Orkla Snacks Sverige",
+            start_date="2026-03-25",
+            end_date="2026-06-23",
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_top_products")
+        self.assertEqual(plans[0].args.get("limit"), 50)
+        self.assertEqual(plans[0].args["start_date"], f"{date.today().year}-01-01")
+        self.assertEqual(plans[0].args["end_date"], (date.today() - timedelta(days=1)).isoformat())
+        self.assertNotIn("region", plans[0].args)
+
     def test_sales_trend_90_days(self):
         plans = plan_forced_tools(
             "Hur har försäljningen utvecklats de senaste 90 dagarna?",

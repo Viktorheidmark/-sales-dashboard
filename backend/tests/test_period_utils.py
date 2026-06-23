@@ -9,14 +9,86 @@ from app.services.period_utils import (
     completed_week_bounds,
     completed_week_label,
     current_period_start,
+    default_data_bounds,
     filter_incomplete_series,
     first_complete_week_monday,
     format_week_range_sv,
+    latest_completed_date,
+    resolve_period_range,
     series_date_range,
 )
 
 
 class PeriodUtilsTests(unittest.TestCase):
+    REF = date(2026, 6, 23)
+    DATA_MIN = date(2024, 6, 24)
+    DATA_MAX = date(2026, 6, 22)
+
+    def test_latest_completed_date(self):
+        self.assertEqual(latest_completed_date(self.REF), date(2026, 6, 22))
+
+    def test_detta_ar_resolves_ytd(self):
+        out = resolve_period_range(
+            "Jämför försäljningen över detta år",
+            reference=self.REF,
+            data_min=self.DATA_MIN,
+            data_max=self.DATA_MAX,
+        )
+        self.assertEqual(out["start_date"], "2026-01-01")
+        self.assertEqual(out["end_date"], "2026-06-22")
+
+    def test_i_ar_resolves_same_as_detta_ar(self):
+        detta = resolve_period_range("i år", reference=self.REF, data_min=self.DATA_MIN, data_max=self.DATA_MAX)
+        i_ar = resolve_period_range("hittills i år", reference=self.REF, data_min=self.DATA_MIN, data_max=self.DATA_MAX)
+        self.assertEqual(detta, i_ar)
+        self.assertEqual(detta["start_date"], "2026-01-01")
+        self.assertEqual(detta["end_date"], "2026-06-22")
+
+    def test_forra_are_resolves_previous_calendar_year(self):
+        out = resolve_period_range(
+            "förra året",
+            reference=self.REF,
+            data_min=self.DATA_MIN,
+            data_max=self.DATA_MAX,
+        )
+        self.assertEqual(out["start_date"], "2025-01-01")
+        self.assertEqual(out["end_date"], "2025-12-31")
+
+    def test_over_hela_perioden_resolves_full_dataset(self):
+        out = resolve_period_range(
+            "över hela perioden",
+            reference=self.REF,
+            data_min=self.DATA_MIN,
+            data_max=self.DATA_MAX,
+        )
+        self.assertEqual(out["start_date"], self.DATA_MIN.isoformat())
+        self.assertEqual(out["end_date"], self.DATA_MAX.isoformat())
+
+    def test_senaste_30_dagar_ends_on_latest_completed(self):
+        out = resolve_period_range(
+            "senaste 30 dagarna",
+            reference=self.REF,
+            data_min=self.DATA_MIN,
+            data_max=self.DATA_MAX,
+        )
+        self.assertEqual(out["end_date"], "2026-06-22")
+        self.assertEqual(out["start_date"], "2026-05-24")
+
+    def test_senaste_90_dagar_unchanged_shape(self):
+        out = resolve_period_range(
+            "senaste 90 dagarna",
+            reference=self.REF,
+            data_min=self.DATA_MIN,
+            data_max=self.DATA_MAX,
+        )
+        self.assertEqual(out["days"], 90)
+        self.assertEqual(out["end_date"], "2026-06-22")
+
+    def test_default_data_bounds_two_year_window(self):
+        start, end = default_data_bounds(self.REF)
+        self.assertEqual(end, date(2026, 6, 22))
+        self.assertEqual((end - start).days + 1, 730)
+
     def test_current_month_start(self):
         ref = date(2026, 6, 23)
         self.assertEqual(current_period_start("month", ref), "2026-06-01")

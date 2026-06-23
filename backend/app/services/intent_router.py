@@ -12,7 +12,11 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Optional
 
-from app.services.period_utils import align_weekly_query_bounds, completed_week_bounds
+from app.services.period_utils import (
+    align_weekly_query_bounds,
+    completed_week_bounds,
+    resolve_period_range,
+)
 
 CATEGORIES = ("Läsk", "Chips & snacks")
 KNOWN_REGIONS = ("Stockholm", "Göteborg", "Malmö", "Uppsala", "Västerås", "Örebro", "Linköping", "Helsingborg")
@@ -40,6 +44,14 @@ _TOP_PRODUCTS_RE = re.compile(
     r"("
     r"(produkt|produkter).{0,50}(bäst|säljer|topp|störst|mest)|"
     r"(bäst|topp|störst|mest).{0,50}(produkt|produkter)"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_ALL_PRODUCTS_COMPARE_RE = re.compile(
+    r"("
+    r"(jämför|jämföra|visa|ranka).{0,80}(alla|samtliga)\s+produkter|"
+    r"(alla|samtliga)\s+produkter.{0,80}(jämför|försäljning|omsättning|rank)"
     r")",
     re.IGNORECASE | re.DOTALL,
 )
@@ -258,45 +270,29 @@ def is_period_only_followup(message: str) -> bool:
 
 def extract_period_args(message: str, reference: Optional[date] = None) -> dict:
     """Derive start_date/end_date (and optional days) from relative Swedish period phrases."""
-    today = reference or date.today()
-    msg = message.lower()
+    return resolve_period_range(message, reference=reference)
 
-    match = re.search(r"senaste\s+(\d+)\s+dag", msg)
-    if match:
-        days = int(match.group(1))
-        return {
-            "start_date": (today - timedelta(days=days)).isoformat(),
-            "end_date": today.isoformat(),
-            "days": days,
+
+def _period_args_from_message(
+    message: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    prior: Optional[PriorTurnContext] = None,
+    reference: Optional[date] = None,
+) -> dict:
+    """Message-resolved period overrides UI default date filters."""
+    period_args = extract_period_args(message, reference=reference) if message else {}
+    if period_args.get("start_date") and period_args.get("end_date"):
+        out = {
+            "start_date": period_args["start_date"],
+            "end_date": period_args["end_date"],
         }
-
-    if re.search(r"senaste\s+veck", msg):
-        week_start, week_end = completed_week_bounds(today)
-        days = (week_end - week_start).days + 1
-        return {
-            "start_date": week_start.isoformat(),
-            "end_date": week_end.isoformat(),
-            "days": days,
-            "completed_week": True,
-        }
-
-    if re.search(r"senaste\s+90", msg):
-        days = 90
-        return {
-            "start_date": (today - timedelta(days=days)).isoformat(),
-            "end_date": today.isoformat(),
-            "days": days,
-        }
-
-    if re.search(r"senaste\s+180", msg):
-        days = 180
-        return {
-            "start_date": (today - timedelta(days=days)).isoformat(),
-            "end_date": today.isoformat(),
-            "days": days,
-        }
-
-    return {}
+        if period_args.get("days") is not None:
+            out["days"] = period_args["days"]
+        if period_args.get("completed_week"):
+            out["completed_week"] = True
+        return out
+    return _date_args(start_date, end_date, prior)
 
 
 def _date_args(
@@ -448,6 +444,8 @@ def _reconstruct_tool_args(
             "start_date": period_args["start_date"],
             "end_date": period_args["end_date"],
         }
+        if period_args.get("completed_week"):
+            args["completed_week"] = True
     else:
         args = _date_args(start_date, end_date, prior)
 
@@ -735,15 +733,24 @@ def plan_forced_tools(
         ))
         return plans
 
+    if _ALL_PRODUCTS_COMPARE_RE.search(msg) and not _DECLINING_RE.search(msg):
+        args = _period_args_from_message(msg, start_date, end_date)
+        args["limit"] = 50
+        plans.append(ToolPlan(
+            tool_name="get_top_products",
+            args=args,
+            reason="all products ranked for requested period",
+        ))
+        return plans
+
     if _SALES_TREND_RE.search(msg):
-        period_args = extract_period_args(msg)
-        args = period_args if period_args else _date_args(start_date, end_date)
+        args = _period_args_from_message(msg, start_date, end_date)
         args["granularity"] = _granularity_from_date_range(
             args.get("start_date"),
             args.get("end_date"),
             msg,
         )
-        if _WEEKLY_SALES_RE.search(msg) and period_args.get("completed_week"):
+        if _WEEKLY_SALES_RE.search(msg) and args.get("completed_week"):
             week_start, week_end = completed_week_bounds()
             prev_start = week_start - timedelta(days=7)
             args["start_date"] = prev_start.isoformat()
@@ -760,7 +767,7 @@ def plan_forced_tools(
         return plans
 
     if _SALES_BY_REGION_RE.search(msg) and not _TOP_PRODUCTS_RE.search(msg):
-        args = _date_args(start_date, end_date)
+        args = _period_args_from_message(msg, start_date, end_date)
         plans.append(ToolPlan(
             tool_name="get_sales_by_region",
             args=args,
@@ -769,8 +776,8 @@ def plan_forced_tools(
         return plans
 
     if _DECLINING_RE.search(msg) and not _TOP_PRODUCTS_RE.search(msg):
-        args = _date_args(start_date, end_date)
-        args.update({"days": 30, "limit": 5})
+        args = _period_args_from_message(msg, start_date, end_date)
+        args.update({"days": extract_period_args(msg).get("days", 30), "limit": 5})
         plans.append(ToolPlan(
             tool_name="get_declining_products",
             args=args,
@@ -779,7 +786,7 @@ def plan_forced_tools(
         return plans
 
     if _KPI_COMPARISON_RE.search(msg):
-        args = _date_args(start_date, end_date)
+        args = _period_args_from_message(msg, start_date, end_date)
         plans.append(ToolPlan(
             tool_name="get_supplier_kpis",
             args=args,
@@ -790,7 +797,7 @@ def plan_forced_tools(
     if _TOP_PRODUCTS_RE.search(msg) and not _DECLINING_RE.search(msg):
         region = extract_region(msg)
         if region:
-            args = _date_args(start_date, end_date)
+            args = _period_args_from_message(msg, start_date, end_date)
             args["region"] = region
             args["limit"] = 5
             plans.append(ToolPlan(
@@ -802,7 +809,7 @@ def plan_forced_tools(
 
     if _MARKET_SHARE_RE.search(msg):
         category = extract_category(msg) or default_category_for_supplier(supplier_name)
-        args = _date_args(start_date, end_date)
+        args = _period_args_from_message(msg, start_date, end_date)
         args["category_name"] = category
         plans.append(ToolPlan(
             tool_name="get_market_share",
