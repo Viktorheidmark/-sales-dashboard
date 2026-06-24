@@ -91,6 +91,10 @@ def build_contextual_follow_ups(
         period = _period_phrase_from_range(by_tool["get_supplier_kpis"].get("date_range"), question)
         return [
             {
+                "label": "Visa utveckling per vecka",
+                "message": f"Visa utveckling per vecka {period}",
+            },
+            {
                 "label": "Visa produkter som drev utvecklingen",
                 "message": f"Vilka produkter drev utvecklingen {period}?",
             },
@@ -100,7 +104,7 @@ def build_contextual_follow_ups(
             },
             {
                 "label": "Jämför med samma period förra året",
-                "message": f"Hur ser försäljningen ut jämfört med samma period förra året?",
+                "message": "Hur ser försäljningen ut jämfört med samma period förra året?",
             },
         ]
 
@@ -149,8 +153,15 @@ def build_contextual_follow_ups(
 
     if "get_sales_over_time" in by_tool and "get_revenue_drivers" not in by_tool:
         period = _period_phrase_from_range(by_tool["get_sales_over_time"].get("date_range"), question)
+        sales = by_tool["get_sales_over_time"]
         if is_current_year_phrase(question) or "utveckl" in question.lower():
-            return [
+            actions: list[dict[str, str]] = []
+            if sales.get("granularity", "month") == "month":
+                actions.append({
+                    "label": "Visa utveckling per vecka",
+                    "message": f"Visa utveckling per vecka {period}",
+                })
+            actions.extend([
                 {
                     "label": "Visa produkter som drev utvecklingen",
                     "message": f"Vilka produkter drev utvecklingen {period}?",
@@ -159,6 +170,7 @@ def build_contextual_follow_ups(
                     "label": "Visa utveckling per region",
                     "message": f"Hur ser försäljningen ut per region {period}?",
                 },
-            ]
+            ])
+            return actions
 
     return []

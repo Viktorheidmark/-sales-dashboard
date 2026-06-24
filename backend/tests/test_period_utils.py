@@ -14,6 +14,8 @@ from app.services.period_utils import (
     filter_incomplete_series,
     first_complete_week_monday,
     format_week_range_sv,
+    format_compact_date_range_sv,
+    format_week_series_label_sv,
     is_current_year_phrase,
     latest_completed_date,
     resolve_period_range,
@@ -182,9 +184,54 @@ class PeriodUtilsTests(unittest.TestCase):
 
     def test_format_week_range_sv(self):
         self.assertEqual(
-            format_week_range_sv(date(2026, 6, 16)),
-            "16–22 juni 2026",
+            format_week_range_sv(date(2026, 6, 15)),
+            "15–21 juni",
         )
+
+    def test_format_compact_date_range_same_month(self):
+        self.assertEqual(
+            format_compact_date_range_sv("2026-06-09", "2026-06-15"),
+            "9–15 juni",
+        )
+
+    def test_format_compact_date_range_cross_month(self):
+        self.assertEqual(
+            format_compact_date_range_sv("2026-03-30", "2026-04-05"),
+            "30 mars–5 april",
+        )
+
+    def test_format_compact_date_range_cross_year(self):
+        self.assertEqual(
+            format_compact_date_range_sv("2025-12-30", "2026-01-05"),
+            "30 dec 2025–5 jan 2026",
+        )
+
+    def test_full_iso_week_label(self):
+        self.assertEqual(
+            format_week_series_label_sv("2026-03-30"),
+            "veckan 30 mars–5 april",
+        )
+
+    def test_partial_week_label(self):
+        self.assertEqual(
+            format_week_series_label_sv("2026-03-23", "2026-03-27"),
+            "perioden 27–29 mars",
+        )
+
+    def test_weekly_series_enriched_with_period_label(self):
+        series = [
+            {"period": "2026-03-30", "revenue": 100.0},
+            {"period": "2026-04-06", "revenue": 110.0},
+        ]
+        out = apply_sales_over_time_period_policy({
+            "granularity": "week",
+            "series": series,
+            "date_range": {"start": "2026-03-30", "end": "2026-04-12"},
+            "query_date_range": {"start": "2026-03-30", "end": "2026-04-12"},
+            "limitations": [],
+        })
+        self.assertEqual(out["series"][0]["period_label"], "veckan 30 mars–5 april")
+        self.assertNotIn("…", out["series"][0]["period_label"])
 
     def test_excludes_incomplete_month_from_series(self):
         series = [

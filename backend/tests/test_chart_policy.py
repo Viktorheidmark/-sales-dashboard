@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 
 from app.services.chart_policy import ChartIntent, resolve_chart_intent, select_charts
 from app.services.chart_builder import LINE_CHART, BAR_CHART, PIE_CHART
@@ -148,6 +149,39 @@ class ChartPolicyTests(unittest.TestCase):
         ]
         charts = select_charts(q, raw)
         self.assertEqual(charts[0]["source_tool"], "get_sales_over_time")
+
+
+    def test_ytd_overview_primary_is_line_not_period_bar(self):
+        q = "Hur ser försäljningen ut i år?"
+        ytd_start = f"{date.today().year}-01-01"
+        ytd_end = date.today().isoformat()
+        sales = {
+            "granularity": "month",
+            "_force_time_series": True,
+            "_chart_intent": "time_series",
+            "series": [
+                {"period": f"{ytd_start[:7]}-01", "revenue": 100000.0},
+                {"period": "2026-02-01", "revenue": 110000.0},
+                {"period": "2026-03-01", "revenue": 105000.0},
+            ],
+            "date_range": {"start": ytd_start, "end": ytd_end},
+            "limitations": [],
+        }
+        kpis = {
+            "comparison_kind": "year_over_year",
+            "date_range": {"start": ytd_start, "end": ytd_end},
+            "current_period": {"total_revenue": 315000.0},
+            "prior_period": {"total_revenue": 290000.0},
+        }
+        raw = [("get_supplier_kpis", kpis), ("get_sales_over_time", sales)]
+        self.assertEqual(resolve_chart_intent(q, raw), ChartIntent.TIME_SERIES)
+        charts = select_charts(q, raw)
+        self.assertEqual(len(charts), 1)
+        self.assertEqual(charts[0]["chart_type"], LINE_CHART)
+        self.assertEqual(charts[0]["chart_role"], "primary")
+        self.assertTrue(charts[0].get("y_axis_from_zero"))
+        bar_charts = [c for c in charts if c.get("chart_type") == BAR_CHART]
+        self.assertEqual(bar_charts, [])
 
 
 if __name__ == "__main__":

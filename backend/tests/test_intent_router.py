@@ -89,6 +89,21 @@ class IntentRouterTests(unittest.TestCase):
         )
         self.assertEqual(charts[0]["chart_type"], LINE_CHART)
 
+    def test_ytd_weekly_drill_preserves_ytd_dates(self):
+        plans = plan_forced_tools(
+            "Visa utveckling per vecka i år",
+            "Orkla Snacks Sverige",
+            start_date=self.UI_START,
+            end_date=self.UI_END,
+        )
+        ytd_start, ytd_end = self._expected_ytd()
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+        self.assertEqual(plans[0].args["granularity"], "week")
+        self.assertEqual(plans[0].args["start_date"], ytd_start)
+        self.assertEqual(plans[0].args["end_date"], ytd_end)
+        self.assertTrue(plans[0].args.get("_force_time_series"))
+
     def test_ytd_top_products_ranking(self):
         plans = plan_forced_tools(
             "Vilka produkter säljer bäst i år?",

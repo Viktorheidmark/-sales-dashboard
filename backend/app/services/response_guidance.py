@@ -265,6 +265,8 @@ FRÅGETYP: Försäljningstrend
 - Ange den faktiska perioden från analysed_range_label eller date_range i verktygsresultat.
 - Beskriv övergripande riktning utifrån fullständiga perioder — ingen månad-för-månad- eller dag-för-dag-lista
   om användaren inte bett om det.
+- När du nämner enskilda veckor i serien: använd exakt period_label från varje datapunkt.
+  Skriv aldrig "vecka" framför ett datumintervall — använd "veckan" endast när period_label börjar så.
 - För cirka 15–90 dagar: beskriv veckovis utveckling (inte dag-för-dag).
 - För över 90 dagar: beskriv månadsvis utveckling.
 - TRENDSPRÅK: Använd "nedåtgående trend" endast vid tydlig och ihållande nedgång över jämförbara

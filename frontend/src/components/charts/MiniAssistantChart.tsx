@@ -134,42 +134,66 @@ function ChartTooltip({
   const displayLabel = tooltipKey && row[tooltipKey] != null
     ? String(row[tooltipKey])
     : String(label ?? row.display_label ?? '')
+  const orders = row.orders != null ? Number(row.orders) : null
   return (
     <div style={tooltipStyle} className="px-2.5 py-1.5">
       <p className="text-[11px] font-medium mb-0.5">{displayLabel}</p>
-      <p className="text-[11px] opacity-80">{formatChartMetric(payload[0].value, yKey)}</p>
+      <p className="text-[11px] tabular-nums">{formatChartMetric(payload[0].value, yKey)}</p>
+      {orders != null && !Number.isNaN(orders) && (
+        <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">
+          {orders.toLocaleString('sv-SE')} ordrar
+        </p>
+      )}
     </div>
   )
 }
 
-/** Peak/trough/change summary shown below a trend chart. */
+/** Peak/trough/average/change summary shown below a trend chart. */
 function TrendHighlightsSummary({ h }: { h: ChartHighlights }) {
   const positive = h.change_pct >= 0
   const sign = positive ? '+' : ''
   const pctStr = `${sign}${h.change_pct.toFixed(1)} %`
   const peakEqTrough = h.peak_label === h.trough_label
+  const peakName = h.peak_label_display ?? formatPeriodLabel(h.peak_label)
+  const troughName = h.trough_label_display ?? formatPeriodLabel(h.trough_label)
+  const gran = h.granularity === 'week' ? 'vecka' : 'månad'
   return (
-    <div className="mt-2 pt-2 border-t border-workspace-border/40 flex flex-wrap gap-x-5 gap-y-0.5">
+    <div className="mt-2.5 pt-2.5 border-t border-workspace-border/40 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5">
       {!peakEqTrough && (
         <>
-          <span className="text-[11px] text-theme-muted">
-            Starkaste:{' '}
-            <span className="font-medium text-theme-body">{formatCompactSEK(h.peak_revenue)}</span>
-            <span className="opacity-50"> ({formatPeriodLabel(h.peak_label)})</span>
-          </span>
-          <span className="text-[11px] text-theme-muted">
-            Svagaste:{' '}
-            <span className="font-medium text-theme-body">{formatCompactSEK(h.trough_revenue)}</span>
-            <span className="opacity-50"> ({formatPeriodLabel(h.trough_label)})</span>
-          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wide text-theme-muted">Högsta {gran}</p>
+            <p className="text-[11px] font-medium text-theme-body tabular-nums">
+              {formatCompactSEK(h.peak_revenue)}
+            </p>
+            <p className="text-[10px] text-theme-muted leading-snug break-words">{peakName}</p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wide text-theme-muted">Lägsta {gran}</p>
+            <p className="text-[11px] font-medium text-theme-body tabular-nums">
+              {formatCompactSEK(h.trough_revenue)}
+            </p>
+            <p className="text-[10px] text-theme-muted leading-snug break-words">{troughName}</p>
+          </div>
         </>
       )}
-      <span className="text-[11px] text-theme-muted">
-        Periodutveckling:{' '}
-        <span className={`font-medium ${positive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+      {h.avg_revenue != null && (
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-theme-muted">Snitt per {gran}</p>
+          <p className="text-[11px] font-medium text-theme-body tabular-nums">
+            {formatCompactSEK(h.avg_revenue)}
+          </p>
+        </div>
+      )}
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wide text-theme-muted">Utveckling</p>
+        <p className={`text-[11px] font-medium tabular-nums ${
+          positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+        }`}>
           {pctStr}
-        </span>
-      </span>
+          <span className="font-normal text-theme-muted text-[10px]"> första→sista</span>
+        </p>
+      </div>
     </div>
   )
 }
@@ -229,7 +253,7 @@ export function MiniAssistantChart({
   const emphasisIndex    = chart.emphasis_index ?? 0
   const barCount         = chart.data.length
   const chartHeight      = chart.chart_type === 'line_chart'
-    ? (compact ? 120 : 160)
+    ? (compact ? 140 : 200)
     : isHorizontal
       ? Math.max(100, barCount * 28 + 16)
       : isDeclineComp ? 168 : 156
@@ -241,34 +265,38 @@ export function MiniAssistantChart({
 
   // ── Area chart (time-series trend) ──────────────────────────────────────
   if (chart.chart_type === 'line_chart') {
-    const tickInterval = chart.data.length > 8 ? 'preserveStartEnd' : 0
+    const tickInterval = chart.data.length > 10 ? 'preserveStartEnd' : 0
+    const usePreformattedLabels = chart.tooltip_key === 'display_label'
+    const showMarkers = chart.show_markers !== false && chart.trend_granularity !== 'day'
+    const yDomain = chart.y_axis_from_zero !== false ? revenueYAxisDomain : undefined
     const gradId = 'trendAreaFill'
     return (
       <div>
         <ResponsiveContainer width="100%" height={chartHeight}>
-          <AreaChart data={chart.data} margin={{ top: 8, right: 8, left: 0, bottom: 2 }}>
+          <AreaChart data={chart.data} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
             <defs>
               <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={colors.line} stopOpacity={0.18} />
-                <stop offset="90%" stopColor={colors.line} stopOpacity={0} />
+                <stop offset="5%"  stopColor={colors.line} stopOpacity={0.22} />
+                <stop offset="95%" stopColor={colors.line} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+            <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
             <XAxis
               dataKey={chart.x_key}
               tick={chartAxisTickSm}
               tickLine={false}
               axisLine={false}
               interval={tickInterval}
-              tickFormatter={formatPeriodLabel}
+              tickFormatter={usePreformattedLabels ? undefined : formatPeriodLabel}
+              dy={4}
             />
             <YAxis
               tick={chartAxisTickSm}
               tickLine={false}
               axisLine={false}
-              width={44}
+              width={48}
               tickFormatter={formatRevenueTick}
-              domain={revenueYAxisDomain}
+              domain={yDomain}
             />
             <Tooltip
               content={(
@@ -283,10 +311,10 @@ export function MiniAssistantChart({
               type="monotone"
               dataKey={chart.y_key}
               stroke={colors.line}
-              strokeWidth={2}
+              strokeWidth={showMarkers ? 2.5 : 2}
               fill={`url(#${gradId})`}
-              dot={false}
-              activeDot={{ r: 4, strokeWidth: 0 }}
+              dot={showMarkers ? { r: 3.5, strokeWidth: 2, stroke: colors.line, fill: 'var(--workspace-surface, #fff)' } : false}
+              activeDot={{ r: 5, strokeWidth: 0, fill: colors.line }}
             />
           </AreaChart>
         </ResponsiveContainer>

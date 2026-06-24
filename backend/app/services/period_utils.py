@@ -45,6 +45,10 @@ _MONTHS_SV = (
     "januari", "februari", "mars", "april", "maj", "juni",
     "juli", "augusti", "september", "oktober", "november", "december",
 )
+_MONTHS_SV_SHORT = (
+    "jan", "feb", "mar", "apr", "maj", "jun",
+    "jul", "aug", "sep", "okt", "nov", "dec",
+)
 
 
 def completed_week_bounds(reference: Optional[date] = None) -> tuple[date, date]:
@@ -243,15 +247,84 @@ def format_week_range_sv(week_monday: date | str) -> str:
     if isinstance(week_monday, str):
         week_monday = date.fromisoformat(week_monday[:10])
     sunday = week_monday + timedelta(days=6)
+    return format_compact_date_range_sv(week_monday, sunday)
 
-    def part(d: date) -> str:
-        return f"{d.day} {_MONTHS_SV[d.month - 1]}"
 
-    if week_monday.year == sunday.year and week_monday.month == sunday.month:
-        return f"{week_monday.day}–{sunday.day} {_MONTHS_SV[sunday.month - 1]} {sunday.year}"
-    if week_monday.year == sunday.year:
-        return f"{part(week_monday)}–{part(sunday)} {sunday.year}"
-    return f"{part(week_monday)} {week_monday.year}–{part(sunday)} {sunday.year}"
+def format_compact_date_range_sv(start: date | str, end: date | str) -> str:
+    """Compact Swedish range for chart summaries — never truncated."""
+    if isinstance(start, str):
+        start = date.fromisoformat(start[:10])
+    if isinstance(end, str):
+        end = date.fromisoformat(end[:10])
+
+    if start.year == end.year and start.month == end.month:
+        return f"{start.day}–{end.day} {_MONTHS_SV[end.month - 1]}"
+    if start.year == end.year:
+        return (
+            f"{start.day} {_MONTHS_SV[start.month - 1]}"
+            f"–{end.day} {_MONTHS_SV[end.month - 1]}"
+        )
+    return (
+        f"{start.day} {_MONTHS_SV_SHORT[start.month - 1]} {start.year}"
+        f"–{end.day} {_MONTHS_SV_SHORT[end.month - 1]} {end.year}"
+    )
+
+
+def week_bucket_bounds(
+    week_monday: date | str,
+    query_start: Optional[date | str] = None,
+) -> tuple[date, date]:
+    """Actual inclusive bounds for a weekly bucket (handles partial start weeks)."""
+    if isinstance(week_monday, str):
+        week_monday = date.fromisoformat(week_monday[:10])
+    sunday = week_monday + timedelta(days=6)
+    if query_start is not None:
+        if isinstance(query_start, str):
+            query_start = date.fromisoformat(query_start[:10])
+        if is_partial_start_week(week_monday, query_start):
+            return query_start, sunday
+    return week_monday, sunday
+
+
+def is_complete_iso_week_bucket(
+    week_monday: date | str,
+    query_start: Optional[date | str] = None,
+) -> bool:
+    if isinstance(week_monday, str):
+        week_monday = date.fromisoformat(week_monday[:10])
+    if week_monday.weekday() != 0:
+        return False
+    if query_start is not None:
+        if isinstance(query_start, str):
+            query_start = date.fromisoformat(query_start[:10])
+        if is_partial_start_week(week_monday, query_start):
+            return False
+    return True
+
+
+def format_week_series_label_sv(
+    week_monday: date | str,
+    query_start: Optional[date | str] = None,
+) -> str:
+    """Human label for a weekly series point — 'veckan' only for full ISO weeks."""
+    start, end = week_bucket_bounds(week_monday, query_start)
+    compact = format_compact_date_range_sv(start, end)
+    if isinstance(week_monday, str):
+        week_monday = date.fromisoformat(week_monday[:10])
+    prefix = "veckan" if is_complete_iso_week_bucket(week_monday, query_start) else "perioden"
+    return f"{prefix} {compact}"
+
+
+def enrich_weekly_series_labels(
+    series: list[dict],
+    query_start: Optional[str] = None,
+) -> None:
+    """Attach period_label to weekly series rows for synthesis and charts."""
+    for point in series:
+        period = str(point.get("period", ""))[:10]
+        if not period:
+            continue
+        point["period_label"] = format_week_series_label_sv(period, query_start)
 
 
 def format_date_sv(d: date | str) -> str:
@@ -446,6 +519,9 @@ def apply_sales_over_time_period_policy(result: dict) -> dict:
         out["date_range"] = aligned
     if query_dr:
         out["query_date_range"] = query_dr
+
+    if granularity == "week" and completed:
+        enrich_weekly_series_labels(completed, query_start)
 
     if meta:
         out["period_analysis"] = meta

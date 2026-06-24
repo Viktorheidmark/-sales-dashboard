@@ -4,6 +4,7 @@ Deterministic chart builder — converts raw MCP tool results into chart payload
 Chart selection is governed by chart_policy.select_charts (intent-based).
 """
 
+from datetime import date, timedelta
 from typing import Optional
 
 from app.services.comparison_labels import (
@@ -14,7 +15,15 @@ from app.services.comparison_labels import (
 from app.services.period_labels import append_chart_period
 from app.services.period_utils import (
     apply_sales_over_time_period_policy,
+    format_compact_date_range_sv,
     format_date_sv,
+    format_week_series_label_sv,
+    week_bucket_bounds,
+)
+
+_MONTHS_SV = (
+    "januari", "februari", "mars", "april", "maj", "juni",
+    "juli", "augusti", "september", "oktober", "november", "december",
 )
 
 LINE_CHART = "line_chart"
@@ -41,8 +50,46 @@ def _shorten_period(period: str, granularity: str) -> str:
     return period
 
 
-def _granularity_label(granularity: str) -> str:
-    return {"day": "dag", "week": "vecka", "month": "månad"}.get(granularity, granularity)
+def _month_axis_label(period: str) -> str:
+    """Compact month label for chart axis, e.g. 'maj 26'."""
+    try:
+        d = date.fromisoformat(period[:7] + "-01") if len(period) >= 7 else date.fromisoformat(period[:10])
+        return f"{_MONTHS_SV[d.month - 1][:3]} {str(d.year)[-2:]}"
+    except ValueError:
+        return period[:7] if len(period) >= 7 else period
+
+
+def _month_tooltip_label(period: str) -> str:
+    try:
+        d = date.fromisoformat(period[:7] + "-01") if len(period) >= 7 else date.fromisoformat(period[:10])
+        return f"{_MONTHS_SV[d.month - 1].capitalize()} {d.year}"
+    except ValueError:
+        return period
+
+
+def _series_row_label(
+    period: str,
+    granularity: str,
+    query_start: Optional[str] = None,
+) -> tuple[str, str]:
+    """Return (axis_label, tooltip_label)."""
+    if granularity == "month":
+        return _month_axis_label(period), _month_tooltip_label(period)
+    if granularity == "week" and len(period) >= 10:
+        start, end = week_bucket_bounds(period[:10], query_start)
+        axis = format_compact_date_range_sv(start, end)
+        tip = format_week_series_label_sv(period[:10], query_start)
+        return axis, tip
+    return _shorten_period(period, granularity), period
+
+
+def _query_start_from_result(result: dict) -> Optional[str]:
+    qdr = result.get("query_date_range") or {}
+    return (
+        qdr.get("requested_start")
+        or qdr.get("start")
+        or (result.get("date_range") or {}).get("start")
+    )
 
 
 def is_relatively_flat_series(series: list[dict]) -> bool:
@@ -61,27 +108,45 @@ def is_relatively_flat_series(series: list[dict]) -> bool:
     return True
 
 
-def _compute_highlights(data: list[dict]) -> Optional[dict]:
+def _granularity_label(granularity: str) -> str:
+    return {"day": "dag", "week": "vecka", "month": "månad"}.get(granularity, granularity)
+
+
+def _compute_highlights(data: list[dict], *, granularity: str = "month") -> Optional[dict]:
     if len(data) < 2:
         return None
-    valid = [(row["label"], float(row["revenue"])) for row in data if row.get("revenue") is not None]
+    valid = []
+    for row in data:
+        if row.get("revenue") is None:
+            continue
+        axis_lbl = row["label"]
+        display_lbl = row.get("display_label") or axis_lbl
+        valid.append((axis_lbl, display_lbl, float(row["revenue"])))
     if len(valid) < 2:
         return None
 
-    peak_label, peak_rev = max(valid, key=lambda x: x[1])
-    trough_label, trough_rev = min(valid, key=lambda x: x[1])
-    first_rev = valid[0][1]
-    last_rev = valid[-1][1]
+    peak_axis, peak_display, peak_rev = max(valid, key=lambda x: x[2])
+    trough_axis, trough_display, trough_rev = min(valid, key=lambda x: x[2])
+    if granularity == "week":
+        peak_display = peak_axis
+        trough_display = trough_axis
+    first_rev = valid[0][2]
+    last_rev = valid[-1][2]
+    avg_rev = sum(r for _, _, r in valid) / len(valid)
     change_pct = round((last_rev - first_rev) / first_rev * 100, 1) if first_rev > 0 else 0.0
 
     return {
-        "peak_label": peak_label,
+        "peak_label": peak_axis,
         "peak_revenue": round(peak_rev, 2),
-        "trough_label": trough_label,
+        "peak_label_display": peak_display,
+        "trough_label": trough_axis,
         "trough_revenue": round(trough_rev, 2),
+        "trough_label_display": trough_display,
         "first_revenue": round(first_rev, 2),
         "last_revenue": round(last_rev, 2),
+        "avg_revenue": round(avg_rev, 2),
         "change_pct": change_pct,
+        "granularity": granularity,
     }
 
 
@@ -131,11 +196,25 @@ def build_time_series_chart(result: dict, *, force: bool = False) -> Optional[di
 
     granularity = result.get("granularity", "month")
     gran_label = _granularity_label(granularity)
-    data = [
-        {"label": _shorten_period(p["period"], granularity), "revenue": p["revenue"]}
-        for p in series
-        if p.get("revenue") is not None
-    ]
+    query_start = _query_start_from_result(result)
+    data = []
+    for p in series:
+        if p.get("revenue") is None:
+            continue
+        period = str(p["period"])
+        if p.get("period_label") and granularity == "week":
+            axis_lbl = format_compact_date_range_sv(*week_bucket_bounds(period[:10], query_start))
+            tip_lbl = p["period_label"]
+        else:
+            axis_lbl, tip_lbl = _series_row_label(period, granularity, query_start)
+        row = {
+            "label": axis_lbl,
+            "display_label": tip_lbl,
+            "revenue": p["revenue"],
+        }
+        if p.get("orders") is not None:
+            row["orders"] = p["orders"]
+        data.append(row)
     if len(data) < 2:
         return None
 
@@ -147,9 +226,9 @@ def build_time_series_chart(result: dict, *, force: bool = False) -> Optional[di
     if widened and granularity == "week":
         orig = chart_context.get("original_date_range") or {}
         week_end = orig.get("end") or (result.get("date_range") or {}).get("end")
-        if not week_end and data:
-            from datetime import date, timedelta
-            last_monday = date.fromisoformat(str(data[-1]["label"])[:10])
+        if not week_end and series:
+            last_period = str(series[-1].get("period", ""))[:10]
+            last_monday = date.fromisoformat(last_period)
             week_end = (last_monday + timedelta(days=6)).isoformat()
         title = "Utveckling inför senaste avslutade vecka"
         end_label = format_date_sv(week_end) if week_end else "senaste avslutade vecka"
@@ -164,7 +243,10 @@ def build_time_series_chart(result: dict, *, force: bool = False) -> Optional[di
         elif period_analysis.get("completed_week_label"):
             period_note = period_analysis["completed_week_label"]
         elif period_analysis.get("excluded_incomplete_period"):
-            period_note = f"Pågående {gran_label} exkluderad från diagrammet."
+            if granularity == "month":
+                period_note = "Pågående månad exkluderad — diagrammet visar fullständiga månader."
+            else:
+                period_note = f"Pågående {gran_label} exkluderad från diagrammet."
 
     payload: dict = {
         "chart_type": LINE_CHART,
@@ -172,12 +254,16 @@ def build_time_series_chart(result: dict, *, force: bool = False) -> Optional[di
         "description": description,
         "x_key": "label",
         "y_key": "revenue",
+        "tooltip_key": "display_label",
         "data": data,
         "source_tool": "get_sales_over_time",
         "generated_from_row_count": len(data),
         "period_note": period_note,
+        "show_markers": granularity in ("month", "week"),
+        "y_axis_from_zero": True,
+        "trend_granularity": granularity,
     }
-    highlights = _compute_highlights(data)
+    highlights = _compute_highlights(data, granularity=granularity)
     if highlights:
         payload["highlights"] = highlights
     if is_relatively_flat_series(series):

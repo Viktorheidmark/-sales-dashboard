@@ -26,11 +26,15 @@ export interface SourceMeta {
 export interface ChartHighlights {
   peak_label: string
   peak_revenue: number
+  peak_label_display?: string
   trough_label: string
   trough_revenue: number
+  trough_label_display?: string
   first_revenue: number
   last_revenue: number
+  avg_revenue?: number
   change_pct: number
+  granularity?: string
 }
 
 export interface ChartPayload {
@@ -47,6 +51,9 @@ export interface ChartPayload {
   emphasis_index?: number
   tooltip_key?: string
   highlights?: ChartHighlights
+  show_markers?: boolean
+  y_axis_from_zero?: boolean
+  trend_granularity?: string
   chart_variant?: 'decline_comparison'
   chart_role?: 'primary' | 'secondary'
   compact?: boolean

@@ -194,6 +194,11 @@ _PRODUCT_COMPARE_FOLLOWUP_RE = re.compile(
     re.IGNORECASE,
 )
 
+_YTD_WEEKLY_RE = re.compile(
+    r"utveckling\s+per\s+vecka|vecka\s+för\s+vecka|per\s+vecka",
+    re.IGNORECASE,
+)
+
 _YTD_DEVELOPMENT_RE = re.compile(
     r"hur\s+har\s+försäljningen\s+utvecklats",
     re.IGNORECASE,
@@ -333,6 +338,15 @@ def _period_args_from_message(
     return out
 
 
+def _ytd_weekly_trend_args(period_args: dict) -> dict:
+    return {
+        **period_args,
+        "granularity": "week",
+        "_chart_intent": "time_series",
+        "_force_time_series": True,
+    }
+
+
 def _ytd_monthly_trend_args(period_args: dict) -> dict:
     return {
         **period_args,
@@ -352,6 +366,13 @@ def _plan_ytd_tools(
         return []
 
     period_args = _period_args_from_message(message, start_date, end_date)
+
+    if _YTD_WEEKLY_RE.search(message):
+        return [ToolPlan(
+            tool_name="get_sales_over_time",
+            args=_ytd_weekly_trend_args(period_args),
+            reason="YTD weekly development trend",
+        )]
 
     if (
         (_TOP_PRODUCTS_RE.search(message) or _ALL_PRODUCTS_COMPARE_RE.search(message))

@@ -88,6 +88,7 @@ class ComparisonLabelTests(unittest.TestCase):
         )
         labels = [a["label"] for a in actions]
         self.assertIn("Visa produkter som drev utvecklingen", labels)
+        self.assertIn("Visa utveckling per vecka", labels)
         self.assertIn("Jämför med samma period förra året", labels)
         self.assertTrue(any("i år" in a["message"] for a in actions))
 

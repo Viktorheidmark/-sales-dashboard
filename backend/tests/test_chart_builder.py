@@ -135,13 +135,13 @@ class ChartBuilderTests(unittest.TestCase):
         assert chart is not None
         self.assertIn("highlights", chart)
         h = chart["highlights"]
-        self.assertEqual(h["peak_label"], "2026-05-12")
         self.assertAlmostEqual(h["peak_revenue"], 45000.0)
-        self.assertEqual(h["trough_label"], "2026-05-05")
         self.assertAlmostEqual(h["trough_revenue"], 30000.0)
         self.assertAlmostEqual(h["first_revenue"], 30000.0)
         self.assertAlmostEqual(h["last_revenue"], 42000.0)
+        self.assertAlmostEqual(h["avg_revenue"], 38750.0)
         self.assertGreater(h["change_pct"], 0)  # grew from 30k to 42k
+        self.assertIn("peak_label_display", h)
 
     def test_small_trend_dataset_no_chart(self):
         # Fewer than 2 usable data points → chart builder returns None
@@ -166,6 +166,7 @@ class ChartBuilderTests(unittest.TestCase):
         assert h is not None
         self.assertEqual(h["peak_label"], "v2")
         self.assertEqual(h["trough_label"], "v1")
+        self.assertAlmostEqual(h["avg_revenue"], 150.0)
         self.assertAlmostEqual(h["change_pct"], 50.0)  # 100 → 150
 
     def test_compute_highlights_too_short_returns_none(self):
@@ -230,8 +231,12 @@ class ChartBuilderTests(unittest.TestCase):
         assert chart is not None
         policy = apply_sales_over_time_period_policy(raw)
         self.assertEqual(policy["date_range"]["end"], "2026-06-21")
-        self.assertEqual(chart["data"][-1]["label"], "2026-06-15")
-        self.assertEqual(chart["data"][-2]["label"], "2026-06-08")
+        self.assertEqual(chart["data"][-1]["label"], "15–21 juni")
+        self.assertEqual(chart["data"][-2]["label"], "8–14 juni")
+        self.assertEqual(chart["data"][-1]["display_label"], "veckan 15–21 juni")
+        h = chart.get("highlights") or {}
+        self.assertEqual(h.get("peak_label_display"), h.get("peak_label"))
+        self.assertNotIn("…", h.get("peak_label_display", ""))
         self.assertEqual(
             chart["description"],
             "8 avslutade veckor fram till och med 21 juni 2026",
@@ -259,7 +264,31 @@ class ChartBuilderTests(unittest.TestCase):
         self.assertIsNotNone(chart)
         assert chart is not None
         self.assertIsNotNone(chart.get("period_note"))
+        self.assertIn("Pågående månad exkluderad", chart["period_note"])
+        self.assertTrue(chart.get("show_markers"))
+        self.assertTrue(chart.get("y_axis_from_zero"))
         self.assertEqual(len(chart["data"]), 2)
+
+
+    def test_ytd_monthly_chart_has_display_labels(self):
+        chart = build_chart("get_sales_over_time", {
+            "granularity": "month",
+            "_force_time_series": True,
+            "series": [
+                {"period": "2026-01-01", "revenue": 100000.0, "orders": 40},
+                {"period": "2026-02-01", "revenue": 120000.0, "orders": 48},
+                {"period": "2026-03-01", "revenue": 110000.0, "orders": 44},
+            ],
+            "date_range": {"start": "2026-01-01", "end": "2026-03-31"},
+            "limitations": [],
+        })
+        self.assertIsNotNone(chart)
+        assert chart is not None
+        self.assertEqual(chart["tooltip_key"], "display_label")
+        row = chart["data"][0]
+        self.assertIn("display_label", row)
+        self.assertIn("jan", row["label"].lower())
+        self.assertIn("orders", row)
 
 
 if __name__ == "__main__":

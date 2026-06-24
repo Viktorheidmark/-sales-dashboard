@@ -40,6 +40,7 @@ from app.services.intent_router import (
     plan_forced_tools,
 )
 from app.services.period_labels import apply_period_labels
+from app.services.period_utils import apply_sales_over_time_period_policy
 from app.services.currency_format import (
     build_currency_reference_block,
     currency_format_rules_block,

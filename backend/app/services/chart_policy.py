@@ -120,6 +120,14 @@ def resolve_chart_intent(
     if "get_sales_by_region" in tools:
         return ChartIntent.REGION_RANKING
 
+    if "get_supplier_kpis" in tools and "get_sales_over_time" in tools:
+        sales = tools["get_sales_over_time"]
+        if sales.get("_force_time_series") or sales.get("_chart_intent") == "time_series":
+            if _WEEKLY_FACTUAL_RE.search(q):
+                return ChartIntent.WEEKLY_KPI
+            return ChartIntent.TIME_SERIES
+        return ChartIntent.PERIOD_COMPARISON
+
     if "get_supplier_kpis" in tools:
         return ChartIntent.PERIOD_COMPARISON
 
