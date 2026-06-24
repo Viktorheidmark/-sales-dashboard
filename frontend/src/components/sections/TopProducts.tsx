@@ -67,7 +67,7 @@ export function TopProducts({
                     <p className="text-sm font-medium text-theme-strong truncate leading-snug">{p.product_name}</p>
                     <div className="mt-1 h-1 bg-workspace-border/50 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${isTop ? 'bg-brand-500/80' : 'bg-workspace-border'}`}
+                        className={`h-full rounded-full ${isTop ? 'bg-brand-500/85 dark:bg-brand-400/75' : 'bg-brand-500/40 dark:bg-brand-400/35'}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>

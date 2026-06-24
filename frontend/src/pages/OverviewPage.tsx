@@ -7,14 +7,12 @@ import type {
   TopProductsResponse,
   RegionsResponse,
   MarketShareResponse,
-  DecliningProductsResponse,
 } from '../api/types'
 import { KpiCards } from '../components/sections/KpiCards'
 import { SalesTrend } from '../components/sections/SalesTrend'
 import { TopProducts } from '../components/sections/TopProducts'
 import { RegionalSales } from '../components/sections/RegionalSales'
 import { MarketShare } from '../components/sections/MarketShare'
-import { DecliningProducts } from '../components/sections/DecliningProducts'
 import { DATE_PRESETS, presetToDates, defaultCategory, overviewPeriodContextLabel, type DatePreset } from '../utils/dateRange'
 
 interface SectionState<T> {
@@ -59,14 +57,13 @@ export function OverviewPage({ user }: OverviewPageProps) {
   const [topProducts, setTopProducts] = useState<SectionState<TopProductsResponse>>(initialState())
   const [regions, setRegions] = useState<SectionState<RegionsResponse>>(initialState())
   const [marketShare, setMarketShare] = useState<SectionState<MarketShareResponse>>(initialState())
-  const [declining, setDeclining] = useState<SectionState<DecliningProductsResponse>>(initialState())
 
   const anyLoading =
     overview.loading || trend.loading || topProducts.loading ||
-    regions.loading || marketShare.loading || declining.loading
+    regions.loading || marketShare.loading
 
   useEffect(() => {
-    const { startDate, endDate, granularity, days } = presetToDates(datePreset)
+    const { startDate, endDate, granularity } = presetToDates(datePreset)
 
     const load = <T,>(
       setter: (s: SectionState<T> | ((prev: SectionState<T>) => SectionState<T>)) => void,
@@ -83,7 +80,6 @@ export function OverviewPage({ user }: OverviewPageProps) {
     load(setTopProducts, () => api.getTopProducts(startDate, endDate))
     load(setRegions, () => api.getRegions(startDate, endDate))
     load(setMarketShare, () => api.getMarketShare(supplierCategory, startDate, endDate))
-    load(setDeclining, () => api.getDecliningProducts(days))
   }, [datePreset, supplierCategory, refreshTick])
 
   const handleRefresh = () => setRefreshTick(t => t + 1)
@@ -187,24 +183,17 @@ export function OverviewPage({ user }: OverviewPageProps) {
         </div>
       </section>
 
-      {/* Zone 6 — Market share and watch list */}
+      {/* Marknadsandel */}
       <section>
-        <SectionHeading>Marknadsandel och bevakning</SectionHeading>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <MarketShare
-            data={marketShare.data}
-            loading={marketShare.loading}
-            error={marketShare.error}
-            onRetry={handleRefresh}
-            supplierCategory={supplierCategory}
-          />
-          <DecliningProducts
-            data={declining.data}
-            loading={declining.loading}
-            error={declining.error}
-            onRetry={handleRefresh}
-          />
-        </div>
+        <SectionHeading>Marknadsandel</SectionHeading>
+        <MarketShare
+          data={marketShare.data}
+          loading={marketShare.loading}
+          error={marketShare.error}
+          onRetry={handleRefresh}
+          supplierCategory={supplierCategory}
+          fullWidth
+        />
       </section>
     </div>
   )

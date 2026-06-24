@@ -82,7 +82,7 @@ export function RegionalSales({
                   <p className="text-sm font-medium text-theme-strong truncate">{r.region}</p>
                   <div className="mt-1 h-1 bg-workspace-border/50 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${i === 0 ? 'bg-brand-500/80' : 'bg-workspace-border'}`}
+                      className={`h-full rounded-full ${i === 0 ? 'bg-brand-500/85 dark:bg-brand-400/75' : 'bg-brand-500/40 dark:bg-brand-400/35'}`}
                       style={{ width: `${maxRev > 0 ? ((r.revenue ?? 0) / maxRev) * 100 : 0}%` }}
                     />
                   </div>

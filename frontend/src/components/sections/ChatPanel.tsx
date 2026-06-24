@@ -53,6 +53,7 @@ interface ChatPanelProps {
   startDate?: string
   endDate?: string
   supplierName?: string
+  initialPrompt?: string
 }
 
 const markdownComponents = {
@@ -392,9 +393,9 @@ function AssistantBubble({
   )
 }
 
-export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) {
+export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(initialPrompt ?? '')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
