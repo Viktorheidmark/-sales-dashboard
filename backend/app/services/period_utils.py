@@ -25,6 +25,8 @@ _CURRENT_YEAR_RE = re.compile(
     r"("
     r"detta\s+år|"
     r"hittills\s+i\s+år|"
+    r"under\s+hela\s+år[ae]t|"
+    r"hela\s+år[ae]t|"
     r"under\s+året|"
     r"från\s+början\s+av\s+året|"
     r"årets\s+försäljning|"
@@ -37,8 +39,8 @@ _CURRENT_YEAR_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
-_LAST_YEAR_RE = re.compile(r"förra\s+året", re.IGNORECASE)
-_FULL_PERIOD_RE = re.compile(r"över\s+hela\s+perioden", re.IGNORECASE)
+_LAST_YEAR_RE = re.compile(r"förra\s+år[ae]t|föregående\s+år[ae]t|förra\s+kalenderåret", re.IGNORECASE)
+_FULL_PERIOD_RE = re.compile(r"(?:över\s+)?hela\s+period[ae]n|all\s+tillgänglig\s+(?:data|tid)|all\s+tid\b", re.IGNORECASE)
 _ROLLING_YEAR_RE = re.compile(r"senaste\s+året", re.IGNORECASE)
 
 _MONTHS_SV = (

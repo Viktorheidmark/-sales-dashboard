@@ -65,6 +65,7 @@ def plan_deterministic_tools(
         from app.services.follow_up_context import (
             analysis_context_from_prior_data,
             plan_from_analysis_context,
+            plan_nl_context_followup,
         )
         ctx = analysis_context_from_prior_data(
             prior_context.question,
@@ -72,6 +73,10 @@ def plan_deterministic_tools(
             list(prior_context.sources),
             prior_context.analysis_context,
         )
+        if ctx:
+            nl_plans = plan_nl_context_followup(msg, ctx, supplier_name=supplier_name)
+            if nl_plans:
+                return nl_plans
         if ctx and _YTD_WEEKLY_RE.search(msg) and not extract_period_args(msg):
             weekly = plan_from_analysis_context("weekly_trend", ctx, message=msg, supplier_name=supplier_name)
             if weekly:

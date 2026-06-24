@@ -102,8 +102,9 @@ class ComparisonLabelTests(unittest.TestCase):
         }
         actions = build_contextual_follow_ups([("get_market_share", ms)])
         labels = [a["label"] for a in actions]
+        self.assertEqual(len(actions), 1)
         self.assertIn("Visa våra starkaste produkter inom Läsk", labels)
-        self.assertIn("Jämför med föregående 90 dagar", labels)
+        self.assertNotIn("Jämför med föregående 90 dagar", labels)
 
     def test_sanitize_vague_comparison(self):
         kpi = {

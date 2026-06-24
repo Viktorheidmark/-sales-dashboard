@@ -4,13 +4,52 @@ Structured follow-up context — preserves normalized analysis period across chi
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any, Optional
 
 from app.services.period_labels import infer_period_kind
-from app.services.period_utils import align_weekly_query_bounds
+from app.services.period_utils import align_weekly_query_bounds, resolve_period_range, is_current_year_phrase, current_year_period_range, default_data_bounds
 from app.services.ranking_limits import resolve_product_ranking_limit
+
+# ---------------------------------------------------------------------------
+# Patterns for natural-language context follow-up detection
+# ---------------------------------------------------------------------------
+
+_NL_NEW_SUBJECT_RE = re.compile(
+    r"(marknadsandel|konkurrent|fokusera|välj\s+kategori|"
+    r"hur\s+har\s+(?:total|hela\s+företaget)|visa\s+(?:alla|samtliga)\s+produkter|"
+    r"hur\s+går\s+det\s+totalt|vilken\s+produkt|vilken\s+region)",
+    re.IGNORECASE,
+)
+
+_NL_GRANULARITY_WEEK_RE = re.compile(
+    r"(vecka\s+för\s+vecka|per\s+vecka|visa\s+per\s+vecka|visa\s+vecka\s+för\s+vecka)",
+    re.IGNORECASE,
+)
+
+_NL_LIMIT_RE = re.compile(r"(?:top|topp)\s+(\d+)", re.IGNORECASE)
+
+_PRIOR_INTENTS_ELIGIBLE = frozenset({
+    "product_ranking",
+    "sales_trend",
+    "sales_overview",
+    "region_ranking",
+    "market_share",
+    "product_decline",
+    "revenue_drivers",
+})
+
+_NL_TOOL_FOR_INTENT = {
+    "product_ranking": "get_top_products",
+    "sales_trend": "get_sales_over_time",
+    "sales_overview": "get_supplier_kpis",
+    "region_ranking": "get_sales_by_region",
+    "market_share": "get_market_share",
+    "product_decline": "get_declining_products",
+    "revenue_drivers": "get_revenue_drivers",
+}
 
 ALLOWED_FOLLOW_UP_ACTIONS = frozenset({
     "weekly_trend",
@@ -382,6 +421,191 @@ def validate_and_resolve_follow_up(
             plan.args["end_date"] = ctx.end_date
 
     return plans
+
+
+def _nl_resolve_new_period(msg: str) -> Optional[dict]:
+    """Resolve a new period from a short NL message. Returns period dict or None."""
+    today = date.today()
+    # Full history first (most specific pattern)
+    if re.search(r"(?:över\s+)?hela\s+period[ae]n|all\s+tillgänglig|all\s+tid\b", msg, re.IGNORECASE):
+        data_min, data_max = default_data_bounds(today)
+        return {
+            "start_date": data_min.isoformat(),
+            "end_date": data_max.isoformat(),
+            "_period_kind": "full_history",
+            "_period_explicit": True,
+        }
+    # Previous year
+    if re.search(r"förra\s+år[ae]t|föregående\s+år[ae]t|förra\s+kalenderåret", msg, re.IGNORECASE):
+        data_min, data_max = default_data_bounds(today)
+        year = today.year - 1
+        start = max(date(year, 1, 1), data_min)
+        end = min(date(year, 12, 31), data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "_period_kind": "previous_year",
+            "_period_explicit": True,
+        }
+    # Current year / YTD (including "hela året", "i år")
+    if is_current_year_phrase(msg):
+        ytd = current_year_period_range(today)
+        return {
+            "start_date": ytd["start_date"],
+            "end_date": ytd["end_date"],
+            "_period_kind": "year_to_date",
+            "_period_explicit": True,
+        }
+    # General phrase resolution (senaste X dag, senaste veckan, etc.)
+    period = resolve_period_range(msg)
+    if period.get("start_date") and period.get("end_date"):
+        return {
+            "start_date": period["start_date"],
+            "end_date": period["end_date"],
+            "_period_kind": period.get("period_kind", "phrase_resolved"),
+            "_period_explicit": True,
+        }
+    return None
+
+
+def _nl_apply_period_to_intent(ctx: AnalysisContext, new_period: dict, supplier_name: str) -> list:
+    """Build tool plans applying new_period to the prior intent."""
+    from app.services.intent_router import ToolPlan, default_category_for_supplier
+
+    intent = ctx.prior_intent
+
+    if intent == "product_ranking":
+        args: dict[str, Any] = {**new_period, "limit": ctx.limit or 5}
+        if ctx.region:
+            args["region"] = ctx.region
+        if ctx.category:
+            args["category_name"] = ctx.category
+        return [ToolPlan("get_top_products", args, reason="nl-context: period → product_ranking")]
+
+    if intent == "sales_trend":
+        span = 0
+        try:
+            span = (date.fromisoformat(new_period["end_date"]) - date.fromisoformat(new_period["start_date"])).days + 1
+        except (ValueError, KeyError):
+            pass
+        granularity = ctx.granularity or ("month" if span > 90 else "week")
+        args = {
+            **new_period,
+            "granularity": granularity,
+            "_chart_intent": "time_series",
+            "_force_time_series": True,
+        }
+        args = _align_weekly_args(args)
+        return [ToolPlan("get_sales_over_time", args, reason="nl-context: period → sales_trend")]
+
+    if intent == "sales_overview":
+        kpi_args: dict[str, Any] = dict(new_period)
+        trend_args: dict[str, Any] = {
+            **new_period,
+            "granularity": "month",
+            "_chart_intent": "time_series",
+            "_force_time_series": True,
+        }
+        return [
+            ToolPlan("get_supplier_kpis", kpi_args, reason="nl-context: period → sales_overview KPIs"),
+            ToolPlan("get_sales_over_time", trend_args, reason="nl-context: period → sales_overview trend"),
+        ]
+
+    if intent == "region_ranking":
+        return [ToolPlan("get_sales_by_region", dict(new_period), reason="nl-context: period → region_ranking")]
+
+    if intent == "market_share":
+        args = dict(new_period)
+        if ctx.category:
+            args["category_name"] = ctx.category
+        else:
+            args["category_name"] = default_category_for_supplier(supplier_name)
+        return [ToolPlan("get_market_share", args, reason="nl-context: period → market_share")]
+
+    if intent == "product_decline":
+        try:
+            days = (date.fromisoformat(new_period["end_date"]) - date.fromisoformat(new_period["start_date"])).days + 1
+        except (ValueError, KeyError):
+            days = 30
+        return [ToolPlan("get_declining_products", {"days": min(days, 90), "limit": 5}, reason="nl-context: period → product_decline")]
+
+    return []
+
+
+def plan_nl_context_followup(
+    message: str,
+    ctx: AnalysisContext,
+    supplier_name: str = "",
+) -> list:
+    """
+    Detect NL modifier phrases (period/region/limit/granularity) and apply them
+    to the prior analysis context. Returns [] when the message is not a modifier.
+
+    Safety: supplier_id is never read here; all dates clamped by default_data_bounds;
+    only runs when prior intent is in the eligible set; rejects new-subject queries.
+    """
+    from app.services.intent_router import ToolPlan, extract_region
+
+    if not ctx or not ctx.start_date or not ctx.end_date:
+        return []
+    if ctx.prior_intent not in _PRIOR_INTENTS_ELIGIBLE:
+        return []
+
+    msg = message.strip()
+
+    # Reject long messages (likely new standalone queries)
+    if len(msg) > 80:
+        return []
+
+    # Reject messages that introduce a new analysis subject
+    if _NL_NEW_SUBJECT_RE.search(msg):
+        return []
+
+    # 1. Granularity change: "visa vecka för vecka"
+    if _NL_GRANULARITY_WEEK_RE.search(msg):
+        if ctx.prior_intent in ("sales_trend", "sales_overview"):
+            args: dict[str, Any] = {
+                "start_date": ctx.start_date,
+                "end_date": ctx.end_date,
+                "_period_kind": ctx.period_kind or "preserved",
+                "_period_explicit": True,
+                "granularity": "week",
+                "_chart_intent": "time_series",
+                "_force_time_series": True,
+            }
+            args = _align_weekly_args(args)
+            return [ToolPlan("get_sales_over_time", args, reason="nl-context: granularity → weekly")]
+        return []
+
+    # 2. Limit change: "top 3 då?"
+    limit_match = _NL_LIMIT_RE.search(msg)
+    if limit_match and ctx.prior_intent == "product_ranking":
+        limit = int(limit_match.group(1))
+        if 1 <= limit <= 25:
+            args = {
+                "start_date": ctx.start_date,
+                "end_date": ctx.end_date,
+                "_period_kind": ctx.period_kind or "preserved",
+                "_period_explicit": True,
+                "limit": limit,
+            }
+            if ctx.region:
+                args["region"] = ctx.region
+            if ctx.category:
+                args["category_name"] = ctx.category
+            return [ToolPlan("get_top_products", args, reason=f"nl-context: limit → {limit}")]
+
+    # 3. Region filter: "i Stockholm då?"
+    region = extract_region(msg)
+    if region:
+        return plan_from_analysis_context("region_filter", ctx, message=msg, supplier_name=supplier_name)
+
+    # 4. Period change
+    new_period = _nl_resolve_new_period(msg)
+    if new_period:
+        return _nl_apply_period_to_intent(ctx, new_period, supplier_name)
+
+    return []
 
 
 def make_follow_up_action(

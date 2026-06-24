@@ -131,17 +131,12 @@ def build_contextual_follow_ups(
         category = ms.get("category_name") or "kategorin"
         dr = ms.get("date_range") or {}
         span_phrase = _period_phrase_from_range(dr, question)
-        chips = [
+        return [
             {
                 "label": f"Visa våra starkaste produkter inom {category}",
                 "message": f"Vilka produkter säljer bäst inom {category} {span_phrase}?",
             },
-            {
-                "label": "Jämför med föregående 90 dagar",
-                "message": f"Hur stor marknadsandel har vi inom {category} de senaste 90 dagarna?",
-            },
         ]
-        return chips
 
     if "get_top_products" in by_tool:
         products = by_tool["get_top_products"].get("products") or []
