@@ -108,7 +108,7 @@ class PeriodLabelTests(unittest.TestCase):
       [("get_top_products", result)],
       "Vilka produkter säljer bäst i Stockholm?",
     )
-    self.assertIn("OBLIGATORISK PERIOD I SVARET", block)
+    self.assertIn("PERIOD I SVARET", block)
     self.assertIn("de senaste 90 dagarna", block)
 
   def test_stockholm_example_opening(self):

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../../api/client'
 import type { ChatResponse, DateRange, InsightSummary, PriorTurnContext, SourceMeta } from '../../api/types'
@@ -11,6 +11,7 @@ import {
   resolveResponseDateRange,
   visibleResponseLimitations,
 } from '../../utils/sourcePresentation'
+import { useChatState } from '../../context/ChatStateContext'
 
 
 const LOADING_STATUSES = [
@@ -218,15 +219,31 @@ function SendButton({ onClick, disabled, loading }: { onClick: () => void; disab
 
 function LoadingDots() {
   return (
-    <span className="flex gap-0.5">
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '16px 20px',
+        background: 'var(--bg-secondary)',
+        borderRadius: '18px 18px 18px 4px',
+      }}
+    >
       {[0, 1, 2].map(i => (
         <span
           key={i}
-          className="w-1.5 h-1.5 rounded-full bg-theme-faint animate-bounce"
-          style={{ animationDelay: `${i * 0.15}s` }}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--text-muted)',
+            display: 'inline-block',
+            animation: 'dotBounce 1.2s ease-in-out infinite',
+            animationDelay: `${i * 0.15}s`,
+          }}
         />
       ))}
-    </span>
+    </div>
   )
 }
 
@@ -283,6 +300,55 @@ function UnsupportedAnswerCard({ content }: { content: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// SaveInsightButton (FIX 7)
+// ---------------------------------------------------------------------------
+
+function SaveInsightButton({ saveState, onSave }: { saveState: SaveState; onSave: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  const isSaved = saveState === 'saved'
+  const isError = saveState === 'error'
+  const isSaving = saveState === 'saving'
+
+  const borderColor = isSaved ? '#10B981' : isError ? '#EF4444' : 'var(--accent)'
+  const color = isSaved
+    ? '#10B981'
+    : isError
+    ? '#EF4444'
+    : hovered && !isSaving && !isSaved
+    ? 'white'
+    : 'var(--accent)'
+  const bg = hovered && !isSaving && !isSaved && !isError ? 'var(--accent)' : 'transparent'
+
+  return (
+    <button
+      onClick={onSave}
+      disabled={saveState !== 'idle'}
+      onMouseEnter={() => saveState === 'idle' && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '8px 16px',
+        borderRadius: 8,
+        border: `1.5px solid ${borderColor}`,
+        color,
+        background: bg,
+        fontSize: 13,
+        fontWeight: 500,
+        cursor: saveState !== 'idle' ? 'default' : 'pointer',
+        transition: 'all 0.15s ease',
+        marginTop: 12,
+      }}
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+    >
+      <BookmarkIcon filled={isSaved} />
+      {isSaved ? '✓ Sparad' : isError ? 'Kunde inte spara' : isSaving ? 'Sparar…' : 'Spara insikt'}
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // AssistantBubble — styled with new message card design
 // ---------------------------------------------------------------------------
 
@@ -321,14 +387,8 @@ function AssistantBubble({
 
   if (msg.loading && !msg.streamingContent) {
     return (
-      <article
-        className="self-start w-full py-2"
-        style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
-      >
-        <div className="flex items-center gap-2.5 text-sm text-theme-muted">
-          <LoadingDots />
-          <span>{msg.statusText ?? 'Analyserar försäljningsdata…'}</span>
-        </div>
+      <article className="self-start" style={{ maxWidth: '75%', animation: 'messageIn 0.3s ease-out both' }}>
+        <LoadingDots />
       </article>
     )
   }
@@ -337,7 +397,7 @@ function AssistantBubble({
     return (
       <article
         className="self-start w-full py-1"
-        style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
+        style={{ maxWidth: '75%', animation: 'messageIn 0.3s ease-out both' }}
       >
         <div style={{ fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.6 }} className="min-h-[4.5rem]">
           <ReactMarkdown components={markdownComponents}>
@@ -353,7 +413,7 @@ function AssistantBubble({
     return (
       <article
         className="self-start w-full py-1 space-y-3"
-        style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
+        style={{ maxWidth: '75%', animation: 'messageIn 0.3s ease-out both' }}
       >
         <p className="text-sm text-theme-body leading-relaxed">{msg.error}</p>
         {msg.question && (
@@ -378,7 +438,7 @@ function AssistantBubble({
   return (
     <article
       className="self-start w-full space-y-3"
-      style={{ padding: '4px 0', maxWidth: '80%', animation: 'chatMsgIn 0.3s ease-out both' }}
+      style={{ padding: '4px 0', maxWidth: '75%', animation: 'messageIn 0.3s ease-out both' }}
     >
       {!isGrounded ? (
         <UnsupportedAnswerCard content={msg.content} />
@@ -431,29 +491,8 @@ function AssistantBubble({
       )}
 
       {isGrounded && (
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saveState !== 'idle'}
-            className={`inline-flex items-center gap-1.5 text-xs transition-colors ${
-              saveState === 'saved'
-                ? 'text-emerald-600 dark:text-emerald-400 cursor-default'
-                : saveState === 'error'
-                ? 'text-red-500 dark:text-red-400 cursor-default'
-                : saveState === 'saving'
-                ? 'text-theme-muted cursor-wait'
-                : 'text-theme-muted hover:text-brand-600 dark:hover:text-brand-400'
-            }`}
-          >
-            <BookmarkIcon filled={saveState === 'saved'} />
-            {saveState === 'saved'
-              ? 'Insikten har sparats'
-              : saveState === 'error'
-              ? 'Kunde inte spara'
-              : saveState === 'saving'
-              ? 'Sparar…'
-              : 'Spara insikt'}
-          </button>
+        <div className="flex items-center gap-3" style={{ marginTop: 4 }}>
+          <SaveInsightButton saveState={saveState} onSave={handleSave} />
         </div>
       )}
 
@@ -628,6 +667,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
   const chatSessionRef = useRef(0)
+  const { setHasMessages, setOnNewChat } = useChatState()
 
   useEffect(() => {
     mountedRef.current = true
@@ -640,6 +680,26 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Sync chat state to sidebar
+  useEffect(() => {
+    setHasMessages(messages.length > 0)
+  }, [messages.length, setHasMessages])
+
+  const stableResetChat = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    chatSessionRef.current += 1
+    setMessages([])
+    setInput('')
+    setLoading(false)
+    inputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    setOnNewChat(stableResetChat)
+    return () => setOnNewChat(null)
+  }, [setOnNewChat, stableResetChat])
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim()
@@ -747,16 +807,6 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
     }
   }
 
-  const resetChat = () => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    chatSessionRef.current += 1
-    setMessages([])
-    setInput('')
-    setLoading(false)
-    inputRef.current?.focus()
-  }
-
   const isEmpty = messages.length === 0
   const placeholder = 'Vad kan jag hjälpa dig med?'
 
@@ -777,10 +827,6 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
       <style>{`
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes chatMsgIn {
-          from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
@@ -869,7 +915,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             <div className="shrink-0 flex justify-end" style={{ padding: '8px 24px 0' }}>
               <button
                 type="button"
-                onClick={resetChat}
+                onClick={stableResetChat}
                 className="inline-flex items-center gap-1.5 text-xs text-theme-muted hover:text-theme-body transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded px-2 py-1"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24" aria-hidden>
@@ -886,7 +932,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             >
               <div
                 style={{
-                  maxWidth: 720,
+                  maxWidth: 860,
                   margin: '0 auto',
                   padding: '24px 24px 0',
                   display: 'flex',
@@ -899,7 +945,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
                     <div
                       key={msg.id}
                       className="flex justify-end"
-                      style={{ animation: 'chatMsgIn 0.2s ease-out both' }}
+                      style={{ animation: 'messageIn 0.15s ease-out both' }}
                     >
                       <p
                         className="text-white"
@@ -941,7 +987,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
                 padding: '12px 24px 20px',
               }}
             >
-              <div style={{ maxWidth: 680, margin: '0 auto' }}>
+              <div style={{ maxWidth: 860, margin: '0 auto' }}>
                 {inputBar}
                 <p
                   style={{

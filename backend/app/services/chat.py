@@ -111,6 +111,14 @@ Regler du alltid måste följa:
 - Föreslå endast nästa steg som direkt stöds av verktygsdata — inga generiska marknadsförings- eller prisråd utan datastöd.
 - Skriv slutsvaret direkt. Beskriv ALDRIG vad du kommer att göra, hämta eller kontrollera.
 - Håll svar under 90 ord om inte användaren uttryckligen ber om mer detaljer.
+
+RESPONSE FORMAT RULES:
+- Maximum 2-3 sentences of text before the chart
+- Never repeat in text what is already visible in the chart
+- Lead with the single most important insight
+- Do not write introductory sentences like 'Here is the data you requested'
+- Do not write concluding sentences after the chart
+- If the answer is a single number or fact, answer in one sentence only
 {executive_writing_rules(supplier_name)}
 """
 
@@ -150,11 +158,10 @@ def _inject_supplier_scope(tool_name: str, args: dict, supplier_id: str) -> dict
 
 
 def _date_hint(start_date: Optional[str], end_date: Optional[str], current_date: str) -> str:
-    if start_date or end_date:
-        return f"\n[Datumfilter aktivt: {start_date or 'äldsta data'} → {end_date or current_date}]"
+    _ = (start_date, end_date, current_date)
     return (
-        "\n[Inget datumfilter — verktyget använder sitt standardfönster. "
-        "Rapportera den faktiska perioden från date_range i svaret.]"
+        "\n[Inget datumfilter — om frågan inte anger tidsperiod, använd hela tillgängliga datasetet. "
+        "Rapportera den faktiska perioden från date_range i verktygsresultatet.]"
     )
 
 
@@ -250,10 +257,8 @@ async def _invoke_mcp_tool(
     if tool_name not in ALLOWED_TOOLS:
         return {"error": f"Tool '{tool_name}' is not permitted."}
     args = _inject_supplier_scope(tool_name, _strip_internal_tool_args(raw_args), supplier_id)
-    if start_date and "start_date" not in args:
-        args["start_date"] = start_date
-    if end_date and "end_date" not in args:
-        args["end_date"] = end_date
+    # Never inject the Overview UI date-picker preset into assistant tool calls.
+    _ = (start_date, end_date)
     result = await session.call_tool(tool_name, args)
     return _parse_mcp_result(result)
 

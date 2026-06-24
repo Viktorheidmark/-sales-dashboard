@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 from app.schemas.analysis_plan import AnalysisPlan, AnalysisFilters, TimePeriod, VisualizationSpec
 from app.services.intent_router import PriorTurnContext
-from app.services.period_utils import latest_completed_date
+from app.services.period_utils import latest_completed_date, default_data_bounds, default_decline_comparison_days
 from app.services.plan_normalizer import normalize_plan, ALLOWED_TOOLS
 
 
@@ -38,7 +38,7 @@ class PlanNormalizerTests(unittest.TestCase):
         self.assertFalse(norm.use_fallback)
         assert norm.meta
         self.assertEqual(norm.meta.resolved_start_date, ytd_start)
-        self.assertEqual(norm.meta.resolved_end_date, ytd_end)
+        self.assertEqual(norm.meta.resolved_end_date, latest_completed_date().isoformat())
         self.assertEqual(norm.meta.intent, "sales_overview")
         tools = [p.tool_name for p in norm.tool_plans]
         self.assertIn("get_supplier_kpis", tools)
@@ -188,6 +188,38 @@ class PlanNormalizerTests(unittest.TestCase):
         )
         assert full.meta
         self.assertEqual(full.meta.period_kind, "full_history")
+
+    def test_standalone_sales_trend_ignores_planner_rolling_and_ui(self):
+        data_min, data_max = default_data_bounds()
+        norm = normalize_plan(
+            AnalysisPlan(
+                intent="sales_trend",
+                time_period=TimePeriod(kind="rolling_months", days=3),
+                confidence=0.9,
+            ),
+            "Hur har försäljningen utvecklats?",
+            self.SUPPLIER,
+            ui_start=self.UI_START,
+            ui_end=self.UI_END,
+        )
+        assert norm.meta
+        self.assertEqual(norm.meta.period_kind, "full_history")
+        self.assertEqual(norm.meta.resolved_start_date, data_min.isoformat())
+        self.assertEqual(norm.meta.resolved_end_date, latest_completed_date().isoformat())
+        self.assertNotEqual(norm.meta.resolved_start_date, self.UI_START)
+
+    def test_decline_without_period_uses_full_history_halves(self):
+        norm = normalize_plan(
+            AnalysisPlan(intent="product_decline", time_period=TimePeriod(kind="unspecified"), confidence=0.9),
+            "Vilken produkt har tappat mest?",
+            self.SUPPLIER,
+            ui_start=self.UI_START,
+            ui_end=self.UI_END,
+        )
+        self.assertEqual(norm.tool_plans[0].tool_name, "get_declining_products")
+        self.assertEqual(norm.tool_plans[0].args["days"], default_decline_comparison_days())
+        self.assertEqual(norm.tool_plans[0].args.get("_period_kind"), "full_history_halves")
+        self.assertNotEqual(norm.tool_plans[0].args["days"], 90)
 
 
 if __name__ == "__main__":

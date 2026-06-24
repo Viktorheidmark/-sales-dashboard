@@ -1,5 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { ThemeToggle } from '../ui/ThemeToggle'
+import { useChatState } from '../../context/ChatStateContext'
 
 interface SidebarProps {
   supplierName: string
@@ -39,6 +40,10 @@ const NAV_ITEMS = [
 
 export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
   const initial = supplierName ? supplierName.charAt(0).toUpperCase() : '?'
+  const location = useLocation()
+  const { hasMessages, onNewChat } = useChatState()
+  const isAssistant = location.pathname === '/assistant'
+  const showNewChat = isAssistant && hasMessages && onNewChat != null
 
   return (
     <div className="flex h-full flex-col bg-sidebar select-none border-r border-sidebar-border">
@@ -58,7 +63,7 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-5 space-y-0.5">
+      <nav className="px-3 py-5 space-y-0.5">
         <p className="text-[10px] font-semibold text-theme-faint uppercase tracking-[0.16em] px-3 mb-3">
           Navigering
         </p>
@@ -86,6 +91,16 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
+      {/* New Chat button — only on /assistant with active messages */}
+      {showNewChat && (
+        <div className="px-4 pb-2">
+          <NewChatButton onClick={() => { onNewChat(); onNavigate?.() }} />
+        </div>
+      )}
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
       {/* Account */}
       <div className="px-4 py-5 border-t border-sidebar-border">
         <p className="text-[10px] font-semibold text-theme-faint uppercase tracking-[0.14em] px-1 mb-2">
@@ -102,20 +117,53 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
             <p className="text-[10px] text-theme-muted leading-snug mt-0.5">Leverantörsvy · isolerad data</p>
           </div>
         </div>
-        <div className="mb-3">
-          <p className="text-[10px] font-medium text-theme-faint uppercase tracking-[0.12em] px-1 mb-2">Tema</p>
-          <ThemeToggle />
+        <div className="flex items-center justify-between px-1 mb-3">
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-2 text-xs font-medium text-theme-muted hover:text-theme-body transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 rounded px-2 py-1.5"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logga ut
+          </button>
+          <ThemeToggle compact />
         </div>
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-theme-muted hover:text-theme-body hover:bg-[var(--surface-hover)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-        >
-          <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Logga ut
-        </button>
       </div>
     </div>
+  )
+}
+
+function NewChatButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-2 rounded-lg text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+      style={{
+        padding: '10px 12px',
+        border: '1px solid var(--border-color)',
+        background: 'transparent',
+        color: 'var(--text-secondary)',
+        fontSize: 13,
+        fontWeight: 500,
+        cursor: 'pointer',
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget
+        el.style.background = 'var(--bg-secondary)'
+        el.style.color = 'var(--text-primary)'
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget
+        el.style.background = 'transparent'
+        el.style.color = 'var(--text-secondary)'
+      }}
+    >
+      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+      </svg>
+      Ny chatt
+    </button>
   )
 }

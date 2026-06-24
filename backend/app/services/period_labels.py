@@ -13,6 +13,7 @@ from app.services.period_utils import (
     _FULL_PERIOD_RE,
     _LAST_YEAR_RE,
     default_data_bounds,
+    default_decline_comparison_days,
     format_date_range_sv,
     is_current_year_phrase,
     resolve_period_range,
@@ -121,6 +122,9 @@ def answer_period_phrase(
     if period_kind == "full_history":
         return "över hela tillgängliga perioden"
 
+    if period_kind == "full_history_halves":
+        return "över hela tillgängliga perioden (jämfört med föregående lika långa period)"
+
     if period_kind == "previous_year" and s:
         year = _parse(s)
         if year:
@@ -165,6 +169,8 @@ def chart_period_suffix(
         return "hittills i år"
     if phrase == "över hela tillgängliga perioden":
         return "hela tillgängliga perioden"
+    if phrase == "över hela tillgängliga perioden (jämfört med föregående lika långa period)":
+        return "hela tillgängliga perioden (mot föregående halva)"
     if phrase == "senaste avslutade veckan":
         return "senaste avslutade veckan"
     if phrase.startswith("under "):
@@ -215,7 +221,13 @@ def apply_period_labels(
     )
     if tool_name == "get_declining_products" and not date_range:
         days = int(result.get("comparison_days") or 30)
-        kind = "rolling_30" if days == 30 else f"rolling_{days}"
+        hinted = plan_args.get("_period_kind") or result.get("_period_kind")
+        if hinted:
+            kind = str(hinted)
+        elif not message_specifies_period(question) and days >= default_decline_comparison_days():
+            kind = "full_history_halves"
+        else:
+            kind = "rolling_30" if days == 30 else f"rolling_{days}"
 
     result["_period_kind"] = kind
     result["period_label_answer"] = answer_period_phrase(kind, date_range, question)

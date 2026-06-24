@@ -21,6 +21,7 @@ Regler:
   "senaste 30 dagarna" = rolling_days med days=30, "senaste kvartalet" = rolling_months med days=3,
   "senaste året" = rolling_months med days=12, "över hela perioden" = full_history,
   "senaste veckan" = previous_completed_week.
+- Om frågan INTE anger tidsperiod: sätt time_period.kind = full_history (inte rolling_days/months).
 - Välj intent utifrån affärsfrågan: sales_overview, sales_trend, product_ranking, market_share,
   product_decline, region_ranking, portfolio_change, eller unknown om osäker.
 - Om användaren anger top-N (t.ex. "top 3", "de fem bästa"): sätt limit till N (1–10).

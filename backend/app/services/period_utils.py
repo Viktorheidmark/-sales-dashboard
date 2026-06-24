@@ -74,6 +74,13 @@ def default_data_bounds(reference: Optional[date] = None) -> tuple[date, date]:
     return start, end
 
 
+def default_decline_comparison_days(reference: Optional[date] = None) -> int:
+    """Compare latest half of available history vs the prior half (max 365 days per window)."""
+    data_min, data_max = default_data_bounds(reference)
+    span = (data_max - data_min).days + 1
+    return min(365, max(7, span // 2))
+
+
 def clamp_date_range(start: date, end: date, data_min: date, data_max: date) -> tuple[date, date]:
     start = max(start, data_min)
     end = min(end, data_max)

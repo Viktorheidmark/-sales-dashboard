@@ -192,7 +192,12 @@ def build_comparison_context_block(
         dec = by_tool["get_declining_products"]
         days = int(dec.get("comparison_days") or 30)
         prior = dec.get("prior_period") or {}
-        if prior.get("start") and prior.get("end"):
+        if dec.get("_period_kind") == "full_history_halves" and prior.get("start") and prior.get("end"):
+            lines.append(
+                "Produktnedgång: jämför senaste halvan av tillgänglig historik "
+                f"med föregående lika långa period ({format_date_range_sv(prior['start'], prior['end'])})."
+            )
+        elif prior.get("start") and prior.get("end"):
             lines.append(
                 f"Produktnedgång jämfört med föregående {days} dagarna "
                 f"({format_date_range_sv(prior['start'], prior['end'])})."

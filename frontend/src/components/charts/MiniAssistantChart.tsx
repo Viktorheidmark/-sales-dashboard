@@ -336,7 +336,7 @@ export function MiniAssistantChart({
   const useRankList = isHorizontal && !isDeclineComp
   const barCount = chart.data.length
 
-  const trendHeight = compact ? 200 : 280
+  const trendHeight = compact ? 220 : 280
   const chartHeight = chart.chart_type === 'line_chart'
     ? trendHeight
     : isDeclineComp ? 200 : Math.max(120, barCount * 32)
@@ -439,7 +439,7 @@ export function MiniAssistantChart({
                 {chart.data.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={i === 0 ? colors.pieMuted : (isDecline ? '#ef4444' : colors.barPrimary)}
+                    fill={i === 0 ? '#94A3B8' : colors.barPrimary}
                   />
                 ))}
               </Bar>

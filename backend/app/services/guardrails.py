@@ -81,6 +81,11 @@ _INSUFFICIENT_PHRASES = [
 
 _INSUFFICIENT_RE = [re.compile(p, re.IGNORECASE) for p in _INSUFFICIENT_PHRASES]
 
+_INVENTORY_RE = re.compile(
+    r"(lagersaldo|lagerbalans|lagernivå|inventory|stock\s+level|hur\s+mycket\s+lager)",
+    re.IGNORECASE,
+)
+
 
 _UNSUPPORTED_PHRASES = [
     r"(vädr?e?t\b|vädret|väderlek|väderprognos|temperatur|weather|forecast.{0,10}weather)",
@@ -161,6 +166,18 @@ def classify(message: str) -> GuardrailResult:
             )
 
     # 3. Insufficient data — metrics not in the data model
+    if _INVENTORY_RE.search(msg):
+        return GuardrailResult(
+            classification="insufficient_data",
+            answer=(
+                "Jag har ingen lagerdata i den här demon, så jag kan inte bedöma lagersaldo. "
+                "Jag kan däremot visa vilka produkter som säljer snabbast eller vilka som tappat mest."
+            ),
+            limitations=[],
+            should_call_llm=False,
+            should_call_mcp=False,
+        )
+
     for pattern in _INSUFFICIENT_RE:
         if pattern.search(msg):
             return GuardrailResult(

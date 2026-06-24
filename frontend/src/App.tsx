@@ -7,6 +7,7 @@ import { LoginPage } from './components/sections/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { AssistantPage } from './pages/AssistantPage'
 import { InsightsPage } from './pages/InsightsPage'
+import { ChatStateProvider } from './context/ChatStateContext'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
 
@@ -61,6 +62,7 @@ export default function App() {
 
   // Authenticated app
   return (
+    <ChatStateProvider>
     <BrowserRouter
       future={{
         v7_startTransition: true,
@@ -76,5 +78,6 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ChatStateProvider>
   )
 }

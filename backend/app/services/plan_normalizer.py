@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from app.schemas.analysis_plan import AnalysisPlan, NormalizedPlanMeta
@@ -23,11 +23,12 @@ from app.services.intent_router import (
 )
 from app.services.intent_router import PriorTurnContext as RouterPriorContext
 from app.services.ranking_limits import extract_ranking_limit, resolve_product_ranking_limit
+from app.services.period_labels import message_specifies_period
 from app.services.period_utils import (
     completed_week_bounds,
     default_data_bounds,
+    default_decline_comparison_days,
     is_current_year_phrase,
-    latest_completed_date,
     resolve_period_range,
 )
 
@@ -118,47 +119,28 @@ def _resolve_period(
 ) -> tuple[str, str, str, list[str]]:
     """Return (start_date, end_date, period_kind, notes)."""
     notes: list[str] = []
-    today = reference or date.today()
+    today = reference or datetime.now(tz=timezone.utc).date()
     data_min, data_max = default_data_bounds(today)
     tp = plan.time_period
-    completed_end = min(latest_completed_date(today), data_max)
 
-    if tp.kind == "year_to_date" or (tp.kind == "unspecified" and is_current_year_phrase(message)):
+    phrase = resolve_period_range(message, reference=today, data_min=data_min, data_max=data_max)
+    if phrase.get("start_date") and phrase.get("end_date"):
+        kind = phrase.get("period_kind", "phrase_resolved")
+        return phrase["start_date"], phrase["end_date"], str(kind), notes
+
+    if is_current_year_phrase(message):
         from app.services.period_utils import current_year_period_range
         resolved = current_year_period_range(today, data_min, data_max)
         return resolved["start_date"], resolved["end_date"], "year_to_date", notes
 
-    if tp.kind == "previous_year":
-        year = today.year - 1
-        start = max(date(year, 1, 1), data_min)
-        end = min(date(year, 12, 31), data_max)
-        return start.isoformat(), end.isoformat(), "previous_year", notes
-
-    if tp.kind == "rolling_days":
-        days = tp.days or 30
-        end = completed_end
-        start = max(end - timedelta(days=days - 1), data_min)
-        return start.isoformat(), end.isoformat(), "rolling_days", notes
-
-    if tp.kind == "rolling_months":
-        months = tp.days or 3
-        end = completed_end
-        start = max(end - timedelta(days=months * 30 - 1), data_min)
-        return start.isoformat(), end.isoformat(), "rolling_months", notes
-
     if tp.kind == "full_history":
         return data_min.isoformat(), data_max.isoformat(), "full_history", notes
 
-    if tp.kind == "previous_completed_week":
+    if tp.kind == "previous_completed_week" and re.search(r"senaste\s+veck", message, re.I):
         week_start, week_end = completed_week_bounds(today)
         return week_start.isoformat(), week_end.isoformat(), "previous_completed_week", notes
 
-    if tp.kind == "current_week":
-        week_start, week_end = completed_week_bounds(today)
-        prev_start = week_start - timedelta(days=7)
-        return prev_start.isoformat(), week_end.isoformat(), "current_week", notes
-
-    if tp.kind == "exact_range" and tp.start_date and tp.end_date:
+    if tp.kind == "exact_range" and tp.start_date and tp.end_date and message_specifies_period(message):
         try:
             start_d = date.fromisoformat(tp.start_date[:10])
             end_d = date.fromisoformat(tp.end_date[:10])
@@ -170,13 +152,10 @@ def _resolve_period(
         except ValueError:
             notes.append("invalid exact_range clamped via message fallback")
 
-    phrase = resolve_period_range(message, reference=today, data_min=data_min, data_max=data_max)
-    if phrase.get("start_date") and phrase.get("end_date"):
-        kind = phrase.get("period_kind", "phrase_resolved")
-        return phrase["start_date"], phrase["end_date"], str(kind), notes
+    # Ignore planner rolling defaults when the user did not name a period.
+    if tp.kind in ("rolling_days", "rolling_months", "year_to_date", "previous_year", "current_week"):
+        notes.append(f"planner {tp.kind} ignored — no explicit period in question")
 
-    # No explicit period in the question → full available dataset.
-    # Do NOT silently apply the UI date-picker preset (typically 90 days).
     notes.append("no explicit period → full history default")
     return data_min.isoformat(), data_max.isoformat(), "full_history", notes
 
@@ -314,12 +293,22 @@ def _build_tool_plans(
         return plans
 
     if intent == "product_decline":
-        days = plan.time_period.days or max(
-            7, (date.fromisoformat(end_date) - date.fromisoformat(start_date)).days + 1,
-        )
+        explicit = message_specifies_period(message)
+        if explicit:
+            days = int(
+                plan.time_period.days
+                or resolve_period_range(message).get("days")
+                or 30
+            )
+        else:
+            days = default_decline_comparison_days()
         plans.append(ToolPlan(
             "get_declining_products",
-            {"days": min(days, 90), "limit": 5},
+            {
+                "days": min(days, 365),
+                "limit": 5,
+                "_period_kind": "full_history_halves" if not explicit else f"rolling_{days}",
+            },
             reason="planner: product decline",
         ))
         return plans

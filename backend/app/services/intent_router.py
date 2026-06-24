@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from app.services.period_utils import (
     align_weekly_query_bounds,
     completed_week_bounds,
     default_data_bounds,
+    default_decline_comparison_days,
     is_current_year_phrase,
     resolve_period_range,
 )
@@ -342,7 +343,7 @@ def _period_args_from_message(
         out["_period_explicit"] = True
         return out
     # No explicit period → full available dataset (not the UI 90-day preset).
-    today = reference or date.today()
+    today = reference or datetime.now(tz=timezone.utc).date()
     data_min, data_max = default_data_bounds(today)
     return {
         "start_date": data_min.isoformat(),
@@ -915,6 +916,29 @@ def plan_forced_tools(
         ))
         return plans
 
+    if (
+        re.search(r"(utvecklat|utveckling|trend)", msg, re.IGNORECASE)
+        and re.search(r"försäljning", msg, re.IGNORECASE)
+        and not _DECLINING_RE.search(msg)
+        and not _MARKET_SHARE_RE.search(msg)
+        and not (_TOP_PRODUCTS_RE.search(msg) and not _ALL_PRODUCTS_COMPARE_RE.search(msg))
+    ):
+        args = _period_args_from_message(msg, start_date, end_date)
+        args["granularity"] = _granularity_from_date_range(
+            args.get("start_date"),
+            args.get("end_date"),
+            msg,
+        )
+        args["_chart_intent"] = "time_series"
+        args["_force_time_series"] = True
+        args = _align_sales_over_time_weekly(args)
+        plans.append(ToolPlan(
+            tool_name="get_sales_over_time",
+            args=args,
+            reason="sales development without explicit period",
+        ))
+        return plans
+
     if _SALES_BY_REGION_RE.search(msg) and not _TOP_PRODUCTS_RE.search(msg):
         args = _period_args_from_message(msg, start_date, end_date)
         plans.append(ToolPlan(
@@ -924,9 +948,18 @@ def plan_forced_tools(
         ))
         return plans
 
-    if _DECLINING_RE.search(msg) and not _TOP_PRODUCTS_RE.search(msg):
+    if _DECLINING_RE.search(msg) and re.search(r"tappat|minskat|nedgång|fallit|sjunk", msg, re.I):
         args = _period_args_from_message(msg, start_date, end_date)
-        args.update({"days": extract_period_args(msg).get("days", 30), "limit": 5})
+        explicit_days = extract_period_args(msg).get("days")
+        if explicit_days:
+            days = int(explicit_days)
+        else:
+            days = default_decline_comparison_days()
+        args.update({
+            "days": min(days, 365),
+            "limit": 5,
+            "_period_kind": "full_history_halves" if not explicit_days else f"rolling_{days}",
+        })
         plans.append(ToolPlan(
             tool_name="get_declining_products",
             args=args,

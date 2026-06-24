@@ -22,7 +22,7 @@ from app.services.intent_router import (
     plan_long_term_trend_tools,
     plan_period_followup_tools,
 )
-from app.services.period_utils import completed_week_bounds, latest_completed_date
+from app.services.period_utils import completed_week_bounds, default_data_bounds, default_decline_comparison_days, latest_completed_date
 
 
 class IntentRouterTests(unittest.TestCase):
@@ -172,7 +172,7 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(plans[0].tool_name, "get_top_products")
         self.assertEqual(plans[0].args.get("limit"), 50)
         self.assertEqual(plans[0].args["start_date"], f"{date.today().year}-01-01")
-        self.assertEqual(plans[0].args["end_date"], (date.today() - timedelta(days=1)).isoformat())
+        self.assertEqual(plans[0].args["end_date"], latest_completed_date().isoformat())
         self.assertNotIn("region", plans[0].args)
 
     def test_sales_trend_90_days(self):
@@ -235,6 +235,31 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(len(plans), 1)
         self.assertEqual(plans[0].tool_name, "get_declining_products")
         self.assertEqual(plans[0].args.get("days"), 30)
+
+    def test_product_decline_without_period_uses_full_history_halves(self):
+        plans = plan_forced_tools(
+            "Vilken produkt har tappat mest?",
+            "Orkla Snacks Sverige",
+            self.UI_START,
+            self.UI_END,
+        )
+        self.assertEqual(plans[0].tool_name, "get_declining_products")
+        self.assertEqual(plans[0].args.get("days"), default_decline_comparison_days())
+        self.assertEqual(plans[0].args.get("_period_kind"), "full_history_halves")
+        self.assertNotEqual(plans[0].args.get("days"), 90)
+
+    def test_sales_development_without_period_uses_full_history(self):
+        plans = plan_forced_tools(
+            "Hur har försäljningen utvecklats?",
+            "Orkla Snacks Sverige",
+            self.UI_START,
+            self.UI_END,
+        )
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+        data_min, data_max = default_data_bounds()
+        self.assertEqual(plans[0].args.get("start_date"), data_min.isoformat())
+        self.assertEqual(plans[0].args.get("end_date"), latest_completed_date().isoformat())
+        self.assertNotEqual(plans[0].args.get("start_date"), self.UI_START)
 
     def test_period_followup_sales_trend(self):
         prior = PriorTurnContext(
