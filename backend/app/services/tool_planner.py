@@ -1,0 +1,131 @@
+"""
+Hybrid tool planning: deterministic secure paths → AI planner → legacy regex fallback.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from typing import Any, Optional
+
+from app.schemas.analysis_plan import AnalysisPlan, NormalizedPlanMeta
+from app.services.intent_router import (
+    PriorTurnContext,
+    ToolPlan,
+    is_diagram_followup_request,
+    plan_forced_tools,
+    plan_deep_dive_followup_tools,
+    plan_period_followup_tools,
+    plan_long_term_trend_tools,
+    plan_followup_tools,
+)
+from app.services.plan_normalizer import normalize_plan
+from app.services.planner_service import call_planner
+
+
+def _use_ai_planner() -> bool:
+    return os.environ.get("USE_AI_PLANNER", "true").lower() in ("1", "true", "yes")
+
+
+@dataclass
+class ToolResolution:
+    plans: list[ToolPlan] = field(default_factory=list)
+    source: str = "none"
+    analysis_meta: dict[str, Any] = field(default_factory=dict)
+
+
+def plan_deterministic_tools(
+    message: str,
+    supplier_name: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    prior_context: Optional[PriorTurnContext] = None,
+) -> list[ToolPlan]:
+    """Secure follow-ups and UI actions — always bypass the AI planner."""
+    msg = message.strip()
+    if prior_context:
+        for planner_fn in (
+            plan_deep_dive_followup_tools,
+            plan_period_followup_tools,
+            plan_long_term_trend_tools,
+            plan_followup_tools,
+        ):
+            plans = planner_fn(msg, prior_context, supplier_name, start_date, end_date)
+            if plans:
+                return plans
+    if is_diagram_followup_request(msg):
+        return []
+    return []
+
+
+def resolve_tool_plans(
+    message: str,
+    supplier_name: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    prior_context: Optional[PriorTurnContext] = None,
+    *,
+    planner_client: Any = None,
+    planner_model: Optional[str] = None,
+    injected_plan: Optional[AnalysisPlan] = None,
+) -> ToolResolution:
+    """
+    Resolve MCP tool plans for a user message.
+
+    injected_plan: for unit tests — skip OpenAI and use this plan directly.
+    """
+    meta: dict[str, Any] = {"ui_default_range": {"start": start_date, "end": end_date}}
+
+    det = plan_deterministic_tools(
+        message, supplier_name, start_date, end_date, prior_context,
+    )
+    if det:
+        meta.update({"source": "deterministic", "tools": [p.tool_name for p in det]})
+        return ToolResolution(plans=det, source="deterministic", analysis_meta=meta)
+
+    if _use_ai_planner():
+        try:
+            plan = injected_plan or call_planner(
+                message,
+                supplier_name,
+                prior=prior_context,
+                client=planner_client,
+                model=planner_model,
+            )
+            meta["planner_raw"] = plan.model_dump()
+            normalized = normalize_plan(
+                plan,
+                message,
+                supplier_name,
+                ui_start=start_date,
+                ui_end=end_date,
+                prior=prior_context,
+            )
+            if normalized.meta:
+                meta["normalized"] = normalized.meta.model_dump()
+            if not normalized.use_fallback and normalized.tool_plans:
+                meta.update({
+                    "source": "planner",
+                    "tools": [p.tool_name for p in normalized.tool_plans],
+                })
+                return ToolResolution(
+                    plans=normalized.tool_plans,
+                    source="planner",
+                    analysis_meta=meta,
+                )
+            meta["planner_fallback_reason"] = "low_confidence_or_unsupported"
+        except Exception as exc:
+            meta["planner_error"] = str(exc)
+
+    legacy = plan_forced_tools(
+        message, supplier_name, start_date, end_date, prior_context=prior_context,
+    )
+    if legacy:
+        meta.update({
+            "source": "legacy_fallback",
+            "tools": [p.tool_name for p in legacy],
+        })
+        return ToolResolution(plans=legacy, source="legacy_fallback", analysis_meta=meta)
+
+    meta["source"] = "llm_tools"
+    return ToolResolution(plans=[], source="llm_tools", analysis_meta=meta)

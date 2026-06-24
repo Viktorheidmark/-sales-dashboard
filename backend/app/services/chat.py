@@ -30,11 +30,12 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from app.services.guardrails import classify
 from app.services.chart_builder import pick_charts
 from app.services.deep_dive_builder import build_deep_dive, build_follow_up_actions
+from app.services.tool_planner import resolve_tool_plans
 from app.services.intent_router import (
-    plan_forced_tools,
     default_category_for_supplier,
     prior_context_from_dict,
     is_diagram_followup_request,
+    plan_forced_tools,
 )
 from app.services.period_utils import apply_sales_over_time_period_policy
 from app.services.currency_format import (
@@ -388,13 +389,14 @@ def _final_payload(
     limitations: list[str],
     supplier_id: str,
     question: str = "",
+    analysis_meta: Optional[dict] = None,
 ) -> dict:
     cleaned_answer = sanitize_answer_currency(answer, raw_tool_results)
     cleaned_answer = sanitize_trend_wording(cleaned_answer, raw_tool_results)
     all_charts = pick_charts(raw_tool_results, question)
     deep_dive = build_deep_dive(raw_tool_results)
     follow_ups = build_follow_up_actions(deep_dive, "")
-    return {
+    payload = {
         "answer": cleaned_answer,
         "tool_calls": list(dict.fromkeys(tools_used)),
         "sources": sources,
@@ -406,6 +408,9 @@ def _final_payload(
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
+    if analysis_meta and os.environ.get("CHAT_INCLUDE_ANALYSIS_META", "").lower() in ("1", "true", "yes"):
+        payload["analysis_meta"] = analysis_meta
+    return payload
 
 
 async def _llm_tool_round(
@@ -522,6 +527,7 @@ async def run_chat(
     sources: list[dict] = []
     limitations: list[str] = []
     raw_tool_results: list[tuple[str, dict]] = []
+    analysis_meta: dict = {}
 
     params = _server_params()
 
@@ -539,9 +545,11 @@ async def run_chat(
                 {"role": "user", "content": user_message},
             ]
 
-            forced = plan_forced_tools(
+            resolution = resolve_tool_plans(
                 message, supplier_name, start_date, end_date, prior_context=prior,
             )
+            analysis_meta = resolution.analysis_meta
+            forced = resolution.plans
             if forced:
                 await _execute_planned_tools(
                     session, forced, supplier_id, start_date, end_date,
@@ -578,7 +586,7 @@ async def run_chat(
                 raw_tool_results=raw_tool_results,
             )
 
-    return _final_payload(answer, tools_used, sources, raw_tool_results, limitations, supplier_id, message)
+    return _final_payload(answer, tools_used, sources, raw_tool_results, limitations, supplier_id, message, analysis_meta)
 
 
 async def stream_chat(
@@ -617,6 +625,7 @@ async def stream_chat(
         sources: list[dict] = []
         limitations: list[str] = []
         raw_tool_results: list[tuple[str, dict]] = []
+        analysis_meta: dict = {}
 
         params = _server_params()
 
@@ -636,9 +645,11 @@ async def stream_chat(
                     {"role": "user", "content": user_message},
                 ]
 
-                forced = plan_forced_tools(
+                resolution = resolve_tool_plans(
                     message, supplier_name, start_date, end_date, prior_context=prior,
                 )
+                analysis_meta = resolution.analysis_meta
+                forced = resolution.plans
                 if forced:
                     await _execute_planned_tools(
                         session, forced, supplier_id, start_date, end_date,
@@ -720,7 +731,7 @@ async def stream_chat(
                 yield sse("complete", {
                     **_final_payload(
                         full_answer, tools_used, sources, raw_tool_results,
-                        limitations, supplier_id, message,
+                        limitations, supplier_id, message, analysis_meta,
                     ),
                 })
 

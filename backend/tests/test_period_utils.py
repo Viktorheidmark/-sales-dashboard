@@ -9,10 +9,12 @@ from app.services.period_utils import (
     completed_week_bounds,
     completed_week_label,
     current_period_start,
+    current_year_period_range,
     default_data_bounds,
     filter_incomplete_series,
     first_complete_week_monday,
     format_week_range_sv,
+    is_current_year_phrase,
     latest_completed_date,
     resolve_period_range,
     series_date_range,
@@ -36,13 +38,35 @@ class PeriodUtilsTests(unittest.TestCase):
         )
         self.assertEqual(out["start_date"], "2026-01-01")
         self.assertEqual(out["end_date"], "2026-06-22")
+        self.assertEqual(out.get("period_kind"), "current_year")
 
     def test_i_ar_resolves_same_as_detta_ar(self):
-        detta = resolve_period_range("i år", reference=self.REF, data_min=self.DATA_MIN, data_max=self.DATA_MAX)
-        i_ar = resolve_period_range("hittills i år", reference=self.REF, data_min=self.DATA_MIN, data_max=self.DATA_MAX)
-        self.assertEqual(detta, i_ar)
-        self.assertEqual(detta["start_date"], "2026-01-01")
-        self.assertEqual(detta["end_date"], "2026-06-22")
+        phrases = [
+            "i år",
+            "hittills i år",
+            "Hur ser försäljningen ut i år?",
+            "Hur ser försäljningen överlag ut detta år?",
+            "Hur har försäljningen utvecklats i år?",
+            "Vilka produkter säljer bäst i år?",
+            "under året",
+            "årets försäljning",
+        ]
+        expected = current_year_period_range(
+            reference=self.REF,
+            data_min=self.DATA_MIN,
+            data_max=self.DATA_MAX,
+        )
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(is_current_year_phrase(phrase))
+                out = resolve_period_range(
+                    phrase,
+                    reference=self.REF,
+                    data_min=self.DATA_MIN,
+                    data_max=self.DATA_MAX,
+                )
+                self.assertEqual(out["start_date"], expected["start_date"])
+                self.assertEqual(out["end_date"], expected["end_date"])
 
     def test_forra_are_resolves_previous_calendar_year(self):
         out = resolve_period_range(
@@ -88,6 +112,26 @@ class PeriodUtilsTests(unittest.TestCase):
         start, end = default_data_bounds(self.REF)
         self.assertEqual(end, date(2026, 6, 22))
         self.assertEqual((end - start).days + 1, 730)
+
+    def test_ytd_monthly_chart_excludes_incomplete_current_month(self):
+        result = {
+            "granularity": "month",
+            "series": [
+                {"period": "2026-01-01", "revenue": 100.0},
+                {"period": "2026-02-01", "revenue": 110.0},
+                {"period": "2026-03-01", "revenue": 120.0},
+                {"period": "2026-04-01", "revenue": 130.0},
+                {"period": "2026-05-01", "revenue": 140.0},
+                {"period": "2026-06-01", "revenue": 20.0},
+            ],
+            "date_range": {"start": "2026-01-01", "end": "2026-06-22"},
+            "query_date_range": {"start": "2026-01-01", "end": "2026-06-22"},
+            "limitations": [],
+        }
+        out = apply_sales_over_time_period_policy(result)
+        self.assertEqual(len(out["series"]), 5)
+        self.assertEqual(out["series"][-1]["period"], "2026-05-01")
+        self.assertTrue(out.get("period_analysis", {}).get("excluded_incomplete_period"))
 
     def test_current_month_start(self):
         ref = date(2026, 6, 23)

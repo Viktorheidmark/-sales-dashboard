@@ -15,6 +15,7 @@ from typing import Any, Optional
 from app.services.period_utils import (
     align_weekly_query_bounds,
     completed_week_bounds,
+    is_current_year_phrase,
     resolve_period_range,
 )
 
@@ -191,6 +192,16 @@ _PRODUCT_COMPARE_FOLLOWUP_RE = re.compile(
     re.IGNORECASE,
 )
 
+_YTD_DEVELOPMENT_RE = re.compile(
+    r"hur\s+har\s+försäljningen\s+utvecklats",
+    re.IGNORECASE,
+)
+
+_YTD_OVERVIEW_RE = re.compile(
+    r"(hur\s+ser\s+försäljningen|överlag|hur\s+går\s+det)",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class ToolPlan:
@@ -293,6 +304,76 @@ def _period_args_from_message(
             out["completed_week"] = True
         return out
     return _date_args(start_date, end_date, prior)
+
+
+def _ytd_monthly_trend_args(period_args: dict) -> dict:
+    return {
+        **period_args,
+        "granularity": "month",
+        "_chart_intent": "time_series",
+        "_force_time_series": True,
+    }
+
+
+def _plan_ytd_tools(
+    message: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> list[ToolPlan]:
+    """Deterministic routing for current-calendar-year (YTD) questions."""
+    if not is_current_year_phrase(message):
+        return []
+
+    period_args = _period_args_from_message(message, start_date, end_date)
+
+    if (
+        (_TOP_PRODUCTS_RE.search(message) or _ALL_PRODUCTS_COMPARE_RE.search(message))
+        and not _DECLINING_RE.search(message)
+    ):
+        args = dict(period_args)
+        region = extract_region(message)
+        if region:
+            args["region"] = region
+            args["limit"] = 5
+        elif _ALL_PRODUCTS_COMPARE_RE.search(message):
+            args["limit"] = 50
+        else:
+            args["limit"] = 10
+        return [ToolPlan(
+            tool_name="get_top_products",
+            args=args,
+            reason="YTD product ranking",
+        )]
+
+    if _YTD_DEVELOPMENT_RE.search(message):
+        return [ToolPlan(
+            tool_name="get_sales_over_time",
+            args=_ytd_monthly_trend_args(period_args),
+            reason="YTD monthly development trend",
+        )]
+
+    if _YTD_OVERVIEW_RE.search(message):
+        return [
+            ToolPlan(
+                tool_name="get_supplier_kpis",
+                args=dict(period_args),
+                reason="YTD KPI summary",
+            ),
+            ToolPlan(
+                tool_name="get_sales_over_time",
+                args=_ytd_monthly_trend_args(period_args),
+                reason="YTD monthly overview chart",
+            ),
+        ]
+
+    if re.search(r"försäljning", message, re.IGNORECASE):
+        return [ToolPlan(
+            tool_name="get_sales_over_time",
+            args=_ytd_monthly_trend_args(period_args),
+            reason="YTD monthly trend",
+        )]
+
+    return []
 
 
 def _date_args(
@@ -743,6 +824,10 @@ def plan_forced_tools(
         ))
         return plans
 
+    ytd_plans = _plan_ytd_tools(msg, start_date, end_date)
+    if ytd_plans:
+        return ytd_plans
+
     if _SALES_TREND_RE.search(msg):
         args = _period_args_from_message(msg, start_date, end_date)
         args["granularity"] = _granularity_from_date_range(
@@ -796,16 +881,16 @@ def plan_forced_tools(
 
     if _TOP_PRODUCTS_RE.search(msg) and not _DECLINING_RE.search(msg):
         region = extract_region(msg)
+        args = _period_args_from_message(msg, start_date, end_date)
         if region:
-            args = _period_args_from_message(msg, start_date, end_date)
             args["region"] = region
-            args["limit"] = 5
-            plans.append(ToolPlan(
-                tool_name="get_top_products",
-                args=args,
-                reason=f"regional top products ({region})",
-            ))
-            return plans
+        args["limit"] = 5
+        plans.append(ToolPlan(
+            tool_name="get_top_products",
+            args=args,
+            reason=f"top products{f' ({region})' if region else ''}",
+        ))
+        return plans
 
     if _MARKET_SHARE_RE.search(msg):
         category = extract_category(msg) or default_category_for_supplier(supplier_name)

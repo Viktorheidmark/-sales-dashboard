@@ -6,6 +6,8 @@ Run: python -m unittest tests.test_intent_router
 import unittest
 from datetime import date, timedelta
 
+from app.services.chart_policy import select_charts
+from app.services.chart_builder import LINE_CHART, BAR_CHART
 from app.services.intent_router import (
     PriorTurnContext,
     default_category_for_supplier,
@@ -20,10 +22,97 @@ from app.services.intent_router import (
     plan_long_term_trend_tools,
     plan_period_followup_tools,
 )
-from app.services.period_utils import completed_week_bounds
+from app.services.period_utils import completed_week_bounds, latest_completed_date
 
 
 class IntentRouterTests(unittest.TestCase):
+    UI_START = "2026-03-25"
+    UI_END = "2026-06-23"
+
+    def _expected_ytd(self) -> tuple[str, str]:
+        return f"{date.today().year}-01-01", latest_completed_date().isoformat()
+
+    def test_ytd_overview_overrides_ui_default(self):
+        plans = plan_forced_tools(
+            "Hur ser försäljningen överlag ut detta år?",
+            "Orkla Snacks Sverige",
+            start_date=self.UI_START,
+            end_date=self.UI_END,
+        )
+        ytd_start, ytd_end = self._expected_ytd()
+        self.assertEqual(len(plans), 2)
+        self.assertEqual(plans[0].tool_name, "get_supplier_kpis")
+        self.assertEqual(plans[1].tool_name, "get_sales_over_time")
+        self.assertEqual(plans[0].args["start_date"], ytd_start)
+        self.assertEqual(plans[0].args["end_date"], ytd_end)
+        self.assertEqual(plans[1].args["granularity"], "month")
+        self.assertEqual(plans[1].args.get("_chart_intent"), "time_series")
+
+    def test_ytd_sales_overview_monthly_trend(self):
+        plans = plan_forced_tools(
+            "Hur ser försäljningen ut i år?",
+            "Orkla Snacks Sverige",
+            start_date=self.UI_START,
+            end_date=self.UI_END,
+        )
+        ytd_start, ytd_end = self._expected_ytd()
+        self.assertEqual(len(plans), 2)
+        self.assertEqual(plans[1].args["start_date"], ytd_start)
+        self.assertEqual(plans[1].args["end_date"], ytd_end)
+        self.assertEqual(plans[1].args["granularity"], "month")
+
+    def test_ytd_development_monthly_time_series(self):
+        plans = plan_forced_tools(
+            "Hur har försäljningen utvecklats i år?",
+            "Orkla Snacks Sverige",
+            start_date=self.UI_START,
+            end_date=self.UI_END,
+        )
+        ytd_start, ytd_end = self._expected_ytd()
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_sales_over_time")
+        self.assertEqual(plans[0].args["start_date"], ytd_start)
+        self.assertEqual(plans[0].args["end_date"], ytd_end)
+        self.assertEqual(plans[0].args["granularity"], "month")
+        self.assertEqual(plans[0].args.get("_chart_intent"), "time_series")
+        charts = select_charts(
+            "Hur har försäljningen utvecklats i år?",
+            [("get_sales_over_time", {
+                **plans[0].args,
+                "granularity": "month",
+                "series": [
+                    {"period": "2026-01-01", "revenue": 1.0},
+                    {"period": "2026-02-01", "revenue": 2.0},
+                    {"period": "2026-03-01", "revenue": 3.0},
+                ],
+            })],
+        )
+        self.assertEqual(charts[0]["chart_type"], LINE_CHART)
+
+    def test_ytd_top_products_ranking(self):
+        plans = plan_forced_tools(
+            "Vilka produkter säljer bäst i år?",
+            "Orkla Snacks Sverige",
+            start_date=self.UI_START,
+            end_date=self.UI_END,
+        )
+        ytd_start, ytd_end = self._expected_ytd()
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_top_products")
+        self.assertEqual(plans[0].args["start_date"], ytd_start)
+        self.assertEqual(plans[0].args["end_date"], ytd_end)
+        charts = select_charts(
+            "Vilka produkter säljer bäst i år?",
+            [("get_top_products", {
+                "products": [
+                    {"product_name": "A", "revenue": 10.0},
+                    {"product_name": "B", "revenue": 5.0},
+                ],
+            })],
+        )
+        self.assertEqual(charts[0]["chart_type"], BAR_CHART)
+        self.assertEqual(charts[0].get("layout"), "horizontal")
+
     def test_default_category_cocacola(self):
         self.assertEqual(default_category_for_supplier("Coca-Cola Europacific Partners Sverige"), "Läsk")
 

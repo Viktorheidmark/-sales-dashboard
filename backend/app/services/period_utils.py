@@ -21,8 +21,20 @@ WEEKLY_COMPARISON_UNAVAILABLE_NOTE = (
 
 DEFAULT_DATASET_LOOKBACK_DAYS = 730  # matches seed_demo_data.HISTORY_DAYS
 
-_THIS_YEAR_RE = re.compile(
-    r"(detta\s+år|i\s+år|hittills\s+i\s+år|från\s+början\s+av\s+året)",
+_CURRENT_YEAR_RE = re.compile(
+    r"("
+    r"detta\s+år|"
+    r"hittills\s+i\s+år|"
+    r"under\s+året|"
+    r"från\s+början\s+av\s+året|"
+    r"årets\s+försäljning|"
+    r"försäljningen\s+överlag\s+i\s+år|"
+    r"hur\s+går\s+det\s+i\s+år|"
+    r"hur\s+ser\s+försäljningen\s+ut\s+i\s+år|"
+    r"hur\s+har\s+försäljningen\s+utvecklats\s+i\s+år|"
+    r"hur\s+ser\s+försäljningen\s+överlag\s+ut\s+detta\s+år|"
+    r"\bi\s+år\b"
+    r")",
     re.IGNORECASE,
 )
 _LAST_YEAR_RE = re.compile(r"förra\s+året", re.IGNORECASE)
@@ -64,6 +76,32 @@ def clamp_date_range(start: date, end: date, data_min: date, data_max: date) -> 
     return start, end
 
 
+def is_current_year_phrase(message: str) -> bool:
+    """True when the message refers to the current calendar year to date."""
+    return bool(_CURRENT_YEAR_RE.search((message or "").lower()))
+
+
+def current_year_period_range(
+    reference: Optional[date] = None,
+    data_min: Optional[date] = None,
+    data_max: Optional[date] = None,
+) -> dict:
+    """January 1 of reference year through latest completed available date."""
+    today = reference or datetime.now(tz=timezone.utc).date()
+    if data_min is None or data_max is None:
+        default_min, default_max = default_data_bounds(today)
+        data_min = data_min or default_min
+        data_max = data_max or default_max
+    completed_end = min(latest_completed_date(today), data_max)
+    start, end = clamp_date_range(date(today.year, 1, 1), completed_end, data_min, data_max)
+    return {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "days": (end - start).days + 1,
+        "period_kind": "current_year",
+    }
+
+
 def resolve_period_range(
     message: str,
     reference: Optional[date] = None,
@@ -97,13 +135,8 @@ def resolve_period_range(
             "days": (end - start).days + 1,
         }
 
-    if _THIS_YEAR_RE.search(msg):
-        start, end = clamp_date_range(date(today.year, 1, 1), completed_end, data_min, data_max)
-        return {
-            "start_date": start.isoformat(),
-            "end_date": end.isoformat(),
-            "days": (end - start).days + 1,
-        }
+    if is_current_year_phrase(msg):
+        return current_year_period_range(today, data_min, data_max)
 
     if _ROLLING_YEAR_RE.search(msg):
         end = completed_end
@@ -133,6 +166,16 @@ def resolve_period_range(
             "end_date": week_end.isoformat(),
             "days": (week_end - week_start).days + 1,
             "completed_week": True,
+        }
+
+    if re.search(r"senaste\s+kvartalet", msg):
+        end = completed_end
+        start, end = clamp_date_range(end - timedelta(days=89), end, data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": 90,
+            "period_kind": "rolling_quarter",
         }
 
     if re.search(r"senaste\s+90", msg):
