@@ -31,6 +31,7 @@ from app.services.guardrails import classify
 from app.services.chart_builder import pick_charts
 from app.services.deep_dive_builder import build_deep_dive
 from app.services.follow_up_builder import build_contextual_follow_ups
+from app.services.follow_up_context import extract_analysis_context
 from app.services.comparison_labels import build_comparison_context_block
 from app.services.tool_planner import resolve_tool_plans
 from app.services.intent_router import (
@@ -425,6 +426,7 @@ def _final_payload(
     all_charts = pick_charts(raw_tool_results, question)
     deep_dive = build_deep_dive(raw_tool_results)
     follow_ups = build_contextual_follow_ups(raw_tool_results, question, deep_dive)
+    analysis_context = extract_analysis_context(raw_tool_results, question)
     payload = {
         "answer": cleaned_answer,
         "tool_calls": list(dict.fromkeys(tools_used)),
@@ -433,6 +435,7 @@ def _final_payload(
         "charts": all_charts[1:] if len(all_charts) > 1 else [],
         "deep_dive": deep_dive,
         "follow_up_actions": follow_ups,
+        "analysis_context": analysis_context or None,
         "limitations": list(set(limitations)),
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -536,6 +539,7 @@ async def run_chat(
     end_date: Optional[str] = None,
     supplier_name: str = "",
     prior_context: Optional[dict] = None,
+    follow_up_action: Optional[dict] = None,
 ) -> dict:
     guard = classify(message)
     if not guard.should_call_llm:
@@ -576,6 +580,7 @@ async def run_chat(
 
             resolution = resolve_tool_plans(
                 message, supplier_name, start_date, end_date, prior_context=prior,
+                follow_up_action=follow_up_action,
             )
             analysis_meta = resolution.analysis_meta
             forced = resolution.plans
@@ -625,6 +630,7 @@ async def stream_chat(
     end_date: Optional[str] = None,
     supplier_name: str = "",
     prior_context: Optional[dict] = None,
+    follow_up_action: Optional[dict] = None,
 ):
     def sse(event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -676,6 +682,7 @@ async def stream_chat(
 
                 resolution = resolve_tool_plans(
                     message, supplier_name, start_date, end_date, prior_context=prior,
+                    follow_up_action=follow_up_action,
                 )
                 analysis_meta = resolution.analysis_meta
                 forced = resolution.plans

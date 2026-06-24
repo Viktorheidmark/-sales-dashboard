@@ -5,6 +5,7 @@ Contextual follow-up chips grounded in verified tool output and supported routes
 from __future__ import annotations
 
 from app.services.comparison_labels import analyzed_period_label
+from app.services.follow_up_context import extract_analysis_context, make_follow_up_action
 from app.services.period_utils import is_current_year_phrase
 
 
@@ -35,6 +36,13 @@ def _period_phrase_from_range(date_range: dict | None, question: str = "") -> st
         pass
     label = analyzed_period_label(dr)
     return f"under perioden {label}"
+
+
+def _ctx_from_results(
+    tool_results: list[tuple[str, dict]],
+    question: str,
+) -> dict:
+    return extract_analysis_context(tool_results, question)
 
 
 def build_follow_up_actions(
@@ -87,25 +95,35 @@ def build_contextual_follow_ups(
         if isinstance(result, dict) and "error" not in result:
             by_tool[name] = result
 
+    ctx = _ctx_from_results(tool_results, question)
+
     if "get_supplier_kpis" in by_tool and "get_sales_over_time" in by_tool:
         period = _period_phrase_from_range(by_tool["get_supplier_kpis"].get("date_range"), question)
         return [
-            {
-                "label": "Visa utveckling per vecka",
-                "message": f"Visa utveckling per vecka {period}",
-            },
-            {
-                "label": "Visa produkter som drev utvecklingen",
-                "message": f"Vilka produkter drev utvecklingen {period}?",
-            },
-            {
-                "label": "Visa utveckling per region",
-                "message": f"Hur ser försäljningen ut per region {period}?",
-            },
-            {
-                "label": "Jämför med samma period förra året",
-                "message": "Hur ser försäljningen ut jämfört med samma period förra året?",
-            },
+            make_follow_up_action(
+                "Visa utveckling per vecka",
+                f"Visa utveckling per vecka {period}",
+                "weekly_trend",
+                ctx,
+            ),
+            make_follow_up_action(
+                "Visa produkter som drev utvecklingen",
+                f"Vilka produkter drev utvecklingen {period}?",
+                "product_drivers",
+                ctx,
+            ),
+            make_follow_up_action(
+                "Visa utveckling per region",
+                f"Hur ser försäljningen ut per region {period}?",
+                "region_breakdown",
+                ctx,
+            ),
+            make_follow_up_action(
+                "Jämför med samma period förra året",
+                "Hur ser försäljningen ut jämfört med samma period förra året?",
+                "yoy_compare",
+                ctx,
+            ),
         ]
 
     if "get_market_share" in by_tool:
@@ -134,10 +152,12 @@ def build_contextual_follow_ups(
         if products:
             top = products[0].get("product_name")
             if top:
-                chips.append({
-                    "label": "Visa produktens utveckling över tid",
-                    "message": f"Hur har {top} utvecklats {period}?",
-                })
+                chips.append(make_follow_up_action(
+                    "Visa produktens utveckling över tid",
+                    f"Hur har {top} utvecklats {period}?",
+                    "product_trend",
+                    ctx,
+                ))
             if len(products) >= 2:
                 a, b = products[0].get("product_name"), products[1].get("product_name")
                 if a and b:
@@ -145,10 +165,12 @@ def build_contextual_follow_ups(
                         "label": "Jämför de två största produkterna",
                         "message": f"Jämför {a} och {b} {period}",
                     })
-        chips.append({
-            "label": "Visa försäljning per region",
-            "message": f"Vilken region genererar mest intäkter{region_suffix} {period}?",
-        })
+        chips.append(make_follow_up_action(
+            "Visa försäljning per region",
+            f"Vilken region genererar mest intäkter{region_suffix} {period}?",
+            "region_breakdown",
+            ctx,
+        ))
         return chips[:3]
 
     if "get_sales_over_time" in by_tool and "get_revenue_drivers" not in by_tool:
@@ -157,19 +179,25 @@ def build_contextual_follow_ups(
         if is_current_year_phrase(question) or "utveckl" in question.lower():
             actions: list[dict[str, str]] = []
             if sales.get("granularity", "month") == "month":
-                actions.append({
-                    "label": "Visa utveckling per vecka",
-                    "message": f"Visa utveckling per vecka {period}",
-                })
+                actions.append(make_follow_up_action(
+                    "Visa utveckling per vecka",
+                    f"Visa utveckling per vecka {period}",
+                    "weekly_trend",
+                    ctx,
+                ))
             actions.extend([
-                {
-                    "label": "Visa produkter som drev utvecklingen",
-                    "message": f"Vilka produkter drev utvecklingen {period}?",
-                },
-                {
-                    "label": "Visa utveckling per region",
-                    "message": f"Hur ser försäljningen ut per region {period}?",
-                },
+                make_follow_up_action(
+                    "Visa produkter som drev utvecklingen",
+                    f"Vilka produkter drev utvecklingen {period}?",
+                    "product_drivers",
+                    ctx,
+                ),
+                make_follow_up_action(
+                    "Visa utveckling per region",
+                    f"Hur ser försäljningen ut per region {period}?",
+                    "region_breakdown",
+                    ctx,
+                ),
             ])
             return actions
 

@@ -224,6 +224,7 @@ class PriorTurnContext:
     tool_calls: tuple[str, ...] = ()
     sources: tuple[dict[str, Any], ...] = ()
     has_chart: bool = False
+    analysis_context: Optional[dict[str, Any]] = None
 
 
 def default_category_for_supplier(supplier_name: str) -> str:
@@ -967,10 +968,14 @@ def prior_context_from_dict(data: Optional[dict]) -> Optional[PriorTurnContext]:
         return None
     tool_calls = tuple(data.get("tool_calls") or [])
     sources = tuple(data.get("sources") or [])
+    analysis_context = data.get("analysis_context")
+    if isinstance(analysis_context, dict) and not analysis_context:
+        analysis_context = None
     return PriorTurnContext(
         question=question,
         answer=data.get("answer") or "",
         tool_calls=tool_calls,
         sources=sources,
         has_chart=bool(data.get("has_chart")),
+        analysis_context=analysis_context,
     )

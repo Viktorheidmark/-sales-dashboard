@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../../api/client'
-import type { ChatResponse, DateRange, PriorTurnContext, SourceMeta } from '../../api/types'
+import type { ChatResponse, DateRange, FollowUpAction, PriorTurnContext, SourceMeta } from '../../api/types'
 import { formatDate } from '../../utils/format'
 import { MiniAssistantChart } from '../charts/MiniAssistantChart'
 import { DeepDivePanel } from '../charts/DeepDivePanel'
@@ -87,6 +87,7 @@ function buildPriorContext(messages: Message[]): PriorTurnContext | undefined {
       tool_calls: msg.response.tool_calls,
       sources: msg.response.sources,
       has_chart: msg.response.chart != null,
+      analysis_context: msg.response.analysis_context ?? undefined,
     }
   }
   return undefined
@@ -230,7 +231,7 @@ function AssistantBubble({
   msg: Message
   supplierName?: string
   fallbackDateRange?: DateRange
-  onSendMessage: (text: string) => void
+  onSendMessage: (text: string, followUpAction?: FollowUpAction) => void
 }) {
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
@@ -343,7 +344,7 @@ function AssistantBubble({
           {r.follow_up_actions!.map((action) => (
             <button
               key={action.label}
-              onClick={() => onSendMessage(action.message)}
+              onClick={() => onSendMessage(action.message, action)}
               className="text-xs px-2.5 py-1 rounded-full border border-workspace-border bg-workspace-surface text-theme-body hover:border-brand-400/60 hover:text-brand-600 dark:hover:text-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
             >
               {action.label}
@@ -412,7 +413,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, followUpAction?: FollowUpAction) => {
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
@@ -448,6 +449,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
           start_date: startDate,
           end_date: endDate,
           prior_context: priorContext,
+          follow_up_action: followUpAction?.action ? followUpAction : undefined,
         },
         abort.signal,
       )
@@ -472,6 +474,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             charts: event.charts,
             deep_dive: event.deep_dive,
             follow_up_actions: event.follow_up_actions,
+            analysis_context: event.analysis_context,
             limitations: event.limitations,
             supplier_id: event.supplier_id,
             generated_at: event.generated_at,

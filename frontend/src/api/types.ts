@@ -107,6 +107,28 @@ export interface DeepDivePayload {
 export interface FollowUpAction {
   label: string
   message: string
+  action?: string
+  context?: {
+    start_date?: string
+    end_date?: string
+    period_kind?: string
+    granularity?: string
+    region?: string
+    category?: string
+  }
+}
+
+export interface AnalysisContext {
+  prior_intent?: string
+  start_date: string
+  end_date: string
+  period_kind?: string
+  granularity?: string
+  region?: string
+  category?: string
+  product_name?: string
+  limit?: number
+  prior_tool_calls?: string[]
 }
 
 export interface PriorTurnContext {
@@ -115,6 +137,7 @@ export interface PriorTurnContext {
   tool_calls: string[]
   sources?: SourceMeta[]
   has_chart?: boolean
+  analysis_context?: AnalysisContext
 }
 
 export interface ChatRequest {
@@ -122,6 +145,7 @@ export interface ChatRequest {
   start_date?: string
   end_date?: string
   prior_context?: PriorTurnContext
+  follow_up_action?: FollowUpAction
 }
 
 // --- /api/insights ---
@@ -168,6 +192,7 @@ export interface ChatResponse {
   charts?: ChartPayload[]
   deep_dive?: DeepDivePayload | null
   follow_up_actions?: FollowUpAction[]
+  analysis_context?: AnalysisContext | null
   limitations: string[]
   supplier_id: string
   generated_at: string

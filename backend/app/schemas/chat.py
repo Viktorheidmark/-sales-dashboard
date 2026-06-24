@@ -8,6 +8,14 @@ class PriorTurnContext(BaseModel):
     tool_calls: list[str] = []
     sources: list[dict[str, Any]] = []
     has_chart: bool = False
+    analysis_context: Optional[dict[str, Any]] = None
+
+
+class FollowUpAction(BaseModel):
+    label: str
+    message: str
+    action: Optional[str] = None
+    context: Optional[dict[str, Any]] = None
 
 
 class ChatRequest(BaseModel):
@@ -15,6 +23,7 @@ class ChatRequest(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     prior_context: Optional[PriorTurnContext] = None
+    follow_up_action: Optional[FollowUpAction] = None
 
     @field_validator("message")
     @classmethod
@@ -44,7 +53,8 @@ class ChatResponse(BaseModel):
     chart: Optional[Any] = None
     charts: list[Any] = []
     deep_dive: Optional[Any] = None
-    follow_up_actions: list[dict[str, str]] = []
+    follow_up_actions: list[dict[str, Any]] = []
+    analysis_context: Optional[dict[str, Any]] = None
     limitations: list[str]
     supplier_id: str
     generated_at: str

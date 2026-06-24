@@ -12,6 +12,9 @@ from app.schemas.analysis_plan import AnalysisPlan, NormalizedPlanMeta
 from app.services.intent_router import (
     PriorTurnContext,
     ToolPlan,
+    _YTD_WEEKLY_RE,
+    extract_period_args,
+    extract_region,
     is_diagram_followup_request,
     plan_forced_tools,
     plan_deep_dive_followup_tools,
@@ -40,9 +43,46 @@ def plan_deterministic_tools(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     prior_context: Optional[PriorTurnContext] = None,
+    follow_up_action: Optional[dict] = None,
 ) -> list[ToolPlan]:
     """Secure follow-ups and UI actions — always bypass the AI planner."""
     msg = message.strip()
+    if prior_context and follow_up_action:
+        from app.services.follow_up_context import validate_and_resolve_follow_up
+        structured = validate_and_resolve_follow_up(
+            follow_up_action,
+            prior_context.question,
+            list(prior_context.tool_calls),
+            list(prior_context.sources),
+            prior_context.analysis_context,
+            message=msg,
+            supplier_name=supplier_name,
+        )
+        if structured:
+            return structured
+
+    if prior_context:
+        from app.services.follow_up_context import (
+            analysis_context_from_prior_data,
+            plan_from_analysis_context,
+        )
+        ctx = analysis_context_from_prior_data(
+            prior_context.question,
+            list(prior_context.tool_calls),
+            list(prior_context.sources),
+            prior_context.analysis_context,
+        )
+        if ctx and _YTD_WEEKLY_RE.search(msg) and not extract_period_args(msg):
+            weekly = plan_from_analysis_context("weekly_trend", ctx, message=msg, supplier_name=supplier_name)
+            if weekly:
+                return weekly
+        if ctx and extract_region(msg) and len(msg) <= 24:
+            region_only = plan_from_analysis_context(
+                "region_filter", ctx, message=msg, supplier_name=supplier_name,
+            )
+            if region_only:
+                return region_only
+
     if prior_context:
         for planner_fn in (
             plan_deep_dive_followup_tools,
@@ -64,6 +104,7 @@ def resolve_tool_plans(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     prior_context: Optional[PriorTurnContext] = None,
+    follow_up_action: Optional[dict] = None,
     *,
     planner_client: Any = None,
     planner_model: Optional[str] = None,
@@ -77,7 +118,7 @@ def resolve_tool_plans(
     meta: dict[str, Any] = {"ui_default_range": {"start": start_date, "end": end_date}}
 
     det = plan_deterministic_tools(
-        message, supplier_name, start_date, end_date, prior_context,
+        message, supplier_name, start_date, end_date, prior_context, follow_up_action,
     )
     if det:
         meta.update({"source": "deterministic", "tools": [p.tool_name for p in det]})
