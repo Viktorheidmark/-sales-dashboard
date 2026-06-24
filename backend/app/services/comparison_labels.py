@@ -142,11 +142,13 @@ def build_comparison_context_block(
 
     for tool_name, result in by_tool.items():
         opening = result.get("period_label_opening")
-        if opening:
+        answer_phrase = result.get("period_label_answer")
+        if answer_phrase:
             lines.append(
-                f"OBLIGATORISK PERIOD I SVARET: Inled första meningen med '{opening}' "
-                f"(eller integrera '{result.get('period_label_answer')}' naturligt). "
-                "Använd aldrig 'under perioden', 'under vald period' eller 'i den aktuella perioden'."
+                f"PERIOD I SVARET: väv in '{answer_phrase}' naturligt efter slutsatsen "
+                f"(helst i första eller andra meningen). "
+                "Börja INTE med 'Under perioden', rå ISO-datum eller leverantörsnamn. "
+                f"Använd inte '{opening}' som inledning."
             )
             break
 
@@ -161,9 +163,15 @@ def build_comparison_context_block(
 
     if "get_market_share" in by_tool:
         ms = by_tool["get_market_share"]
+        category = ms.get("category_name") or "kategorin"
+        period_phrase = ms.get("period_label_answer") or chart_period_suffix(
+            ms.get("_period_kind") or infer_period_kind(ms.get("date_range") or {}, message=question),
+            ms.get("date_range"),
+            question,
+        )
         lines.append(
-            f"OBLIGATORISK PERIOD I SVARET: {market_share_period_label(ms)}. "
-            "Nämn alltid kategori och tidsperiod i första meningen."
+            f"Marknadsandel inom {category} · {period_phrase}. "
+            "Börja direkt med er andel i procent — väv in kategori och period naturligt i första meningen."
         )
 
     if "get_revenue_drivers" in by_tool:

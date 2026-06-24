@@ -27,7 +27,6 @@ def _period_phrase_from_range(date_range: dict | None, question: str = "") -> st
     if span == 90:
         return "de senaste 90 dagarna"
     try:
-        from datetime import date as dt
         s_d = dt.fromisoformat(start[:10])
         e_d = dt.fromisoformat(end[:10])
         if s_d.month == 1 and s_d.day == 1 and s_d.year == e_d.year:
@@ -45,6 +44,23 @@ def _ctx_from_results(
     return extract_analysis_context(tool_results, question)
 
 
+def _decline_follow_ups(product_name: str, period: str) -> list[dict[str, str]]:
+    return [
+        {
+            "label": "Visa tappet per region",
+            "message": f"Visa tappet per region för {product_name} {period}",
+        },
+        {
+            "label": "Visa produktens utveckling över tid",
+            "message": f"Visa {product_name}s utveckling över tid {period}",
+        },
+        {
+            "label": "Jämför med övriga produkter",
+            "message": f"Jämför {product_name} med övriga produkter {period}",
+        },
+    ]
+
+
 def build_follow_up_actions(
     deep_dive: dict | None,
     question: str = "",
@@ -59,23 +75,28 @@ def build_follow_up_actions(
 
     if kind == "revenue_development":
         actions = [
-            {"label": "Visa produkter som drev ökningen", "message": f"Visa produkter som drev ökningen {period}"},
-            {"label": "Visa produkter som tappade", "message": f"Visa produkter som tappade {period}"},
-            {"label": "Visa utveckling per region", "message": f"Visa utveckling per region {period}"},
+            {
+                "label": "Visa vilka produkter som driver utvecklingen",
+                "message": f"Vilka produkter drev utvecklingen {period}?",
+            },
+            {
+                "label": "Visa produkter som tappade",
+                "message": f"Vilka produkter tappade {period}?",
+            },
+            make_follow_up_action(
+                "Visa utveckling per region",
+                f"Hur ser försäljningen ut per region {period}?",
+                "region_breakdown",
+                _ctx_from_results([], question),
+            ),
         ]
-        if deep_dive.get("relatively_stable"):
-            actions.append({"label": "Visa trend över tid", "message": f"Visa försäljningstrend {period}"})
-        return actions
+        return actions[:3]
 
     if kind == "product_decline":
         focus = (deep_dive.get("focus_product") or {}).get("product_name")
         if not focus:
             return []
-        return [
-            {"label": "Visa tappet per region", "message": f"Visa tappet per region för {focus} {period}"},
-            {"label": "Visa produktens utveckling över tid", "message": f"Visa {focus}s utveckling över tid {period}"},
-            {"label": "Jämför med övriga produkter", "message": f"Jämför {focus} med övriga produkter {period}"},
-        ]
+        return _decline_follow_ups(focus, period)
 
     return []
 
@@ -88,7 +109,7 @@ def build_contextual_follow_ups(
     """Merge deep-dive chips with overview, trend, ranking and market-share chips."""
     actions = build_follow_up_actions(deep_dive, question)
     if actions:
-        return actions
+        return actions[:3]
 
     by_tool: dict[str, dict] = {}
     for name, result in tool_results:
@@ -96,35 +117,6 @@ def build_contextual_follow_ups(
             by_tool[name] = result
 
     ctx = _ctx_from_results(tool_results, question)
-
-    if "get_supplier_kpis" in by_tool and "get_sales_over_time" in by_tool:
-        period = _period_phrase_from_range(by_tool["get_supplier_kpis"].get("date_range"), question)
-        return [
-            make_follow_up_action(
-                "Visa utveckling per vecka",
-                f"Visa utveckling per vecka {period}",
-                "weekly_trend",
-                ctx,
-            ),
-            make_follow_up_action(
-                "Visa produkter som drev utvecklingen",
-                f"Vilka produkter drev utvecklingen {period}?",
-                "product_drivers",
-                ctx,
-            ),
-            make_follow_up_action(
-                "Visa utveckling per region",
-                f"Hur ser försäljningen ut per region {period}?",
-                "region_breakdown",
-                ctx,
-            ),
-            make_follow_up_action(
-                "Jämför med samma period förra året",
-                "Hur ser försäljningen ut jämfört med samma period förra året?",
-                "yoy_compare",
-                ctx,
-            ),
-        ]
 
     if "get_market_share" in by_tool:
         ms = by_tool["get_market_share"]
@@ -136,7 +128,26 @@ def build_contextual_follow_ups(
                 "label": f"Visa våra starkaste produkter inom {category}",
                 "message": f"Vilka produkter säljer bäst inom {category} {span_phrase}?",
             },
-        ]
+            {
+                "label": "Visa marknadsandel över tid",
+                "message": f"Hur har marknadsandelen inom {category} utvecklats {span_phrase}?",
+            },
+            make_follow_up_action(
+                "Visa försäljning per region",
+                f"Hur ser försäljningen ut per region {span_phrase}?",
+                "region_breakdown",
+                ctx,
+            ),
+        ][:3]
+
+    if "get_declining_products" in by_tool:
+        decl = by_tool["get_declining_products"]
+        days = int(decl.get("comparison_days") or 30)
+        period = f"de senaste {days} dagarna"
+        products = decl.get("products") or []
+        focus = products[0].get("product_name") if products else None
+        if focus:
+            return _decline_follow_ups(focus, period)
 
     if "get_top_products" in by_tool:
         products = by_tool["get_top_products"].get("products") or []
@@ -168,32 +179,76 @@ def build_contextual_follow_ups(
         ))
         return chips[:3]
 
+    if "get_sales_by_region" in by_tool:
+        period = _period_phrase_from_range(by_tool["get_sales_by_region"].get("date_range"), question)
+        regions = by_tool["get_sales_by_region"].get("regions") or []
+        top_region = regions[0].get("region") if regions else None
+        chips: list[dict[str, str]] = []
+        if top_region:
+            chips.append({
+                "label": f"Visa starkaste produkter i {top_region}",
+                "message": f"Vilka produkter säljer bäst i {top_region} {period}?",
+            })
+        chips.append({
+            "label": "Jämför med andra regioner",
+            "message": f"Hur ser försäljningen ut per region {period}?",
+        })
+        chips.append(make_follow_up_action(
+            "Visa utveckling över tid",
+            f"Hur har försäljningen utvecklats {period}?",
+            "weekly_trend",
+            ctx,
+        ))
+        return chips[:3]
+
+    if "get_supplier_kpis" in by_tool and "get_sales_over_time" in by_tool:
+        period = _period_phrase_from_range(by_tool["get_supplier_kpis"].get("date_range"), question)
+        return [
+            make_follow_up_action(
+                "Visa utveckling per vecka",
+                f"Visa utveckling per vecka {period}",
+                "weekly_trend",
+                ctx,
+            ),
+            make_follow_up_action(
+                "Visa vilka produkter som driver utvecklingen",
+                f"Vilka produkter drev utvecklingen {period}?",
+                "product_drivers",
+                ctx,
+            ),
+            make_follow_up_action(
+                "Visa utveckling per region",
+                f"Hur ser försäljningen ut per region {period}?",
+                "region_breakdown",
+                ctx,
+            ),
+        ][:3]
+
     if "get_sales_over_time" in by_tool and "get_revenue_drivers" not in by_tool:
         period = _period_phrase_from_range(by_tool["get_sales_over_time"].get("date_range"), question)
         sales = by_tool["get_sales_over_time"]
-        if is_current_year_phrase(question) or "utveckl" in question.lower():
-            actions: list[dict[str, str]] = []
-            if sales.get("granularity", "month") == "month":
-                actions.append(make_follow_up_action(
-                    "Visa utveckling per vecka",
-                    f"Visa utveckling per vecka {period}",
-                    "weekly_trend",
-                    ctx,
-                ))
-            actions.extend([
-                make_follow_up_action(
-                    "Visa produkter som drev utvecklingen",
-                    f"Vilka produkter drev utvecklingen {period}?",
-                    "product_drivers",
-                    ctx,
-                ),
-                make_follow_up_action(
-                    "Visa utveckling per region",
-                    f"Hur ser försäljningen ut per region {period}?",
-                    "region_breakdown",
-                    ctx,
-                ),
-            ])
-            return actions
+        actions: list[dict[str, str]] = []
+        if sales.get("granularity", "month") == "month":
+            actions.append(make_follow_up_action(
+                "Visa utveckling per vecka",
+                f"Visa utveckling per vecka {period}",
+                "weekly_trend",
+                ctx,
+            ))
+        actions.extend([
+            make_follow_up_action(
+                "Visa vilka produkter som driver utvecklingen",
+                f"Vilka produkter drev utvecklingen {period}?",
+                "product_drivers",
+                ctx,
+            ),
+            make_follow_up_action(
+                "Visa utveckling per region",
+                f"Hur ser försäljningen ut per region {period}?",
+                "region_breakdown",
+                ctx,
+            ),
+        ])
+        return actions[:3]
 
     return []

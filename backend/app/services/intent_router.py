@@ -15,6 +15,7 @@ from typing import Any, Optional
 from app.services.period_utils import (
     align_weekly_query_bounds,
     completed_week_bounds,
+    default_data_bounds,
     is_current_year_phrase,
     resolve_period_range,
 )
@@ -316,7 +317,14 @@ def _period_args_from_message(
     prior: Optional[PriorTurnContext] = None,
     reference: Optional[date] = None,
 ) -> dict:
-    """Message-resolved period overrides UI default date filters."""
+    """
+    Resolve period args for a standalone question.
+
+    Priority:
+      1. Explicit period phrase in the message (e.g. "senaste 30 dagarna", "i år").
+      2. Full available dataset — do NOT fall back to the UI date-picker preset
+         (always 90 days) for questions that have no explicit time reference.
+    """
     period_args = extract_period_args(message, reference=reference) if message else {}
     if period_args.get("start_date") and period_args.get("end_date"):
         out = {
@@ -333,10 +341,15 @@ def _period_args_from_message(
         )
         out["_period_explicit"] = True
         return out
-    out = _date_args(start_date, end_date, prior)
-    out["_period_kind"] = _period_kind_from_ui_args(out)
-    out["_period_explicit"] = False
-    return out
+    # No explicit period → full available dataset (not the UI 90-day preset).
+    today = reference or date.today()
+    data_min, data_max = default_data_bounds(today)
+    return {
+        "start_date": data_min.isoformat(),
+        "end_date": data_max.isoformat(),
+        "_period_kind": "full_history",
+        "_period_explicit": False,
+    }
 
 
 def _ytd_weekly_trend_args(period_args: dict) -> dict:

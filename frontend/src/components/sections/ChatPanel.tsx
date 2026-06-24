@@ -1,16 +1,14 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../../api/client'
-import type { ChatResponse, DateRange, FollowUpAction, InsightSummary, PriorTurnContext, SourceMeta } from '../../api/types'
+import type { ChatResponse, DateRange, InsightSummary, PriorTurnContext, SourceMeta } from '../../api/types'
 import { formatDate } from '../../utils/format'
 import { MiniAssistantChart } from '../charts/MiniAssistantChart'
 import { DeepDivePanel } from '../charts/DeepDivePanel'
 import {
-  ANALYTICS_DATA_SOURCE,
   formatSourcePeriod,
   isMarketShareResponse,
   resolveResponseDateRange,
-  toolLabelSv,
   visibleResponseLimitations,
 } from '../../utils/sourcePresentation'
 
@@ -71,9 +69,20 @@ const PROMPT_CARDS = [
   },
 ]
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+const LOADING_STATUSES = [
+  'Analyserar försäljningsdata…',
+  'Hämtar relevanta jämförelser…',
+  'Förbereder analys…',
+] as const
+
+function loadingStatusFor(message: string): string {
+  const idx = message.trim().length % LOADING_STATUSES.length
+  return LOADING_STATUSES[idx]
+}
+
+function userFacingError(_raw?: string): string {
+  return 'Analysen kunde inte slutföras. Försök igen.'
+}
 
 interface Message {
   id: string
@@ -152,17 +161,13 @@ function SourceSummary({
   fallbackDateRange?: DateRange
 }) {
   const dateRange = resolveResponseDateRange(sources, fallbackDateRange)
-  const periodLabel = dateRange ? formatSourcePeriod(dateRange) : null
+  if (!dateRange) return null
+  const periodLabel = formatSourcePeriod(dateRange)
 
   return (
-    <div className="rounded-lg border border-workspace-border/80 bg-workspace-muted/40 px-3 py-2">
-      <p className="text-[11px] text-theme-muted leading-snug">
-        <span className="font-medium text-theme-body">Datakälla.</span>{' '}
-        {periodLabel
-          ? `Försäljningsdata ${periodLabel}.`
-          : 'Försäljningsdata för vald period.'}
-      </p>
-    </div>
+    <p className="text-[10px] text-theme-faint leading-snug">
+      Data: Försäljningsdata · {periodLabel}
+    </p>
   )
 }
 
@@ -177,15 +182,16 @@ function TechnicalSourceDetails({
   sources: SourceMeta[]
   fallbackDateRange?: DateRange
 }) {
+  if (sources.length === 0) return null
+
   return (
-    <details className="group/tech">
-      <summary className="text-xs text-theme-muted cursor-pointer select-none hover:text-theme-body list-none flex items-center gap-1 w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded">
+    <details className="group/tech mt-1">
+      <summary className="text-[10px] text-theme-faint cursor-pointer select-none hover:text-theme-muted list-none flex items-center gap-1 w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded">
         <span className="transition-transform group-open/tech:rotate-90 text-theme-faint">›</span>
         Visa tekniska detaljer
       </summary>
-      <div className="mt-3 pl-3 border-l border-workspace-border/60">
-        <p className="text-xs font-medium text-theme-muted mb-3">Analysinformation</p>
-        <div className="space-y-4">
+      <div className="mt-2 pl-2 border-l border-workspace-border/40">
+        <div className="space-y-3">
           {sources.map((s, i) => {
             const period =
               s.date_range?.start && s.date_range?.end
@@ -195,18 +201,16 @@ function TechnicalSourceDetails({
             return (
               <div
                 key={i}
-                className={`space-y-1.5 text-xs text-theme-muted leading-relaxed ${
-                  i > 0 ? 'pt-4 border-t border-workspace-border/50' : ''
+                className={`space-y-1 text-[10px] text-theme-faint leading-relaxed ${
+                  i > 0 ? 'pt-3 border-t border-workspace-border/40' : ''
                 }`}
               >
-                <p className="font-medium text-theme-body">{toolLabelSv(s.tool)}</p>
                 {s.generated_at && (
-                  <p>Data uppdaterad: {formatDate(s.generated_at)}</p>
+                  <p>Uppdaterad: {formatDate(s.generated_at)}</p>
                 )}
                 {period?.start && period?.end && (
-                  <p>Analysperiod: {formatSourcePeriod(period)}</p>
+                  <p>Period: {formatSourcePeriod(period)}</p>
                 )}
-                <p>Datakälla: {ANALYTICS_DATA_SOURCE}</p>
               </div>
             )
           })}
@@ -261,26 +265,37 @@ function ChartBlock({
     return <MiniAssistantChart chart={chart} supplierName={supplierName} />
   }
   return (
-    <div className={isSecondary ? 'opacity-95' : ''}>
+    <div className={`assistant-chart-card ${isSecondary ? 'assistant-chart-card-secondary' : ''}`}>
       {chart.title && (
-        <p className={`font-semibold text-theme-body mb-1 leading-snug ${isSecondary ? 'text-[11px]' : 'text-xs'}`}>
+        <h3 className={`font-semibold text-theme-heading leading-snug ${isSecondary ? 'text-xs' : 'text-sm'}`}>
           {chart.title}
-        </p>
+        </h3>
       )}
       {chart.description && (
-        <p className={`text-theme-muted mb-2 leading-relaxed ${isSecondary ? 'text-[11px]' : 'text-xs'}`}>
+        <p className={`text-theme-muted mt-0.5 mb-3 leading-relaxed ${isSecondary ? 'text-[11px]' : 'text-xs'}`}>
           {chart.description}
         </p>
       )}
-      <div className={`rounded-lg border border-workspace-border bg-workspace-muted/50 px-3 py-2 ${isSecondary ? 'max-w-sm' : ''}`}>
-        <MiniAssistantChart chart={chart} supplierName={supplierName} compact={isSecondary} />
-      </div>
+      <MiniAssistantChart chart={chart} supplierName={supplierName} compact={isSecondary} />
       {chart.stability_note && (
-        <p className="mt-1.5 text-[11px] text-theme-muted leading-snug italic">{chart.stability_note}</p>
+        <p className="mt-2 text-[11px] text-theme-muted leading-snug italic">{chart.stability_note}</p>
       )}
       {chart.period_note && (
-        <p className="mt-1.5 text-[11px] text-theme-muted leading-snug">{chart.period_note}</p>
+        <p className="mt-2 text-[11px] text-theme-muted leading-snug">{chart.period_note}</p>
       )}
+    </div>
+  )
+}
+
+function UnsupportedAnswerCard({ content }: { content: string }) {
+  return (
+    <div className="assistant-support-card flex items-start gap-3">
+      <span className="shrink-0 w-8 h-8 rounded-lg bg-workspace-muted border border-workspace-border/60 flex items-center justify-center text-theme-muted" aria-hidden>
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
+      </span>
+      <p className="min-w-0 text-sm text-theme-body leading-relaxed">{content}</p>
     </div>
   )
 }
@@ -298,7 +313,7 @@ function AssistantBubble({
   msg: Message
   supplierName?: string
   fallbackDateRange?: DateRange
-  onSendMessage: (text: string, followUpAction?: FollowUpAction) => void
+  onSendMessage: (text: string) => void
 }) {
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
@@ -325,7 +340,7 @@ function AssistantBubble({
   if (msg.loading && !msg.streamingContent) {
     return (
       <article
-        className="self-start max-w-[80%] bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4"
+        className="self-start w-full bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4"
         style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
       >
         <div className="flex items-center gap-2.5 text-sm text-theme-muted">
@@ -339,10 +354,10 @@ function AssistantBubble({
   if (msg.loading && msg.streamingContent) {
     return (
       <article
-        className="self-start max-w-[80%] bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4 space-y-1"
+        className="self-start w-full bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4"
         style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
       >
-        <div className="text-[15px] text-theme-body leading-[1.75]">
+        <div className="text-[15px] text-theme-body leading-[1.7] min-h-[4.5rem]">
           <ReactMarkdown components={markdownComponents}>
             {msg.streamingContent}
           </ReactMarkdown>
@@ -355,10 +370,19 @@ function AssistantBubble({
   if (msg.error) {
     return (
       <article
-        className="self-start max-w-[80%] bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4"
+        className="self-start w-full bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4 space-y-3"
         style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
       >
-        <p className="text-[15px] text-theme-muted leading-relaxed">{msg.error}</p>
+        <p className="text-sm text-theme-body leading-relaxed">{msg.error}</p>
+        {msg.question && (
+          <button
+            type="button"
+            onClick={() => onSendMessage(msg.question!)}
+            className="text-xs px-2.5 py-1 rounded-full border border-workspace-border bg-workspace-surface text-theme-body hover:border-brand-400/60 hover:text-brand-600 dark:hover:text-brand-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+          >
+            Försök igen
+          </button>
+        )}
       </article>
     )
   }
@@ -366,19 +390,25 @@ function AssistantBubble({
   const r = msg.response!
   const isGrounded = r.tool_calls.length > 0
   const displayLimitations = visibleResponseLimitations(r.limitations, r)
+  const sourcePeriod = resolveResponseDateRange(r.sources, fallbackDateRange)
+  const showSourceFooter = isGrounded && (sourcePeriod != null || r.sources.length > 0)
 
   return (
     <article
-      className="self-start max-w-[80%] bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4 space-y-5"
+      className="self-start w-full bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4 space-y-3"
       style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
     >
-      <div className="text-[15px] text-theme-body leading-[1.75]">
-        <ReactMarkdown components={markdownComponents}>
-          {msg.content}
-        </ReactMarkdown>
-      </div>
+      {!isGrounded ? (
+        <UnsupportedAnswerCard content={msg.content} />
+      ) : (
+        <div className="text-[15px] text-theme-body leading-[1.7]">
+          <ReactMarkdown components={markdownComponents}>
+            {msg.content}
+          </ReactMarkdown>
+        </div>
+      )}
 
-      {!r.chart && r.tool_calls.includes('get_sales_over_time') && !r.deep_dive && (
+      {isGrounded && !r.chart && r.tool_calls.includes('get_sales_over_time') && !r.deep_dive && (
         <div className="flex items-center gap-4 pt-1">
           <button
             onClick={() => onSendMessage('Visa diagram')}
@@ -418,17 +448,30 @@ function AssistantBubble({
         </div>
       )}
 
-      {(r.follow_up_actions ?? []).length > 0 && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          {r.follow_up_actions!.map((action) => (
-            <button
-              key={action.label}
-              onClick={() => onSendMessage(action.message, action)}
-              className="text-xs px-2.5 py-1 rounded-full border border-workspace-border bg-workspace-surface text-theme-body hover:border-brand-400/60 hover:text-brand-600 dark:hover:text-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
-            >
-              {action.label}
-            </button>
-          ))}
+      {isGrounded && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            disabled={saveState !== 'idle'}
+            className={`inline-flex items-center gap-1.5 text-xs transition-colors ${
+              saveState === 'saved'
+                ? 'text-emerald-600 dark:text-emerald-400 cursor-default'
+                : saveState === 'error'
+                ? 'text-red-500 dark:text-red-400 cursor-default'
+                : saveState === 'saving'
+                ? 'text-theme-muted cursor-wait'
+                : 'text-theme-muted hover:text-brand-600 dark:hover:text-brand-400'
+            }`}
+          >
+            <BookmarkIcon filled={saveState === 'saved'} />
+            {saveState === 'saved'
+              ? 'Insikten har sparats'
+              : saveState === 'error'
+              ? 'Kunde inte spara'
+              : saveState === 'saving'
+              ? 'Sparar…'
+              : 'Spara insikt'}
+          </button>
         </div>
       )}
 
@@ -440,31 +483,10 @@ function AssistantBubble({
         </div>
       )}
 
-      {isGrounded && (
-        <div className="space-y-3 pt-1">
+      {showSourceFooter && (
+        <div className="space-y-1 pt-2 border-t border-workspace-border/30">
           <SourceSummary sources={r.sources} fallbackDateRange={fallbackDateRange} />
           <TechnicalSourceDetails sources={r.sources} fallbackDateRange={fallbackDateRange} />
-        </div>
-      )}
-
-      {isGrounded && (
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            onClick={handleSave}
-            disabled={saveState !== 'idle'}
-            className={`inline-flex items-center gap-1.5 text-xs transition-colors ${
-              saveState === 'saved'
-                ? 'text-emerald-400 cursor-default'
-                : saveState === 'error'
-                ? 'text-red-400 cursor-default'
-                : saveState === 'saving'
-                ? 'text-theme-muted cursor-wait'
-                : 'text-theme-muted hover:text-brand-600 dark:text-brand-400'
-            }`}
-          >
-            <BookmarkIcon filled={saveState === 'saved'} />
-            {saveState === 'saved' ? 'Sparad i Insikter' : saveState === 'error' ? 'Misslyckades' : saveState === 'saving' ? 'Sparar…' : 'Spara'}
-          </button>
         </div>
       )}
     </article>
@@ -521,6 +543,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
+  const chatSessionRef = useRef(0)
 
   useEffect(() => {
     mountedRef.current = true
@@ -534,7 +557,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const sendMessage = async (text: string, followUpAction?: FollowUpAction) => {
+  const sendMessage = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
@@ -549,7 +572,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
       role: 'assistant',
       content: '',
       loading: true,
-      statusText: 'Analyserar försäljningsdata…',
+      statusText: loadingStatusFor(trimmed),
       question: trimmed,
     }
 
@@ -563,23 +586,23 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
     }
 
     try {
-      const priorContext = buildPriorContext(messages)
+      const sessionAtSend = chatSessionRef.current
+      const priorContext = messages.length > 0 ? buildPriorContext(messages) : undefined
       const stream = api.chatStream(
         {
           message: trimmed,
           start_date: startDate,
           end_date: endDate,
           prior_context: priorContext,
-          follow_up_action: followUpAction?.action ? followUpAction : undefined,
         },
         abort.signal,
       )
 
       for await (const event of stream) {
-        if (!mountedRef.current || abort.signal.aborted) break
+        if (!mountedRef.current || abort.signal.aborted || chatSessionRef.current !== sessionAtSend) break
 
         if (event.type === 'status') {
-          update({ statusText: event.text })
+          update({ statusText: event.text || loadingStatusFor(trimmed) })
         } else if (event.type === 'delta') {
           setMessages(prev => prev.map(m =>
             m.id === assistantId
@@ -612,7 +635,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             loading: false,
             streamingContent: undefined,
             statusText: undefined,
-            error: event.message,
+            error: userFacingError(event.message),
           })
         }
       }
@@ -623,7 +646,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
         loading: false,
         streamingContent: undefined,
         statusText: undefined,
-        error: 'Anslutningen avbröts. Försök igen.',
+        error: userFacingError(),
       })
     } finally {
       if (mountedRef.current) {
@@ -643,6 +666,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
   const resetChat = () => {
     abortRef.current?.abort()
     abortRef.current = null
+    chatSessionRef.current += 1
     setMessages([])
     setInput('')
     setLoading(false)
@@ -786,7 +810,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             </div>
           ) : (
             /* ── Conversation messages ── */
-            <div className="py-6 sm:py-8 space-y-6">
+            <div className="py-6 sm:py-8 space-y-4">
               {messages.map(msg =>
                 msg.role === 'user' ? (
                   /* User bubble */
@@ -859,22 +883,15 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             <button
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || loading}
-              className="absolute right-3 bottom-3 flex items-center justify-center text-white transition-all duration-150 disabled:opacity-35 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              aria-busy={loading}
+              className={`absolute right-3 bottom-3 flex items-center justify-center text-white transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                !input.trim() || loading ? 'opacity-35 cursor-not-allowed' : 'opacity-100 hover:scale-105'
+              }`}
               style={{
                 width: 40,
                 height: 40,
                 borderRadius: '50%',
-                background: '#3B82F6',
-              }}
-              onMouseEnter={e => {
-                if (!e.currentTarget.disabled) {
-                  e.currentTarget.style.background = '#2563EB'
-                  e.currentTarget.style.transform = 'scale(1.05)'
-                }
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = '#3B82F6'
-                e.currentTarget.style.transform = ''
+                background: loading ? '#94A3B8' : '#3B82F6',
               }}
               aria-label="Skicka"
             >

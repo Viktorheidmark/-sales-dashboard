@@ -34,6 +34,8 @@ _FORBIDDEN_PHRASES = (
     "bör överväga att",
     "föregående period",
     "tidigare period",
+    "baserat på data",
+    "analysen visar",
 )
 
 _UNSUPPORTED_ADVICE_RE = re.compile(
@@ -147,28 +149,28 @@ def executive_writing_rules(supplier_name: str) -> str:
     forbidden = "; ".join(f'"{p}"' for p in _FORBIDDEN_PHRASES)
     return f"""
 SKRIVSTANDARD (obligatorisk):
-- Struktur: 1) en mening slutsats 2) 2–3 kompakta fakta 3) högst ett datastött nästa steg.
-- Börja direkt med slutsatsen — inga inledningar som "Under perioden ... har ... utvecklats enligt följande".
-- Använd "{name}" endast när du syftar på leverantören/företaget — inte "ert märke" om inte användaren skrev det.
+- Skriv som en skarp svensk kommersiell analytiker — inte som en rå dataexport.
+- Struktur: 2–3 korta stycken. Första meningen = direkt svar på frågan.
+- Förbjudna inledningar: "Under perioden", "Baserat på data", "Analysen visar", "För {name}".
+- Använd "ni", "er", "ert" eller utelämna leverantörsnamn naturligt. Upprepa INTE hela leverantörsnamnet om det inte behövs.
 - PRODUKTNAMN: kopiera exakt product_name från verktygsresultat. Sätt ALDRIG leverantörsnamnet framför produktnamnet
-  om det inte redan ingår i product_name (t.ex. skriv "Arla Iced Coffee Latte", INTE "{name} Iced Coffee Latte").
+  om det inte redan ingår i product_name (t.ex. skriv "Coca-Cola Zero Sugar 33 cl", INTE "{name} Zero Sugar").
+- Siffror i läsbar svensk form: 5,0 mkr · 800 tkr · 357 047 enheter · 13 215 ordrar · 59,1 %.
 - Omsättning: använd VALUTAREFERENS och VALUTAFORMAT — under 1 000 kr, 1 000–999 999 tkr, från 1 000 000 mkr.
-  Exempel: 75 619 SEK = 75,6 tkr (ALDRIG mkr). 1 200 000 SEK = 1,2 mkr.
+- Period: väv in period_label_answer naturligt (t.ex. "under hela perioden", "hittills i år") — ALDRIG rå ISO-intervall
+  som inledning (t.ex. inte "2024-06-23 till 2026-06-22" i första meningen).
 - Max cirka 90 ord om inte användaren uttryckligen ber om detaljer.
-- Undvik AI-fraser och utfyllnad. Inga stycken som bara sammanfattar det du redan sagt.
-- Rekommendera INTE marknadsföring, prissättning, kampanjer, lager, distribution eller kundpreferenser
-  om datan inte explicit innehåller dessa dimensioner.
+- Hitta aldrig på orsaker, rekommendationer eller siffror som saknas i verktygsdata.
+- Nämn aldrig MCP, verktygsanrop, JSON, planner, databas eller implementation.
 - Avsluta INTE med generiska råd ("för att fortsätta...", "kan det vara fördelaktigt att analysera...").
-  Uppföljning sker via knappar i gränssnittet — skriv bara fakta från verktygsdata.
-- Vid periodjämförelse: ange alltid exakt jämförelsebas (datumintervall eller antal dagar).
-  Skriv ALDRIG bara "föregående period", "tidigare period" eller "jämfört med tidigare" utan exakt period.
+- Vid periodjämförelse: använd exakt jämförelsebas från JÄMFÖRELSE- OCH PERIODKRAV när den finns.
 - Förbjudna fraser och liknande: {forbidden}.
 
 EXEMPEL PÅ BRA TON:
-- "{name} har 69,2 % marknadsandel i Mejeri."
-- "KESO Cottage Cheese är största produkten i Stockholm med 7,1 tkr i omsättning."
-- "Arla Iced Coffee Latte är största risken: omsättningen är ned 56,5 % mot föregående 30 dagar."
-- "Jämför Arla Iced Coffee Latte mellan regioner för att se om tappet är koncentrerat."
+- "Ni har 59,1 % av marknaden inom Läsk under hela perioden."
+- "Coca-Cola Zero Sugar är tydligt er starkaste produkt, med 5,0 mkr i omsättning och 357 047 sålda enheter."
+- "Försäljningen är stabil hittills i år. Omsättningen är 4,5 mkr, vilket är i nivå med samma period förra året."
+- "Coca-Cola Zero Sugar Lemon har tappat mest: omsättningen är ned 56,5 % jämfört med föregående 30 dagarna."
 """
 
 
@@ -180,35 +182,32 @@ def synthesis_blueprint(question: str, tools_used: list[str], supplier_name: str
     if "get_market_share" in tools or _MARKET_SHARE_RE.search(q):
         return """
 FRÅGETYP: Marknadsandel
-- Max 3 korta meningar.
-- Första meningen MÅSTE nämna kategori OCH analyserad tidsperiod (enligt OBLIGATORISK PERIOD I SVARET).
-- Inkludera: leverantörens andel, övriga aktörers andel.
-- Skriv "Övriga aktörer" — nämn inte antal konkurrenter eller "en aktör".
-- Avsluta utan rekommendation — ingen uppföljning om produkter, marknadsföring eller strategier.
+- Styck 1: Börja direkt med er andel i procent och kategori (t.ex. "Ni har 59,1 % av marknaden inom Läsk under hela perioden.").
+- Styck 2: Er omsättning, kategoritotal och övriga aktörers andel i procent ("Övriga aktörer står tillsammans för X %").
+- Använd period_label_answer naturligt — aldrig rå ISO-datum i inledningen.
+- Skriv "Övriga aktörer" — nämn inte antal konkurrenter, produkter eller enskilda konkurrentnamn.
+- Max 2–3 korta stycken. Ingen rekommendation eller strategiråd.
 """
 
     if "get_supplier_kpis" in tools:
-        return f"""
+        return """
 FRÅGETYP: Översikt (KPI)
-- Första meningen MÅSTE ange analyserad tidsperiod (period_label_opening / period_label_answer).
-- Slutsats om omsättning för analyserad period (date_range i verktygsresultat).
-- Andra meningen: förändring i ordrar och enheter om relevant.
-- Tredje meningen: procentuell förändring mot jämförelsebas — använd OBLIGATORISK JÄMFÖRELSETEXT
-  från JÄMFÖRELSE- OCH PERIODKRAV ordagrant (t.ex. "jämfört med samma period föregående år, 1 januari–23 juni 2025").
-- Nämn leverantören ("{name}") en gång.
-- Max 3 meningar. INGEN rekommendation eller generisk uppmaning att analysera vidare.
+- Styck 1: Direkt slutsats om omsättning för perioden (period_label_answer), med belopp.
+- Styck 2: Ordrar och enheter om relevant.
+- Styck 3: Procentuell förändring mot jämförelsebas — använd OBLIGATORISK JÄMFÖRELSETEXT ordagrant när den finns.
+- Använd "ni/er" — inte fullt leverantörsnamn i inledningen.
+- Max 3 korta stycken. Ingen rekommendation.
 """
 
     if "get_top_products" in tools or (_TOP_PRODUCTS_RE.search(q) and "nedgång" not in q.lower()):
         return """
 FRÅGETYP: Topprodukter
-- Första meningen MÅSTE tydligt ange analyserad tidsperiod (period_label_opening / period_label_answer).
-- Nämn tydlig vinnare med exakt product_name och region om den finns i verktygsresultat.
-- Andra meningen: tvåa (runner-up) med exakt product_name om den finns i verktygsresultat.
-- Nämn ENDAST produkter som finns i verktygsresultat — aldrig fler än requested_limit.
-- Om färre än tre produkter returnerades: lista bara dessa, utan att hitta på fler.
-- Avsluta utan rekommendation — ingen marknadsföring, kampanj, prissättning, lager eller distribution.
-- Förbjudet: "överväg att fokusera på marknadsföring" och liknande råd.
+- Styck 1: Namnge starkaste produkten direkt med exakt product_name, omsättning och sålda enheter.
+  Väv in period_label_answer naturligt (t.ex. "under hela perioden") — inte som inledning med ISO-datum.
+- Styck 2: Nästa produkter enligt ranking och requested_limit — med omsättning. Nämn gap till tvåan om meningsfullt.
+- Styck 3: En kort, datastödd kommersiell tolkning (t.ex. sortimentsmotor, tydlig ledare) — inga påhittade orsaker.
+- Nämn ENDAST produkter i verktygsresultat. Lista inte fler än requested_limit.
+- Nämn region endast om den finns i verktygsresultat och är relevant.
 """
 
     if "get_revenue_drivers" in tools:
@@ -218,18 +217,17 @@ FRÅGETYP: Omsättningsutveckling (30 dagar)
 - Nämn ordrar och enheter om de förstärker bilden.
 - Lyft största positiva produktbidrag och största negativa produktbidrag med exakta product_name.
 - Nämn region med starkast respektive svagast förändring om datan finns.
-- Max 4 korta meningar. Ingen rekommendation.
+- Max 3 korta stycken. Ingen rekommendation.
 """
 
     if "get_declining_products" in tools or _DECLINING_RE.search(q):
         return """
 FRÅGETYP: Produkter i nedgång
-- Första meningen MÅSTE ange analyserad tidsperiod (period_label_answer).
-- Börja med största nedgången med exakt product_name, procent och omsättningsförändring.
+- Styck 1: Börja med produkten som tappat mest — exakt product_name, procent och omsättningsförändring.
+- Styck 2: Jämförelseperiod i naturligt språk (period_label_answer / jämförelsebas från verktygsdata).
+- Styck 3: En kort tolkning — brett eller koncentrerat — endast om datan stödjer det. Säg inte "risk" utan tydlig nedgång.
 - Ignorera produkter med marginell förändring.
-- Avsluta med högst ett specifikt uppföljningssteg som produkten stödjer, t.ex.:
-  "Jämför produkten mellan regioner." / "Följ utvecklingen mot föregående period."
-- Inga antaganden om pris, lager, kampanj eller marknadsföring.
+- Inga antaganden om pris, lager eller marknadsföring.
 """
 
     if "get_sales_over_time" in tools and is_diagram_followup_request(q):
@@ -246,54 +244,38 @@ FRÅGETYP: Diagramuppföljning (försäljning)
     if "get_sales_over_time" in tools and _WEEKLY_SALES_RE.search(q):
         return f"""
 FRÅGETYP: Senaste avslutade veckan
-- Börja med exakt period från completed_week_label i verktygsresultat, eller date_range om etiketten saknas
-  (t.ex. "Senaste avslutade vecka: 16–22 juni 2026").
-- Ange omsättning, antal ordrar och sålda enheter för den veckan (från serien).
-- En kort mening om jämförelse: om weekly_comparison_available är false eller comparison_note finns,
-  avsluta med exakt comparison_note-texten (affärsspråk om saknad jämförelsevecka).
-  Om två eller fler fullständiga veckor finns: en kort jämförelse mot föregående fullständiga vecka.
-- Nämn leverantören ("{name}") en gång.
+- Börja direkt med veckans resultat: omsättning, ordrar och enheter.
+- Ange period naturligt via completed_week_label eller period_label_answer — inte rå ISO i inledningen.
+- En kort jämförelse: om weekly_comparison_available är false, använd comparison_note.
+  Om två eller fler fullständiga veckor finns: kort jämförelse mot föregående avslutade vecka.
 - Max cirka 60 ord. Ingen rekommendation.
-- Nämn ALDRIG pågående vecka, serien, ofullständig period, exkludering eller intern databehandling.
+- Nämn ALDRIG pågående vecka, serien, ofullständig period eller intern databehandling.
 """
 
     if "get_sales_over_time" in tools or _TREND_RE.search(q):
         return f"""
 FRÅGETYP: Försäljningstrend
-- Nämn leverantören ("{name}") minst en gång.
-- Första meningen MÅSTE ange analyserad tidsperiod (period_label_answer eller analysed_range_label).
-- Ange den faktiska perioden från analysed_range_label eller date_range i verktygsresultat.
-- Beskriv övergripande riktning utifrån fullständiga perioder — ingen månad-för-månad- eller dag-för-dag-lista
-  om användaren inte bett om det.
-- När du nämner enskilda veckor i serien: använd exakt period_label från varje datapunkt.
-  Skriv aldrig "vecka" framför ett datumintervall — använd "veckan" endast när period_label börjar så.
-- För cirka 15–90 dagar: beskriv veckovis utveckling (inte dag-för-dag).
-- För över 90 dagar: beskriv månadsvis utveckling.
-- TRENDSPRÅK: Använd "nedåtgående trend" endast vid tydlig och ihållande nedgång över jämförbara
-  fullständiga perioder (minst två lägre veckor/månader efter toppen).
-- Vid blandad utveckling: "Försäljningen varierade under perioden.",
-  "De senaste avslutade veckorna låg lägre än slutet av maj.",
-  "Utvecklingen är svagare jämfört med periodens topp."
-- Dra aldrig slutsats om bred nedgång från en ofullständig gränsvecka.
-- Om analysis_note eller completed_week_label finns: nämn INTE ofullständig period i brödtexten (notis under diagrammet).
-- Dra inga slutsatser om kraftig nedgång från ofullständig period.
-- Ingen avslutande rekommendation, uppföljning eller "överväg att analysera".
-- Vid jämförelse mot annan period: ange exakt jämförelsebas — aldrig bara "föregående period".
+- Styck 1: Direkt trendslutsats — uppåt, nedåt, stabilt eller blandat — med kärnsiffra om den tillför värde.
+- Styck 2: Period naturligt via period_label_answer eller analysed_range_label. Omsättning, ordrar eller enheter om relevant.
+- Styck 3: Högst en observation om topp, dip eller snitt — endast om den tillför värde.
+- Beskriv övergripande riktning — ingen månad-för-månad-lista om användaren inte bett om det.
+- TRENDSPRÅK: "nedåtgående trend" endast vid tydlig ihållande nedgång. Vid blandad utveckling: "stabil", "varierad" eller "blandad".
+- Om analysis_note finns: nämn INTE ofullständig period i brödtexten.
+- Ingen avslutande rekommendation. Vid jämförelse: exakt jämförelsebas — aldrig bara "föregående period".
 """
 
     if _FOCUS_RE.search(q):
         return """
 FRÅGETYP: Fokus nästa period
 - Kort prioritering: vilken produkt/kategori/region som sticker ut enligt data.
-- Ge högst ETT konkret uppföljningssteg som finns i produkten, t.ex.:
-  "Jämför produkten mellan regioner." / "Kontrollera om tappet är koncentrerat till Stockholm."
-  / "Följ utvecklingen mot föregående period." / "Jämför produktens utveckling med övriga produkter i Mejeri."
-- Inga numrerade listor med generiska åtgärder. Ingen marknadsföring, prissättning, lager eller kundpreferenser.
+- Högst en datastödd observation — inga generiska åtgärdslistor.
+- Ingen marknadsföring, prissättning, lager eller kundpreferenser utan datastöd.
 """
 
     return """
 FRÅGETYP: Allmän analys
-- Slutsats först, sedan kompakta fakta. Ett nästa steg endast om datan stödjer det.
+- Direkt svar först, sedan kompakta fakta. Om data saknas: säg det tydligt och föreslå vad som går att analysera istället.
+- Hitta aldrig på siffror eller orsaker.
 """
 
 
@@ -389,9 +371,5 @@ def needs_synthesis_retry(
     if raw_tool_results:
         from app.services.currency_format import sanitize_answer_currency
         if sanitize_answer_currency(answer, raw_tool_results) != answer:
-            return True
-    name = (supplier_name or "").strip()
-    if name and tools_used and "get_sales_over_time" in tools_used:
-        if name.lower() not in answer.lower():
             return True
     return False

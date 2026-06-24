@@ -87,12 +87,13 @@ class ComparisonLabelTests(unittest.TestCase):
             question="Hur ser försäljningen ut i år?",
         )
         labels = [a["label"] for a in actions]
-        self.assertIn("Visa produkter som drev utvecklingen", labels)
+        self.assertEqual(len(actions), 3)
+        self.assertIn("Visa vilka produkter som driver utvecklingen", labels)
         self.assertIn("Visa utveckling per vecka", labels)
+        self.assertIn("Visa utveckling per region", labels)
         weekly = next(a for a in actions if a["label"] == "Visa utveckling per vecka")
         self.assertEqual(weekly.get("action"), "weekly_trend")
         self.assertIn("start_date", weekly.get("context", {}))
-        self.assertIn("Jämför med samma period förra året", labels)
         self.assertTrue(any("i år" in a["message"] for a in actions))
 
     def test_market_share_follow_ups(self):
@@ -102,9 +103,10 @@ class ComparisonLabelTests(unittest.TestCase):
         }
         actions = build_contextual_follow_ups([("get_market_share", ms)])
         labels = [a["label"] for a in actions]
-        self.assertEqual(len(actions), 1)
+        self.assertEqual(len(actions), 3)
         self.assertIn("Visa våra starkaste produkter inom Läsk", labels)
-        self.assertNotIn("Jämför med föregående 90 dagar", labels)
+        self.assertIn("Visa marknadsandel över tid", labels)
+        self.assertIn("Visa försäljning per region", labels)
 
     def test_sanitize_vague_comparison(self):
         kpi = {

@@ -123,7 +123,7 @@ class DeepDiveBuilderTests(unittest.TestCase):
         deep = build_deep_dive([("get_revenue_drivers", self._drivers_result())])
         actions = build_follow_up_actions(deep)
         labels = [a["label"] for a in actions]
-        self.assertIn("Visa produkter som drev ökningen", labels)
+        self.assertIn("Visa vilka produkter som driver utvecklingen", labels)
         self.assertIn("Visa utveckling per region", labels)
 
     def test_30_day_trend_question_uses_line_chart_primary(self):

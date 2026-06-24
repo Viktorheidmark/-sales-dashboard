@@ -166,10 +166,10 @@ def classify(message: str) -> GuardrailResult:
             return GuardrailResult(
                 classification="insufficient_data",
                 answer=(
-                    "Den typen av data finns tyvärr inte tillgänglig i systemet för tillfället. "
-                    "Tillgängliga mätvärden inkluderar: omsättning, antal ordrar, enheter sålda, "
-                    "produktprestanda, regional fördelning och marknadsandel per kategori. "
-                    "Kan du omformulera din fråga utifrån dessa?"
+                    "Jag har tyvärr inte den typen av data i systemet. "
+                    "Tillgängligt är omsättning, ordrar, sålda enheter, produktranking, "
+                    "regional försäljning och marknadsandel per kategori. "
+                    "Vad vill du att jag tittar på istället?"
                 ),
                 limitations=["Efterfrågade mätvärden finns inte i datakällan."],
                 should_call_llm=False,

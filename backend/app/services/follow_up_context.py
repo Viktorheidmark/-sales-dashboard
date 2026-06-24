@@ -24,12 +24,44 @@ _NL_NEW_SUBJECT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Patterns for detecting sentence-level (standalone) questions that must NOT be
+# treated as follow-up modifiers even when they contain modifier words like "top 3"
+# or a region name.
+_STANDALONE_QUESTION_RE = re.compile(
+    r"("
+    r"vilka?\s|"           # "vilken / vilka produkter..."
+    r"hur\s+stor|"         # "hur stor marknadsandel..."
+    r"hur\s+går\s+det|"    # "hur går det..."
+    r"hur\s+har\s+|"       # "hur har försäljningen..."
+    r"ge\s+mig\s|"         # "ge mig top 3..."
+    r"berätta\s|"          # "berätta om..."
+    r"vad\s+är\s|"         # "vad är..."
+    r"visa\s+v[aå]r[ae]\s|"# "visa våra starkaste..."
+    r"säljer\s+bäst|"      # "...säljer bäst..."
+    r"genererar\s+mest|"   # "...genererar mest..."
+    r"\.{0}produkterna\b"  # "...produkterna" (noun form = full sentence)
+    r")",
+    re.IGNORECASE,
+)
+
 _NL_GRANULARITY_WEEK_RE = re.compile(
     r"(vecka\s+för\s+vecka|per\s+vecka|visa\s+per\s+vecka|visa\s+vecka\s+för\s+vecka)",
     re.IGNORECASE,
 )
 
-_NL_LIMIT_RE = re.compile(r"(?:top|topp)\s+(\d+)", re.IGNORECASE)
+# Tight patterns: only match when the ENTIRE message is a bare modifier phrase.
+# These prevent standalone sentences that happen to contain "top 3" or a city name
+# from being misclassified as follow-up modifiers.
+_BARE_LIMIT_RE = re.compile(
+    r"^(?:top|topp)\s+(\d{1,2})\s*(?:då\s*)?\??\s*$",
+    re.IGNORECASE,
+)
+
+from app.services.intent_router import KNOWN_REGIONS as _KNOWN_REGIONS_FOR_RE
+_BARE_REGION_RE = re.compile(
+    r"^i\s+(" + "|".join(re.escape(r) for r in _KNOWN_REGIONS_FOR_RE) + r")\s*(?:då\s*)?\??\s*$",
+    re.IGNORECASE,
+)
 
 _PRIOR_INTENTS_ELIGIBLE = frozenset({
     "product_ranking",
@@ -553,8 +585,13 @@ def plan_nl_context_followup(
 
     msg = message.strip()
 
-    # Reject long messages (likely new standalone queries)
-    if len(msg) > 80:
+    # Reject messages that look like full standalone questions (sentence structure).
+    # These must go through the normal planner, not be treated as modifiers.
+    if _STANDALONE_QUESTION_RE.search(msg):
+        return []
+
+    # Reject long messages (anything > 60 chars is almost certainly a new question)
+    if len(msg) > 60:
         return []
 
     # Reject messages that introduce a new analysis subject
@@ -577,10 +614,10 @@ def plan_nl_context_followup(
             return [ToolPlan("get_sales_over_time", args, reason="nl-context: granularity → weekly")]
         return []
 
-    # 2. Limit change: "top 3 då?"
-    limit_match = _NL_LIMIT_RE.search(msg)
-    if limit_match and ctx.prior_intent == "product_ranking":
-        limit = int(limit_match.group(1))
+    # 2. Limit change: only when the ENTIRE message is a bare "top N [då?]" phrase.
+    bare_limit = _BARE_LIMIT_RE.match(msg)
+    if bare_limit and ctx.prior_intent == "product_ranking":
+        limit = int(bare_limit.group(1))
         if 1 <= limit <= 25:
             args = {
                 "start_date": ctx.start_date,
@@ -595,10 +632,15 @@ def plan_nl_context_followup(
                 args["category_name"] = ctx.category
             return [ToolPlan("get_top_products", args, reason=f"nl-context: limit → {limit}")]
 
-    # 3. Region filter: "i Stockholm då?"
-    region = extract_region(msg)
-    if region:
-        return plan_from_analysis_context("region_filter", ctx, message=msg, supplier_name=supplier_name)
+    # 3. Region filter: only when the ENTIRE message is a bare "i <Region> [då?]" phrase.
+    bare_region = _BARE_REGION_RE.match(msg)
+    if bare_region:
+        region = next(
+            (r for r in _KNOWN_REGIONS_FOR_RE if r.lower() == bare_region.group(1).lower()),
+            bare_region.group(1),
+        )
+        from app.services.intent_router import extract_region as _er
+        return plan_from_analysis_context("region_filter", ctx, message=f"i {region}", supplier_name=supplier_name)
 
     # 4. Period change
     new_period = _nl_resolve_new_period(msg)

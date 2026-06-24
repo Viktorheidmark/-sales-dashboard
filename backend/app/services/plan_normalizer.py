@@ -175,19 +175,10 @@ def _resolve_period(
         kind = phrase.get("period_kind", "phrase_resolved")
         return phrase["start_date"], phrase["end_date"], str(kind), notes
 
-    if ui_start and ui_end:
-        try:
-            start_d = max(date.fromisoformat(ui_start[:10]), data_min)
-            end_d = min(date.fromisoformat(ui_end[:10]), data_max)
-            notes.append("used UI default window")
-            return start_d.isoformat(), end_d.isoformat(), "ui_default", notes
-        except ValueError:
-            pass
-
-    end = completed_end
-    start = max(end - timedelta(days=89), data_min)
-    notes.append("safe 90-day fallback")
-    return start.isoformat(), end.isoformat(), "safe_fallback", notes
+    # No explicit period in the question → full available dataset.
+    # Do NOT silently apply the UI date-picker preset (typically 90 days).
+    notes.append("no explicit period → full history default")
+    return data_min.isoformat(), data_max.isoformat(), "full_history", notes
 
 
 def _validate_region(region: Optional[str]) -> Optional[str]:
