@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import type { MarketShareResponse } from '../../api/types'
 import { formatSEK } from '../../utils/format'
 import { useChartTheme } from '../../utils/chartTheme'
@@ -82,26 +82,24 @@ export function MarketShare({
         ) : fullWidth ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10 items-center">
             <div className="flex flex-col items-center md:items-start">
-              <ResponsiveContainer width={132} height={132}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={42}
-                    outerRadius={62}
-                    dataKey="value"
-                    startAngle={90}
-                    endAngle={-270}
-                    strokeWidth={0}
-                  >
-                    {pieData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => formatSEK(v)} contentStyle={chartTooltipStyle} />
-                </PieChart>
-              </ResponsiveContainer>
+              <PieChart width={132} height={132}>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={42}
+                  outerRadius={62}
+                  dataKey="value"
+                  startAngle={90}
+                  endAngle={-270}
+                  strokeWidth={0}
+                >
+                  {pieData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v: number) => formatSEK(v)} contentStyle={chartTooltipStyle} />
+              </PieChart>
               <p className="-mt-1 text-2xl font-bold text-theme-heading tabular-nums leading-none">
                 {formatSharePct(data.market_share_pct)}
               </p>
@@ -134,26 +132,24 @@ export function MarketShare({
         ) : (
           <div className="flex items-center gap-4">
             <div className="shrink-0 flex flex-col items-center">
-              <ResponsiveContainer width={118} height={118}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={38}
-                    outerRadius={56}
-                    dataKey="value"
-                    startAngle={90}
-                    endAngle={-270}
-                    strokeWidth={0}
-                  >
-                    {pieData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => formatSEK(v)} contentStyle={chartTooltipStyle} />
-                </PieChart>
-              </ResponsiveContainer>
+              <PieChart width={118} height={118}>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={38}
+                  outerRadius={56}
+                  dataKey="value"
+                  startAngle={90}
+                  endAngle={-270}
+                  strokeWidth={0}
+                >
+                  {pieData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v: number) => formatSEK(v)} contentStyle={chartTooltipStyle} />
+              </PieChart>
               <p className="-mt-2 text-xl font-bold text-theme-heading tabular-nums leading-none">
                 {formatSharePct(data.market_share_pct)}
               </p>

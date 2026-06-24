@@ -61,7 +61,12 @@ export default function App() {
 
   // Authenticated app
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Routes>
         <Route element={<AppShell supplierName={user.supplier_name} onLogout={handleLogout} />}>
           <Route path="/" element={<OverviewPage user={user} />} />
