@@ -11,6 +11,7 @@ from app.services.comparison_labels import (
     market_share_period_label,
     revenue_drivers_comparison_label,
 )
+from app.services.period_labels import append_chart_period
 from app.services.period_utils import (
     apply_sales_over_time_period_policy,
     format_date_sv,
@@ -156,7 +157,7 @@ def build_time_series_chart(result: dict, *, force: bool = False) -> Optional[di
         period_note = description
     else:
         title = "Försäljningsutveckling"
-        description = f"Omsättning per {gran_label}"
+        description = append_chart_period(f"Omsättning per {gran_label}", result)
         period_note = None
         if period_analysis.get("analysed_range_label"):
             period_note = period_analysis["analysed_range_label"]
@@ -225,7 +226,7 @@ def _build_supplier_kpis(result: dict) -> Optional[dict]:
     rev_pct = round(100.0 * (curr_rev - prior_rev) / prior_rev, 1) if prior_rev > 0 else 0.0
     sign = "+" if rev_pct >= 0 else ""
     comp_label = kpi_comparison_label(result)
-    return {
+    payload = {
         "chart_type": BAR_CHART,
         "chart_variant": "decline_comparison",
         "title": "Periodjämförelse",
@@ -240,6 +241,8 @@ def _build_supplier_kpis(result: dict) -> Optional[dict]:
         "generated_from_row_count": 2,
         "emphasis_index": 1,
     }
+    payload["description"] = append_chart_period(payload["description"], result)
+    return payload
 
 
 def _build_top_products(result: dict) -> Optional[dict]:
@@ -263,9 +266,8 @@ def _build_top_products(result: dict) -> Optional[dict]:
         return None
 
     region = result.get("region_filter")
-    subtitle = "Omsättning per produkt"
-    if region:
-        subtitle = f"Omsättning per produkt · {region}"
+    base = f"Omsättning per produkt · {region}" if region else "Omsättning per produkt"
+    subtitle = append_chart_period(base, result)
 
     return {
         "chart_type": BAR_CHART,
@@ -297,7 +299,7 @@ def _build_sales_by_region(result: dict) -> Optional[dict]:
         "chart_type": BAR_CHART,
         "layout": "horizontal",
         "title": "Regional försäljning",
-        "description": "Omsättning per region",
+        "description": append_chart_period("Omsättning per region", result),
         "x_key": "region",
         "y_key": "revenue",
         "data": data,

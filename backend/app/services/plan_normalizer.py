@@ -261,7 +261,12 @@ def _build_tool_plans(
     chart_intent: Optional[str],
 ) -> list[ToolPlan]:
     intent = plan.intent
-    base = {"start_date": start_date, "end_date": end_date}
+    base = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "_period_kind": period_kind,
+        "_period_explicit": period_kind not in ("ui_default", "safe_fallback"),
+    }
     plans: list[ToolPlan] = []
 
     if intent == "sales_overview":

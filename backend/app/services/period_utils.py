@@ -124,6 +124,7 @@ def resolve_period_range(
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
             "days": (end - start).days + 1,
+            "period_kind": "full_history",
         }
 
     if _LAST_YEAR_RE.search(msg):
@@ -133,6 +134,7 @@ def resolve_period_range(
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
             "days": (end - start).days + 1,
+            "period_kind": "previous_year",
         }
 
     if is_current_year_phrase(msg):
@@ -156,6 +158,7 @@ def resolve_period_range(
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
             "days": days,
+            "period_kind": f"rolling_{days}",
         }
 
     if re.search(r"senaste\s+veck", msg):
@@ -166,6 +169,7 @@ def resolve_period_range(
             "end_date": week_end.isoformat(),
             "days": (week_end - week_start).days + 1,
             "completed_week": True,
+            "period_kind": "previous_completed_week",
         }
 
     if re.search(r"senaste\s+kvartalet", msg):
@@ -186,6 +190,7 @@ def resolve_period_range(
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
             "days": days,
+            "period_kind": "rolling_90",
         }
 
     if re.search(r"senaste\s+180", msg):
@@ -196,6 +201,7 @@ def resolve_period_range(
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
             "days": days,
+            "period_kind": "rolling_180",
         }
 
     return {}

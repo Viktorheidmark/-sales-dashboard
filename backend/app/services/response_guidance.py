@@ -190,7 +190,8 @@ FRÅGETYP: Marknadsandel
     if "get_supplier_kpis" in tools:
         return f"""
 FRÅGETYP: Översikt (KPI)
-- Första meningen: slutsats om omsättning för analyserad period (date_range i verktygsresultat).
+- Första meningen MÅSTE ange analyserad tidsperiod (period_label_opening / period_label_answer).
+- Slutsats om omsättning för analyserad period (date_range i verktygsresultat).
 - Andra meningen: förändring i ordrar och enheter om relevant.
 - Tredje meningen: procentuell förändring mot jämförelsebas — använd OBLIGATORISK JÄMFÖRELSETEXT
   från JÄMFÖRELSE- OCH PERIODKRAV ordagrant (t.ex. "jämfört med samma period föregående år, 1 januari–23 juni 2025").
@@ -201,7 +202,8 @@ FRÅGETYP: Översikt (KPI)
     if "get_top_products" in tools or (_TOP_PRODUCTS_RE.search(q) and "nedgång" not in q.lower()):
         return """
 FRÅGETYP: Topprodukter
-- Första meningen: tydlig vinnare med exakt product_name.
+- Första meningen MÅSTE tydligt ange analyserad tidsperiod (period_label_opening / period_label_answer).
+- Nämn tydlig vinnare med exakt product_name och region om den finns i verktygsresultat.
 - Andra meningen: tvåa (runner-up) med exakt product_name om den finns i verktygsresultat.
 - Nämn ENDAST produkter som finns i verktygsresultat — aldrig fler än requested_limit.
 - Om färre än tre produkter returnerades: lista bara dessa, utan att hitta på fler.
@@ -222,6 +224,7 @@ FRÅGETYP: Omsättningsutveckling (30 dagar)
     if "get_declining_products" in tools or _DECLINING_RE.search(q):
         return """
 FRÅGETYP: Produkter i nedgång
+- Första meningen MÅSTE ange analyserad tidsperiod (period_label_answer).
 - Börja med största nedgången med exakt product_name, procent och omsättningsförändring.
 - Ignorera produkter med marginell förändring.
 - Avsluta med högst ett specifikt uppföljningssteg som produkten stödjer, t.ex.:
@@ -258,6 +261,7 @@ FRÅGETYP: Senaste avslutade veckan
         return f"""
 FRÅGETYP: Försäljningstrend
 - Nämn leverantören ("{name}") minst en gång.
+- Första meningen MÅSTE ange analyserad tidsperiod (period_label_answer eller analysed_range_label).
 - Ange den faktiska perioden från analysed_range_label eller date_range i verktygsresultat.
 - Beskriv övergripande riktning utifrån fullständiga perioder — ingen månad-för-månad- eller dag-för-dag-lista
   om användaren inte bett om det.

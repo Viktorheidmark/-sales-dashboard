@@ -9,6 +9,11 @@ from __future__ import annotations
 from datetime import date
 
 from app.services.period_utils import format_date_range_sv
+from app.services.period_labels import (
+    answer_period_phrase,
+    chart_period_suffix,
+    infer_period_kind,
+)
 
 
 def _parse(d: str | None) -> date | None:
@@ -27,30 +32,35 @@ def _period_days(start: str, end: str) -> int:
     return (e - s).days + 1
 
 
-def analyzed_period_label(date_range: dict | None, *, prefix: str = "") -> str:
+def analyzed_period_label(date_range: dict | None, *, prefix: str = "", message: str = "") -> str:
     """Human-readable label for the primary analyzed window."""
-    if not date_range or not date_range.get("start") or not date_range.get("end"):
-        return prefix or "vald period"
-    start, end = date_range["start"], date_range["end"]
-    span = _period_days(start, end)
-    s_d, e_d = _parse(start), _parse(end)
-    if s_d and e_d and s_d.month == 1 and s_d.day == 1 and s_d.year == e_d.year:
-        return f"hittills i år ({format_date_range_sv(start, end)})"
-    if span == 90:
-        return f"de senaste 90 dagarna ({format_date_range_sv(start, end)})"
-    if span == 30:
-        return f"de senaste 30 dagarna ({format_date_range_sv(start, end)})"
-    body = format_date_range_sv(start, end)
+    kind = infer_period_kind(date_range, message=message)
+    phrase = answer_period_phrase(kind, date_range, message)
+    if kind in ("year_to_date", "current_year"):
+        start, end = (date_range or {}).get("start"), (date_range or {}).get("end")
+        if start and end:
+            return f"hittills i år ({format_date_range_sv(start, end)})"
+    if kind in ("ui_default", "safe_fallback", "rolling_90", "rolling_quarter"):
+        start, end = (date_range or {}).get("start"), (date_range or {}).get("end")
+        if start and end:
+            return f"{phrase} ({format_date_range_sv(start, end)})"
+    if kind in ("ui_default_30", "rolling_30"):
+        start, end = (date_range or {}).get("start"), (date_range or {}).get("end")
+        if start and end:
+            return f"{phrase} ({format_date_range_sv(start, end)})"
+    body = phrase if phrase else format_date_range_sv(
+        (date_range or {}).get("start", ""),
+        (date_range or {}).get("end", ""),
+    )
     return f"{prefix}{body}".strip() if prefix else body
 
 
-def market_share_period_label(result: dict) -> str:
+def market_share_period_label(result: dict, message: str = "") -> str:
     category = result.get("category_name") or "kategorin"
     dr = result.get("date_range") or {}
-    period = analyzed_period_label(dr)
-    if dr and _period_days(dr.get("start", ""), dr.get("end", "")) == 90:
-        return f"Marknadsandel inom {category} de senaste 90 dagarna"
-    return f"Marknadsandel inom {category}, {period}"
+    kind = result.get("_period_kind") or infer_period_kind(dr, message=message)
+    suffix = chart_period_suffix(kind, dr, message)
+    return f"Marknadsandel inom {category} · {suffix}"
 
 
 def kpi_comparison_label(result: dict) -> str:
@@ -122,10 +132,23 @@ def weekly_sales_comparison_label() -> str:
     return "jämfört med föregående avslutade vecka"
 
 
-def build_comparison_context_block(raw_tool_results: list[tuple[str, dict]]) -> str:
+def build_comparison_context_block(
+    raw_tool_results: list[tuple[str, dict]],
+    question: str = "",
+) -> str:
     """Injected into synthesis so the LLM must use explicit comparison wording."""
     lines: list[str] = []
     by_tool = {name: res for name, res in raw_tool_results if isinstance(res, dict)}
+
+    for tool_name, result in by_tool.items():
+        opening = result.get("period_label_opening")
+        if opening:
+            lines.append(
+                f"OBLIGATORISK PERIOD I SVARET: Inled första meningen med '{opening}' "
+                f"(eller integrera '{result.get('period_label_answer')}' naturligt). "
+                "Använd aldrig 'under perioden', 'under vald period' eller 'i den aktuella perioden'."
+            )
+            break
 
     if "get_supplier_kpis" in by_tool:
         kpi = by_tool["get_supplier_kpis"]

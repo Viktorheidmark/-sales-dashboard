@@ -19,6 +19,7 @@ from app.services.period_utils import (
     resolve_period_range,
 )
 from app.services.ranking_limits import resolve_product_ranking_limit
+from app.services.period_labels import infer_period_kind
 
 CATEGORIES = ("Läsk", "Chips & snacks")
 KNOWN_REGIONS = ("Stockholm", "Göteborg", "Malmö", "Uppsala", "Västerås", "Örebro", "Linköping", "Helsingborg")
@@ -285,6 +286,23 @@ def extract_period_args(message: str, reference: Optional[date] = None) -> dict:
     return resolve_period_range(message, reference=reference)
 
 
+def _period_kind_from_ui_args(args: dict) -> str:
+    start, end = args.get("start_date"), args.get("end_date")
+    if not start or not end:
+        return "ui_default"
+    try:
+        span = (date.fromisoformat(str(end)[:10]) - date.fromisoformat(str(start)[:10])).days + 1
+    except ValueError:
+        return "ui_default"
+    if span == 90:
+        return "ui_default"
+    if span == 30:
+        return "ui_default_30"
+    if span == 180:
+        return "ui_default_180"
+    return "exact_range"
+
+
 def _period_args_from_message(
     message: str,
     start_date: Optional[str] = None,
@@ -303,8 +321,16 @@ def _period_args_from_message(
             out["days"] = period_args["days"]
         if period_args.get("completed_week"):
             out["completed_week"] = True
+        out["_period_kind"] = period_args.get("period_kind") or infer_period_kind(
+            {"start": period_args["start_date"], "end": period_args["end_date"]},
+            message=message,
+        )
+        out["_period_explicit"] = True
         return out
-    return _date_args(start_date, end_date, prior)
+    out = _date_args(start_date, end_date, prior)
+    out["_period_kind"] = _period_kind_from_ui_args(out)
+    out["_period_explicit"] = False
+    return out
 
 
 def _ytd_monthly_trend_args(period_args: dict) -> dict:

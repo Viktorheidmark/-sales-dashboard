@@ -39,7 +39,7 @@ from app.services.intent_router import (
     is_diagram_followup_request,
     plan_forced_tools,
 )
-from app.services.period_utils import apply_sales_over_time_period_policy
+from app.services.period_labels import apply_period_labels
 from app.services.currency_format import (
     build_currency_reference_block,
     currency_format_rules_block,
@@ -199,7 +199,12 @@ def _strip_internal_tool_args(args: dict) -> dict:
     return {k: v for k, v in args.items() if not str(k).startswith("_")}
 
 
-def _enrich_planned_tool_result(tool_name: str, parsed: dict, plan_args: dict) -> dict:
+def _enrich_planned_tool_result(
+    tool_name: str,
+    parsed: dict,
+    plan_args: dict,
+    question: str = "",
+) -> dict:
     if not isinstance(parsed, dict):
         return parsed
     for key in ("_deep_dive_focus", "_chart_intent", "_force_time_series"):
@@ -207,7 +212,7 @@ def _enrich_planned_tool_result(tool_name: str, parsed: dict, plan_args: dict) -
             parsed[key] = plan_args[key]
     if tool_name == "get_sales_over_time":
         parsed = _enrich_sales_over_time_result(parsed, plan_args)
-    return parsed
+    return apply_period_labels(parsed, question, plan_args, tool_name=tool_name)
 
 
 def _enrich_sales_over_time_result(parsed: dict, plan_args: dict) -> dict:
@@ -261,6 +266,7 @@ async def _execute_planned_tools(
     sources: list[dict],
     limitations: list[str],
     raw_tool_results: list[tuple[str, dict]],
+    question: str = "",
 ) -> None:
     for plan in plans:
         if plan.tool_name in tools_used:
@@ -268,11 +274,23 @@ async def _execute_planned_tools(
         parsed = await _invoke_mcp_tool(
             session, plan.tool_name, plan.args, supplier_id, start_date, end_date,
         )
-        parsed = _enrich_planned_tool_result(plan.tool_name, parsed, plan.args)
+        parsed = _enrich_planned_tool_result(plan.tool_name, parsed, plan.args, question)
         _record_tool_result(
             plan.tool_name, parsed, supplier_id,
             tools_used, sources, limitations, raw_tool_results,
         )
+
+
+def _ensure_period_labels(
+    raw_tool_results: list[tuple[str, dict]],
+    question: str,
+) -> list[tuple[str, dict]]:
+    out: list[tuple[str, dict]] = []
+    for name, result in raw_tool_results:
+        if isinstance(result, dict) and not result.get("period_label_answer"):
+            result = apply_period_labels(result, question, tool_name=name)
+        out.append((name, result))
+    return out
 
 
 def _diagram_clarification_response(supplier_id: str) -> dict:
@@ -326,7 +344,7 @@ def _tool_context_message(
             f"{build_currency_reference_block(raw_tool_results)}"
             f"{currency_format_rules_block()}"
             f"{synthesis_suffix(supplier_name, question, tool_list)}"
-            f"{build_comparison_context_block(raw_tool_results)}"
+            f"{build_comparison_context_block(raw_tool_results, question)}"
         ),
     }
 
@@ -398,6 +416,7 @@ def _final_payload(
     question: str = "",
     analysis_meta: Optional[dict] = None,
 ) -> dict:
+    raw_tool_results = _ensure_period_labels(raw_tool_results, question)
     cleaned_answer = sanitize_answer_currency(answer, raw_tool_results)
     cleaned_answer = sanitize_vague_comparisons(cleaned_answer, raw_tool_results)
     cleaned_answer = sanitize_generic_recommendations(cleaned_answer)
@@ -562,7 +581,7 @@ async def run_chat(
             if forced:
                 await _execute_planned_tools(
                     session, forced, supplier_id, start_date, end_date,
-                    tools_used, sources, limitations, raw_tool_results,
+                    tools_used, sources, limitations, raw_tool_results, message,
                 )
                 messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
             else:
@@ -581,7 +600,7 @@ async def run_chat(
                 if fallback:
                     await _execute_planned_tools(
                         session, fallback, supplier_id, start_date, end_date,
-                        tools_used, sources, limitations, raw_tool_results,
+                        tools_used, sources, limitations, raw_tool_results, message,
                     )
                     messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
 
@@ -662,7 +681,7 @@ async def stream_chat(
                 if forced:
                     await _execute_planned_tools(
                         session, forced, supplier_id, start_date, end_date,
-                        tools_used, sources, limitations, raw_tool_results,
+                        tools_used, sources, limitations, raw_tool_results, message,
                     )
                     messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
                 else:
@@ -681,7 +700,7 @@ async def stream_chat(
                     if fallback:
                         await _execute_planned_tools(
                             session, fallback, supplier_id, start_date, end_date,
-                            tools_used, sources, limitations, raw_tool_results,
+                            tools_used, sources, limitations, raw_tool_results, message,
                         )
                         messages.append(_tool_context_message(message, raw_tool_results, supplier_name, tools_used))
 
