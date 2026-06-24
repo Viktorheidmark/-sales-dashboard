@@ -243,35 +243,4 @@ def build_deep_dive(tool_results: list[tuple[str, dict]]) -> Optional[dict]:
     return None
 
 
-def build_follow_up_actions(
-    deep_dive: Optional[dict],
-    question: str = "",
-) -> list[dict[str, str]]:
-    if not deep_dive:
-        return []
-
-    days = deep_dive.get("comparison_days", 30)
-    period = f"de senaste {days} dagarna"
-    kind = deep_dive.get("kind")
-
-    if kind == "revenue_development":
-        actions = [
-            {"label": "Visa produkter som drev ökningen", "message": f"Visa produkter som drev ökningen {period}"},
-            {"label": "Visa produkter som tappade", "message": f"Visa produkter som tappade {period}"},
-            {"label": "Visa utveckling per region", "message": f"Visa utveckling per region {period}"},
-        ]
-        if deep_dive.get("relatively_stable"):
-            actions.append({"label": "Visa trend över tid", "message": f"Visa försäljningstrend {period}"})
-        return actions
-
-    if kind == "product_decline":
-        focus = (deep_dive.get("focus_product") or {}).get("product_name")
-        if not focus:
-            return []
-        return [
-            {"label": "Visa tappet per region", "message": f"Visa tappet per region för {focus} {period}"},
-            {"label": "Visa produktens utveckling över tid", "message": f"Visa {focus}s utveckling över tid {period}"},
-            {"label": "Jämför med övriga produkter", "message": f"Jämför {focus} med övriga produkter {period}"},
-        ]
-
-    return []
+from app.services.follow_up_builder import build_follow_up_actions  # noqa: F401 — re-export for tests

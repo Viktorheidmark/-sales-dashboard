@@ -22,6 +22,7 @@ from app.services.intent_router import (
     plan_forced_tools,
 )
 from app.services.intent_router import PriorTurnContext as RouterPriorContext
+from app.services.ranking_limits import extract_ranking_limit, resolve_product_ranking_limit
 from app.services.period_utils import (
     completed_week_bounds,
     default_data_bounds,
@@ -250,8 +251,10 @@ def _chart_intent_for(plan: AnalysisPlan) -> Optional[str]:
 def _build_tool_plans(
     plan: AnalysisPlan,
     *,
+    message: str,
     start_date: str,
     end_date: str,
+    period_kind: str,
     granularity: str,
     region: Optional[str],
     category: str,
@@ -290,7 +293,13 @@ def _build_tool_plans(
         return plans
 
     if intent == "product_ranking":
-        args = {**base, "limit": 10}
+        is_ytd = period_kind == "year_to_date" or plan.time_period.kind == "year_to_date"
+        limit = resolve_product_ranking_limit(
+            message,
+            plan_limit=plan.limit,
+            is_ytd=is_ytd,
+        )
+        args = {**base, "limit": limit}
         if region:
             args["region"] = region
         plans.append(ToolPlan("get_top_products", args, reason="planner: product ranking"))
@@ -360,7 +369,11 @@ def normalize_plan(
             intent = "sales_trend"
             notes.append("inferred sales_trend from YTD development phrasing")
         elif is_current_year_phrase(message) and re.search(r"produkt|bäst|topp", message, re.I):
-            plan = plan.model_copy(update={"intent": "product_ranking", "confidence": 0.8})
+            update: dict = {"intent": "product_ranking", "confidence": 0.8}
+            explicit = extract_ranking_limit(message)
+            if explicit is not None:
+                update["limit"] = explicit
+            plan = plan.model_copy(update=update)
             intent = "product_ranking"
             notes.append("inferred product_ranking from YTD product phrasing")
         elif plan.confidence < CONFIDENCE_THRESHOLD:
@@ -388,8 +401,10 @@ def normalize_plan(
 
     tool_plans = _build_tool_plans(
         plan,
+        message=message,
         start_date=start_date,
         end_date=end_date,
+        period_kind=period_kind,
         granularity=granularity,
         region=region,
         category=category,

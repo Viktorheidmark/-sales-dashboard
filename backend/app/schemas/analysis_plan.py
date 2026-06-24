@@ -93,6 +93,7 @@ class AnalysisPlan(BaseModel):
     filters: AnalysisFilters = Field(default_factory=AnalysisFilters)
     comparison: ComparisonSpec = Field(default_factory=ComparisonSpec)
     visualization: VisualizationSpec = Field(default_factory=VisualizationSpec)
+    limit: Optional[int] = Field(default=None, ge=1, le=50)
     needs_deep_dive: bool = False
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     clarification_needed: bool = False
@@ -112,6 +113,17 @@ class AnalysisPlan(BaseModel):
         if not isinstance(v, list):
             return []
         return [d for d in v if isinstance(d, str) and d in ALLOWED_DIMENSIONS]
+
+    @field_validator("limit", mode="before")
+    @classmethod
+    def _sanitize_limit(cls, v: object) -> Optional[int]:
+        if v is None:
+            return None
+        try:
+            from app.services.ranking_limits import clamp_ranking_limit
+            return clamp_ranking_limit(int(v), allow_large=True)
+        except (TypeError, ValueError):
+            return None
 
 
 class NormalizedPlanMeta(BaseModel):

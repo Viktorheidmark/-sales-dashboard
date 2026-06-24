@@ -29,7 +29,9 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from app.services.guardrails import classify
 from app.services.chart_builder import pick_charts
-from app.services.deep_dive_builder import build_deep_dive, build_follow_up_actions
+from app.services.deep_dive_builder import build_deep_dive
+from app.services.follow_up_builder import build_contextual_follow_ups
+from app.services.comparison_labels import build_comparison_context_block
 from app.services.tool_planner import resolve_tool_plans
 from app.services.intent_router import (
     default_category_for_supplier,
@@ -46,7 +48,9 @@ from app.services.currency_format import (
 from app.services.response_guidance import (
     executive_writing_rules,
     needs_synthesis_retry,
+    sanitize_generic_recommendations,
     sanitize_trend_wording,
+    sanitize_vague_comparisons,
     synthesis_suffix,
 )
 
@@ -322,6 +326,7 @@ def _tool_context_message(
             f"{build_currency_reference_block(raw_tool_results)}"
             f"{currency_format_rules_block()}"
             f"{synthesis_suffix(supplier_name, question, tool_list)}"
+            f"{build_comparison_context_block(raw_tool_results)}"
         ),
     }
 
@@ -337,7 +342,9 @@ def _synthesis_retry_message(supplier_name: str, question: str, tools_used: list
             "Skriv om svaret som ett färdigt analysresultat baserat på verktygsdata. "
             "Inga planeringsfraser, inga generiska rekommendationer och inga felaktiga produktnamn "
             "(sätt aldrig leverantörsnamnet framför product_name). "
-            "Använd korrekt valutaenhet: under 1 mkr SEK som tkr, inte mkr."
+            "Använd korrekt valutaenhet: under 1 mkr SEK som tkr, inte mkr. "
+            "Ange alltid exakt jämförelseperiod — aldrig bara 'föregående period'. "
+            "Avsluta efter fakta utan råd eller uppmaningar."
             + synthesis_suffix(supplier_name, question, tools_used)
             + _SYNTHESIS_RETRY_NOTE
         ),
@@ -392,10 +399,12 @@ def _final_payload(
     analysis_meta: Optional[dict] = None,
 ) -> dict:
     cleaned_answer = sanitize_answer_currency(answer, raw_tool_results)
+    cleaned_answer = sanitize_vague_comparisons(cleaned_answer, raw_tool_results)
+    cleaned_answer = sanitize_generic_recommendations(cleaned_answer)
     cleaned_answer = sanitize_trend_wording(cleaned_answer, raw_tool_results)
     all_charts = pick_charts(raw_tool_results, question)
     deep_dive = build_deep_dive(raw_tool_results)
-    follow_ups = build_follow_up_actions(deep_dive, "")
+    follow_ups = build_contextual_follow_ups(raw_tool_results, question, deep_dive)
     payload = {
         "answer": cleaned_answer,
         "tool_calls": list(dict.fromkeys(tools_used)),

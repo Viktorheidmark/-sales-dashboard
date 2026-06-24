@@ -27,6 +27,13 @@ _FORBIDDEN_PHRASES = (
     "framgångsfaktorer",
     "tillväxtområden",
     "identifiera potentiella",
+    "för att fortsätta denna",
+    "kan det vara fördelaktigt",
+    "det kan vara fördelaktigt",
+    "rekommenderas att",
+    "bör överväga att",
+    "föregående period",
+    "tidigare period",
 )
 
 _UNSUPPORTED_ADVICE_RE = re.compile(
@@ -40,8 +47,28 @@ _UNSUPPORTED_ADVICE_RE = re.compile(
     r"analysera specifika produktprestationer|vidta strategier|"
     r"kampanj|distribution|lageråtgärd|prisändring|"
     r"tillväxtmöjligheter|framgångsfaktorer|tillväxtområden|"
-    r"identifiera potentiella)",
+    r"identifiera potentiella|"
+    r"för att fortsätta|kan det vara fördelaktigt|det kan vara fördelaktigt|"
+    r"rekommenderas att|bör överväga att|"
+    r"analysera vidare|fortsätta denna positiva)",
     re.IGNORECASE,
+)
+
+_VAGUE_COMPARISON_RE = re.compile(
+    r"(jämfört med|mot)\s+(den\s+)?(föregående|tidigare)\s+period\b",
+    re.IGNORECASE,
+)
+_VAGUE_COMPARISON_BARE_RE = re.compile(
+    r"jämfört med\s+(tidigare|föregående)\b(?!\s+\d)",
+    re.IGNORECASE,
+)
+_GENERIC_RECOMMENDATION_TAIL_RE = re.compile(
+    r"\s*(För att (fortsätta|förbättra|upprätthålla)|"
+    r"Det kan vara (fördelaktigt|bra)|"
+    r"kan det vara fördelaktigt att|"
+    r"rekommenderas att|bör överväga att|"
+    r"kan vara värt att analysera).*$",
+    re.IGNORECASE | re.DOTALL,
 )
 
 _SUPPLIER_PRODUCT_CONCAT_RE = re.compile(
@@ -131,6 +158,10 @@ SKRIVSTANDARD (obligatorisk):
 - Undvik AI-fraser och utfyllnad. Inga stycken som bara sammanfattar det du redan sagt.
 - Rekommendera INTE marknadsföring, prissättning, kampanjer, lager, distribution eller kundpreferenser
   om datan inte explicit innehåller dessa dimensioner.
+- Avsluta INTE med generiska råd ("för att fortsätta...", "kan det vara fördelaktigt att analysera...").
+  Uppföljning sker via knappar i gränssnittet — skriv bara fakta från verktygsdata.
+- Vid periodjämförelse: ange alltid exakt jämförelsebas (datumintervall eller antal dagar).
+  Skriv ALDRIG bara "föregående period", "tidigare period" eller "jämfört med tidigare" utan exakt period.
 - Förbjudna fraser och liknande: {forbidden}.
 
 EXEMPEL PÅ BRA TON:
@@ -150,20 +181,32 @@ def synthesis_blueprint(question: str, tools_used: list[str], supplier_name: str
         return """
 FRÅGETYP: Marknadsandel
 - Max 3 korta meningar.
-- Inkludera: leverantörens andel, övriga aktörers andel, kategori.
+- Första meningen MÅSTE nämna kategori OCH analyserad tidsperiod (enligt OBLIGATORISK PERIOD I SVARET).
+- Inkludera: leverantörens andel, övriga aktörers andel.
 - Skriv "Övriga aktörer" — nämn inte antal konkurrenter eller "en aktör".
 - Avsluta utan rekommendation — ingen uppföljning om produkter, marknadsföring eller strategier.
+"""
+
+    if "get_supplier_kpis" in tools:
+        return f"""
+FRÅGETYP: Översikt (KPI)
+- Första meningen: slutsats om omsättning för analyserad period (date_range i verktygsresultat).
+- Andra meningen: förändring i ordrar och enheter om relevant.
+- Tredje meningen: procentuell förändring mot jämförelsebas — använd OBLIGATORISK JÄMFÖRELSETEXT
+  från JÄMFÖRELSE- OCH PERIODKRAV ordagrant (t.ex. "jämfört med samma period föregående år, 1 januari–23 juni 2025").
+- Nämn leverantören ("{name}") en gång.
+- Max 3 meningar. INGEN rekommendation eller generisk uppmaning att analysera vidare.
 """
 
     if "get_top_products" in tools or (_TOP_PRODUCTS_RE.search(q) and "nedgång" not in q.lower()):
         return """
 FRÅGETYP: Topprodukter
 - Första meningen: tydlig vinnare med exakt product_name.
-- Andra meningen: tvåa (runner-up) med exakt product_name.
-- Valfri tredje mening: en kort faktainlação (t.ex. att de två står för största delen av omsättningen).
+- Andra meningen: tvåa (runner-up) med exakt product_name om den finns i verktygsresultat.
+- Nämn ENDAST produkter som finns i verktygsresultat — aldrig fler än requested_limit.
+- Om färre än tre produkter returnerades: lista bara dessa, utan att hitta på fler.
 - Avsluta utan rekommendation — ingen marknadsföring, kampanj, prissättning, lager eller distribution.
 - Förbjudet: "överväg att fokusera på marknadsföring" och liknande råd.
-- Lista inte fler än två produkter i text; diagrammet visar resten.
 """
 
     if "get_revenue_drivers" in tools:
@@ -229,6 +272,7 @@ FRÅGETYP: Försäljningstrend
 - Om analysis_note eller completed_week_label finns: nämn INTE ofullständig period i brödtexten (notis under diagrammet).
 - Dra inga slutsatser om kraftig nedgång från ofullständig period.
 - Ingen avslutande rekommendation, uppföljning eller "överväg att analysera".
+- Vid jämförelse mot annan period: ange exakt jämförelsebas — aldrig bara "föregående period".
 """
 
     if _FOCUS_RE.search(q):
@@ -254,6 +298,52 @@ def synthesis_suffix(supplier_name: str, question: str, tools_used: list[str]) -
         f"{executive_writing_rules(supplier_name)}"
         f"{synthesis_blueprint(question, tools_used, supplier_name)}"
     )
+
+
+def has_vague_comparison(answer: str) -> bool:
+    text = answer or ""
+    return bool(_VAGUE_COMPARISON_RE.search(text) or _VAGUE_COMPARISON_BARE_RE.search(text))
+
+
+def has_generic_recommendation(answer: str) -> bool:
+    return bool(_GENERIC_RECOMMENDATION_TAIL_RE.search(answer or ""))
+
+
+def sanitize_vague_comparisons(
+    answer: str,
+    raw_tool_results: list[tuple[str, dict]] | None = None,
+) -> str:
+    if not answer or not raw_tool_results:
+        return answer
+    from app.services.comparison_labels import comparison_metadata
+
+    meta = comparison_metadata(raw_tool_results)
+    explicit = meta.get("kpi_comparison_label") or ""
+    if not explicit:
+        for name, result in raw_tool_results:
+            if name == "get_revenue_drivers" and isinstance(result, dict):
+                from app.services.comparison_labels import revenue_drivers_comparison_label
+                explicit = revenue_drivers_comparison_label(result)
+                break
+    if not explicit:
+        return answer
+
+    out = answer
+    for pattern in (_VAGUE_COMPARISON_RE, _VAGUE_COMPARISON_BARE_RE):
+        out = pattern.sub(explicit, out)
+    out = re.sub(
+        r"mot\s+(den\s+)?(föregående|tidigare)\s+period\b",
+        explicit,
+        out,
+        flags=re.IGNORECASE,
+    )
+    return out
+
+
+def sanitize_generic_recommendations(answer: str) -> str:
+    if not answer:
+        return answer
+    return _GENERIC_RECOMMENDATION_TAIL_RE.sub("", answer).strip()
 
 
 def has_unsupported_recommendation(answer: str) -> bool:
@@ -283,6 +373,10 @@ def needs_synthesis_retry(
     if not (answer or "").strip():
         return False
     if has_unsupported_recommendation(answer) or misnames_product(answer, supplier_name):
+        return True
+    if has_vague_comparison(answer):
+        return True
+    if has_generic_recommendation(answer):
         return True
     if claims_unsupported_strong_decline(answer, raw_tool_results):
         return True

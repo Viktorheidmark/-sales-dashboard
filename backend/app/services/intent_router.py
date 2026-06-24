@@ -18,6 +18,7 @@ from app.services.period_utils import (
     is_current_year_phrase,
     resolve_period_range,
 )
+from app.services.ranking_limits import resolve_product_ranking_limit
 
 CATEGORIES = ("Läsk", "Chips & snacks")
 KNOWN_REGIONS = ("Stockholm", "Göteborg", "Malmö", "Uppsala", "Västerås", "Örebro", "Linköping", "Helsingborg")
@@ -334,11 +335,10 @@ def _plan_ytd_tools(
         region = extract_region(message)
         if region:
             args["region"] = region
-            args["limit"] = 5
-        elif _ALL_PRODUCTS_COMPARE_RE.search(message):
-            args["limit"] = 50
+        if _ALL_PRODUCTS_COMPARE_RE.search(message):
+            args["limit"] = resolve_product_ranking_limit(message, all_products=True)
         else:
-            args["limit"] = 10
+            args["limit"] = resolve_product_ranking_limit(message, is_ytd=True)
         return [ToolPlan(
             tool_name="get_top_products",
             args=args,
@@ -539,7 +539,10 @@ def _reconstruct_tool_args(
         region = extract_region(q)
         if region:
             args["region"] = region
-        args["limit"] = 5
+        args["limit"] = resolve_product_ranking_limit(
+            period_message,
+            is_ytd=is_current_year_phrase(period_message),
+        )
     elif tool_name == "get_declining_products":
         args["days"] = period_args.get("days", 30)
         args["limit"] = 5
@@ -816,7 +819,7 @@ def plan_forced_tools(
 
     if _ALL_PRODUCTS_COMPARE_RE.search(msg) and not _DECLINING_RE.search(msg):
         args = _period_args_from_message(msg, start_date, end_date)
-        args["limit"] = 50
+        args["limit"] = resolve_product_ranking_limit(msg, all_products=True)
         plans.append(ToolPlan(
             tool_name="get_top_products",
             args=args,
@@ -884,7 +887,10 @@ def plan_forced_tools(
         args = _period_args_from_message(msg, start_date, end_date)
         if region:
             args["region"] = region
-        args["limit"] = 5
+        args["limit"] = resolve_product_ranking_limit(
+            msg,
+            is_ytd=is_current_year_phrase(msg),
+        )
         plans.append(ToolPlan(
             tool_name="get_top_products",
             args=args,

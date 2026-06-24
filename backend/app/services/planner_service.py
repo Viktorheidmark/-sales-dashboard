@@ -23,6 +23,7 @@ Regler:
   "senaste veckan" = previous_completed_week.
 - Välj intent utifrån affärsfrågan: sales_overview, sales_trend, product_ranking, market_share,
   product_decline, region_ranking, portfolio_change, eller unknown om osäker.
+- Om användaren anger top-N (t.ex. "top 3", "de fem bästa"): sätt limit till N (1–10).
 - visualization.primary: line/area för trend, bar_ranked för ranking, bar_compare för periodjämförelse,
   donut för marknadsandel, kpi för ren KPI-översikt.
 - Sätt needs_deep_dive=true endast när frågan uttryckligen ber om drivare/förklaringar.

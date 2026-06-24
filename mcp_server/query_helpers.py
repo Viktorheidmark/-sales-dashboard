@@ -59,6 +59,24 @@ _KPI_SQL = """
 """
 
 
+def _shift_date_one_year_back(d: date) -> date:
+    """Same calendar day one year earlier (Feb 29 → Feb 28)."""
+    try:
+        return d.replace(year=d.year - 1)
+    except ValueError:
+        return d.replace(year=d.year - 1, day=28)
+
+
+def is_year_to_date_range(start: date, end: date) -> bool:
+    """True when the range is Jan 1 through a date in the same calendar year."""
+    return start.month == 1 and start.day == 1 and start.year == end.year
+
+
+def prior_year_same_period(start: date, end: date) -> tuple[date, date]:
+    """Equivalent calendar window one year earlier."""
+    return _shift_date_one_year_back(start), _shift_date_one_year_back(end)
+
+
 def query_supplier_kpis(
     db: Session,
     supplier_id: str,
@@ -67,15 +85,21 @@ def query_supplier_kpis(
 ) -> dict:
     """
     Return aggregate KPIs for a supplier over a date range, plus prior-period
-    comparison values for the same duration shifted back by one period.
+    comparison values.
 
-    Joins: order_items → products → brands (filtered by supplier_id)
-           order_items → orders (filtered by order_date range)
+    Year-to-date ranges (Jan 1 – date in same year) compare against the
+    equivalent calendar period in the previous year. All other ranges use the
+    immediately preceding window of equal length.
     """
     sd, ed = _date_range(start_date, end_date)
-    period_days = (ed - sd).days + 1
-    prev_ed = sd - timedelta(days=1)
-    prev_sd = sd - timedelta(days=period_days)
+    if is_year_to_date_range(sd, ed):
+        prev_sd, prev_ed = prior_year_same_period(sd, ed)
+        comparison_kind = "year_over_year"
+    else:
+        period_days = (ed - sd).days + 1
+        prev_ed = sd - timedelta(days=1)
+        prev_sd = sd - timedelta(days=period_days)
+        comparison_kind = "prior_equal_length"
 
     row = db.execute(text(_KPI_SQL), {"supplier_id": supplier_id, "start_date": sd, "end_date": ed}).fetchone()
     prev = db.execute(text(_KPI_SQL), {"supplier_id": supplier_id, "start_date": prev_sd, "end_date": prev_ed}).fetchone()
@@ -93,6 +117,7 @@ def query_supplier_kpis(
         "prev_total_units": int(prev.total_units),
         "prev_average_order_value": _float(prev.average_order_value),
         "prev_date_range": {"start": _to_iso(prev_sd), "end": _to_iso(prev_ed)},
+        "comparison_kind": comparison_kind,
         "source": "MCP:get_supplier_kpis",
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "row_count": 1,
@@ -237,6 +262,7 @@ def query_top_products(
         "supplier_id": supplier_id,
         "region_filter": region,
         "products": products,
+        "requested_limit": limit,
         "date_range": {"start": _to_iso(sd), "end": _to_iso(ed)},
         "source": "MCP:get_top_products",
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),

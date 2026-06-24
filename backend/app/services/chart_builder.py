@@ -6,6 +6,11 @@ Chart selection is governed by chart_policy.select_charts (intent-based).
 
 from typing import Optional
 
+from app.services.comparison_labels import (
+    kpi_comparison_label,
+    market_share_period_label,
+    revenue_drivers_comparison_label,
+)
 from app.services.period_utils import (
     apply_sales_over_time_period_policy,
     format_date_sv,
@@ -93,15 +98,16 @@ def build_period_comparison_chart(
         return None
     rev_pct = round(100.0 * (curr_rev - prior_rev) / prior_rev, 1) if prior_rev > 0 else 0.0
     sign = "+" if rev_pct >= 0 else ""
-    title = "Periodjämförelse" if not compact else "Jämfört med föregående period"
+    comp_label = revenue_drivers_comparison_label(result)
+    title = "Periodjämförelse" if not compact else comp_label.capitalize()
     return {
         "chart_type": BAR_CHART,
         "chart_variant": "decline_comparison",
         "title": title,
-        "description": f"{sign}{rev_pct:.1f} % omsättningsförändring · senaste {days} dagar",
+        "description": f"{sign}{rev_pct:.1f} % omsättningsförändring · {comp_label}",
         "data": [
-            {"period": "Föregående period", "revenue": round(prior_rev, 2)},
-            {"period": "Senaste period", "revenue": round(curr_rev, 2)},
+            {"period": "Jämförelsebas", "revenue": round(prior_rev, 2)},
+            {"period": "Analyserad period", "revenue": round(curr_rev, 2)},
         ],
         "x_key": "period",
         "y_key": "revenue",
@@ -218,14 +224,15 @@ def _build_supplier_kpis(result: dict) -> Optional[dict]:
         return None
     rev_pct = round(100.0 * (curr_rev - prior_rev) / prior_rev, 1) if prior_rev > 0 else 0.0
     sign = "+" if rev_pct >= 0 else ""
+    comp_label = kpi_comparison_label(result)
     return {
         "chart_type": BAR_CHART,
         "chart_variant": "decline_comparison",
         "title": "Periodjämförelse",
-        "description": f"{sign}{rev_pct:.1f} % omsättningsförändring",
+        "description": f"{sign}{rev_pct:.1f} % omsättningsförändring · {comp_label}",
         "data": [
-            {"period": "Föregående period", "revenue": round(prior_rev, 2)},
-            {"period": "Senaste period", "revenue": round(curr_rev, 2)},
+            {"period": "Jämförelsebas", "revenue": round(prior_rev, 2)},
+            {"period": "Analyserad period", "revenue": round(curr_rev, 2)},
         ],
         "x_key": "period",
         "y_key": "revenue",
@@ -237,6 +244,9 @@ def _build_supplier_kpis(result: dict) -> Optional[dict]:
 
 def _build_top_products(result: dict) -> Optional[dict]:
     products = result.get("products") or []
+    requested = result.get("requested_limit")
+    if requested is not None:
+        products = products[: int(requested)]
     if len(products) < 2:
         return None
     data = []
@@ -312,7 +322,7 @@ def _build_market_share(result: dict) -> Optional[dict]:
     return {
         "chart_type": PIE_CHART,
         "title": "Marknadsandel",
-        "description": f"Fördelning i {category}",
+        "description": market_share_period_label(result),
         "x_key": "name",
         "y_key": "revenue",
         "data": data,
