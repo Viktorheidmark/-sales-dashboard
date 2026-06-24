@@ -257,7 +257,7 @@ function AssistantBubble({
 
   if (msg.loading && !msg.streamingContent) {
     return (
-      <article className="max-w-2xl">
+      <article className="w-full">
         <div className="flex items-center gap-2.5 text-sm text-theme-muted">
           <LoadingDots />
           <span>{msg.statusText ?? 'Analyserar försäljningsdata…'}</span>
@@ -268,7 +268,7 @@ function AssistantBubble({
 
   if (msg.loading && msg.streamingContent) {
     return (
-      <article className="max-w-2xl space-y-1">
+      <article className="w-full space-y-1">
         <div className="text-[15px] text-theme-body leading-[1.75]">
           <ReactMarkdown components={markdownComponents}>
             {msg.streamingContent}
@@ -281,7 +281,7 @@ function AssistantBubble({
 
   if (msg.error) {
     return (
-      <article className="max-w-2xl">
+      <article className="w-full">
         <p className="text-[15px] text-theme-muted leading-relaxed">{msg.error}</p>
       </article>
     )
@@ -292,7 +292,7 @@ function AssistantBubble({
   const displayLimitations = visibleResponseLimitations(r.limitations, r)
 
   return (
-    <article className="max-w-2xl space-y-5">
+    <article className="w-full space-y-5">
       <div className="text-[15px] text-theme-body leading-[1.75]">
         <ReactMarkdown components={markdownComponents}>
           {msg.content}
@@ -536,7 +536,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
     : 'Fråga om försäljning, produkter eller marknadsandel…'
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 w-full max-w-3xl mx-auto">
+    <div className="flex flex-col flex-1 min-h-0 w-full max-w-3xl lg:max-w-[60rem] xl:max-w-[62.5rem] mx-auto">
       {hasConversation && (
         <div className="shrink-0 flex justify-end pb-2">
           <button
@@ -556,19 +556,10 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
         {isEmpty ? (
           <div className="flex flex-col min-h-full px-2 py-10 sm:py-16">
-            <div className="w-full max-w-xl mx-auto text-center mb-10">
-              {supplierName && (
-                <p className="text-xs text-theme-muted mb-3 leading-relaxed">
-                  Du analyserar{' '}
-                  <span className="text-theme-body font-medium">{supplierName}</span>
-                </p>
-              )}
-              <h2 className="text-2xl sm:text-[1.75rem] font-semibold text-theme-heading tracking-tight">
-                Vad vill du analysera?
+            <div className="w-full text-center mb-10">
+              <h2 className="text-2xl sm:text-[1.75rem] font-bold text-theme-heading tracking-tight">
+                Hej, {supplierName}, vad vill du analysera idag?
               </h2>
-              <p className="mt-3 text-sm text-theme-muted leading-relaxed">
-                Fråga om försäljning, produkter, regioner och marknadsandel.
-              </p>
             </div>
 
             <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -588,14 +579,6 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
                 </button>
               ))}
             </div>
-
-            {supplierName && (
-              <p className="mt-10 text-[11px] text-theme-muted text-center leading-relaxed max-w-sm mx-auto">
-                Analys baserad på syntetisk försäljningsdata för{' '}
-                <span className="text-theme-muted">{supplierName}</span>.
-                Konkurrentdata visas enbart aggregerat.
-              </p>
-            )}
 
             <div
               className="flex-1 flex items-end justify-center min-h-[4.5rem] pt-10 pb-2"
