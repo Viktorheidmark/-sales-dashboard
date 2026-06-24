@@ -111,6 +111,23 @@
       transform: none;
     }
   }
+
+  .overview-kpi-card {
+    @apply transition-[transform,box-shadow,border-color,background-color] duration-200 ease-out;
+  }
+
+  .overview-kpi-card:hover {
+    transform: scale(1.015);
+    border-color: rgba(77, 124, 255, 0.28);
+    background-color: rgba(77, 124, 255, 0.04);
+    box-shadow: 0 0 18px -6px rgba(77, 124, 255, 0.14);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .overview-kpi-card:hover {
+      transform: none;
+    }
+  }
 }
 
 @layer utilities {

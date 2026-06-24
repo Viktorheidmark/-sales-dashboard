@@ -104,12 +104,11 @@ export const api = {
       end_date: endDate,
     }),
 
-  getTopProducts: (startDate?: string, endDate?: string, region?: string) =>
+  getTopProducts: (startDate?: string, endDate?: string) =>
     get<TopProductsResponse>('/api/dashboard/top-products', {
       start_date: startDate,
       end_date: endDate,
-      limit: 5,
-      region,
+      limit: 50,
     }),
 
   getRegions: (startDate?: string, endDate?: string) =>

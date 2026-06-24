@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import { api } from '../api/client'
 import type {
   AuthUser,
@@ -11,12 +11,11 @@ import type {
 } from '../api/types'
 import { KpiCards } from '../components/sections/KpiCards'
 import { SalesTrend } from '../components/sections/SalesTrend'
-import { ExecutiveActionPanel } from '../components/sections/ExecutiveActionPanel'
 import { TopProducts } from '../components/sections/TopProducts'
 import { RegionalSales } from '../components/sections/RegionalSales'
 import { MarketShare } from '../components/sections/MarketShare'
 import { DecliningProducts } from '../components/sections/DecliningProducts'
-import { DATE_PRESETS, presetToDates, defaultCategory, type DatePreset } from '../utils/dateRange'
+import { DATE_PRESETS, presetToDates, defaultCategory, overviewPeriodContextLabel, type DatePreset } from '../utils/dateRange'
 
 interface SectionState<T> {
   data: T | null
@@ -36,7 +35,7 @@ function formatShortDate(iso: string): string {
 
 function SectionHeading({ children }: { children: ReactNode }) {
   return (
-    <h2 className="text-xs font-semibold text-theme-muted uppercase tracking-[0.14em] mb-4">
+    <h2 className="text-base font-semibold text-theme-heading tracking-tight mb-4">
       {children}
     </h2>
   )
@@ -47,10 +46,13 @@ interface OverviewPageProps {
 }
 
 export function OverviewPage({ user }: OverviewPageProps) {
-  const [datePreset, setDatePreset] = useState<DatePreset>('90d')
-  const [selectedRegion, setSelectedRegion] = useState('all')
-  const [selectedCategory, setSelectedCategory] = useState(() => defaultCategory(user.supplier_name))
+  const [datePreset, setDatePreset] = useState<DatePreset>('all')
   const [refreshTick, setRefreshTick] = useState(0)
+
+  const supplierCategory = useMemo(
+    () => defaultCategory(user.supplier_name),
+    [user.supplier_name],
+  )
 
   const [overview, setOverview] = useState<SectionState<OverviewResponse>>(initialState())
   const [trend, setTrend] = useState<SectionState<SalesOverTimeResponse>>(initialState())
@@ -65,7 +67,6 @@ export function OverviewPage({ user }: OverviewPageProps) {
 
   useEffect(() => {
     const { startDate, endDate, granularity, days } = presetToDates(datePreset)
-    const regionParam = selectedRegion === 'all' ? undefined : selectedRegion
 
     const load = <T,>(
       setter: (s: SectionState<T> | ((prev: SectionState<T>) => SectionState<T>)) => void,
@@ -79,128 +80,100 @@ export function OverviewPage({ user }: OverviewPageProps) {
 
     load(setOverview, () => api.getOverview(startDate, endDate))
     load(setTrend, () => api.getSalesOverTime(granularity, startDate, endDate))
-    load(setTopProducts, () => api.getTopProducts(startDate, endDate, regionParam))
+    load(setTopProducts, () => api.getTopProducts(startDate, endDate))
     load(setRegions, () => api.getRegions(startDate, endDate))
-    load(setMarketShare, () => api.getMarketShare(selectedCategory, startDate, endDate))
+    load(setMarketShare, () => api.getMarketShare(supplierCategory, startDate, endDate))
     load(setDeclining, () => api.getDecliningProducts(days))
-  }, [datePreset, selectedRegion, selectedCategory, refreshTick])
+  }, [datePreset, supplierCategory, refreshTick])
 
   const handleRefresh = () => setRefreshTick(t => t + 1)
 
-  const worst = declining.data?.products[0]
-  const topRegion = regions.data?.regions[0]
-  const worstPct = worst?.revenue_change_pct != null
-    ? Math.abs(worst.revenue_change_pct).toFixed(1)
-    : null
-
   const latestOrderDate = overview.data?.latest_order_date
-  const currentPreset = DATE_PRESETS.find(p => p.value === datePreset)
-  const periodLabel = currentPreset?.label?.toLowerCase() ?? datePreset
-  const periodDisplay = currentPreset?.label ?? datePreset
-  const supplierInitial = user.supplier_name
-    ? user.supplier_name.charAt(0).toUpperCase()
-    : '?'
+  const generatedAt = overview.data?.generated_at
+  const periodContextLabel = overviewPeriodContextLabel(datePreset)
 
   return (
-    <div className="space-y-7 pb-2">
-      {/* Compact page header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="space-y-8 pb-2">
+      {/* Zone 1 — Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold text-theme-heading tracking-tight">
             Försäljningsöversikt
           </h1>
-          <div className="mt-2 flex items-center gap-2 min-w-0">
-            <div
-              className="w-6 h-6 rounded-full bg-workspace-elevated border border-workspace-border flex items-center justify-center shrink-0 text-[10px] font-semibold text-brand-600 dark:text-brand-400"
-              aria-hidden
-            >
-              {supplierInitial}
-            </div>
-            <p className="text-sm text-theme-muted truncate leading-snug">
-              <span className="text-theme-body font-medium">{user.supplier_name}</span>
-              <span className="text-theme-faint mx-1.5" aria-hidden>·</span>
-              <span>Leverantörsvy</span>
-            </p>
-          </div>
+          <p className="mt-1.5 text-sm leading-snug truncate">
+            <span className="text-theme-body font-medium">{user.supplier_name}</span>
+            <span className="text-theme-faint mx-1.5" aria-hidden>·</span>
+            <span className="text-theme-muted">Leverantörsvy</span>
+          </p>
           {latestOrderDate && (
-            <p className="mt-1.5 text-xs text-theme-muted">
+            <p className="mt-1 text-xs text-theme-faint">
               Senast transaktionsdatum: {formatShortDate(latestOrderDate)}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="segment-control">
-            {DATE_PRESETS.map(p => (
-              <button
-                key={p.value}
-                onClick={() => setDatePreset(p.value)}
-                className={`segment-btn ${datePreset === p.value ? 'segment-btn-active' : ''}`}
-              >
-                {p.label}
-              </button>
-            ))}
+        <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+          {generatedAt && (
+            <p className="text-xs text-theme-muted">
+              Senast uppdaterad: {formatShortDate(generatedAt.slice(0, 10))}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <div className="segment-control">
+              {DATE_PRESETS.map(p => (
+                <button
+                  key={p.value}
+                  onClick={() => setDatePreset(p.value)}
+                  className={`segment-btn ${datePreset === p.value ? 'segment-btn-active' : ''}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={anyLoading}
+              className="btn-ghost"
+              aria-label="Uppdatera"
+            >
+              <span className={anyLoading ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
+              Uppdatera
+            </button>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={anyLoading}
-            className="btn-ghost"
-            aria-label="Uppdatera"
-          >
-            <span className={anyLoading ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
-            Uppdatera
-          </button>
         </div>
       </div>
 
-      {/* KPI row */}
+      {/* Zone 2 — KPI row */}
       <KpiCards
         data={overview.data}
         loading={overview.loading}
         error={overview.error}
         onRetry={handleRefresh}
-        periodLabel={periodLabel}
         compact
       />
 
-      {/* Main decision area */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-5 lg:gap-6 items-stretch">
-        <div className="lg:col-span-7 min-w-0">
-          <SalesTrend
-            data={trend.data}
-            loading={trend.loading}
-            error={trend.error}
-            onRetry={handleRefresh}
-            featured
-            periodLabel={periodDisplay}
-          />
-        </div>
-        <div className="lg:col-span-3 min-w-0">
-          <ExecutiveActionPanel
-            worst={worst}
-            worstPct={worstPct}
-            topRegion={topRegion}
-            marketShare={marketShare.data}
-            selectedCategory={selectedCategory}
-            decliningLoading={declining.loading}
-            regionsLoading={regions.loading}
-            marketShareLoading={marketShare.loading}
-          />
-        </div>
-      </div>
+      {/* Försäljningstrend */}
+      <SalesTrend
+        data={trend.data}
+        loading={trend.loading}
+        error={trend.error}
+        onRetry={handleRefresh}
+        featured
+        periodContextLabel={periodContextLabel}
+        chartHeight={280}
+      />
 
-      {/* Operational detail */}
+      {/* Zone 5 — Products and regions */}
       <section>
-        <SectionHeading>Operativ detalj</SectionHeading>
+        <SectionHeading>Produkter och regioner</SectionHeading>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <TopProducts
             data={topProducts.data}
-            regionsData={regions.data}
             loading={topProducts.loading}
             error={topProducts.error}
             onRetry={handleRefresh}
-            selectedRegion={selectedRegion}
-            onRegionChange={setSelectedRegion}
             compact
+            showAssistantLink
+            periodContextLabel={periodContextLabel}
           />
           <RegionalSales
             data={regions.data}
@@ -208,21 +181,22 @@ export function OverviewPage({ user }: OverviewPageProps) {
             error={regions.error}
             onRetry={handleRefresh}
             compact
+            showAssistantLink
+            periodContextLabel={periodContextLabel}
           />
         </div>
       </section>
 
-      {/* Market position and risks */}
+      {/* Zone 6 — Market share and watch list */}
       <section>
-        <SectionHeading>Marknadsposition och risker</SectionHeading>
+        <SectionHeading>Marknadsandel och bevakning</SectionHeading>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <MarketShare
             data={marketShare.data}
             loading={marketShare.loading}
             error={marketShare.error}
             onRetry={handleRefresh}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
+            supplierCategory={supplierCategory}
           />
           <DecliningProducts
             data={declining.data}
@@ -232,8 +206,6 @@ export function OverviewPage({ user }: OverviewPageProps) {
           />
         </div>
       </section>
-
-      <p className="text-xs text-theme-faint pt-1">Syntetisk demodata · Solvigo Sales Intelligence</p>
     </div>
   )
 }

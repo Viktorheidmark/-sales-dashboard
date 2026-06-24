@@ -20,9 +20,42 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 
-def _date_range(start_date: Optional[date], end_date: Optional[date]) -> tuple[date, date]:
+def _date_range(
+    start_date: Optional[date],
+    end_date: Optional[date],
+    *,
+    db: Optional[Session] = None,
+    supplier_id: Optional[str] = None,
+) -> tuple[date, date]:
+    """Resolve query bounds. When both dates are omitted, use supplier data extent."""
+    if start_date is None and end_date is None:
+        if db is not None and supplier_id is not None:
+            return query_supplier_date_bounds(db, supplier_id)
+        today = datetime.now(tz=timezone.utc).date()
+        return today - timedelta(days=179), today
     today = datetime.now(tz=timezone.utc).date()
     return (start_date or (today - timedelta(days=179))), (end_date or today)
+
+
+def query_supplier_date_bounds(db: Session, supplier_id: str) -> tuple[date, date]:
+    """Earliest and latest order dates for a supplier (full available history)."""
+    row = db.execute(
+        text("""
+            SELECT
+                MIN(o.order_date)::date AS min_date,
+                MAX(o.order_date)::date AS max_date
+            FROM order_items oi
+            JOIN orders   o ON o.id  = oi.order_id
+            JOIN products p ON p.id  = oi.product_id
+            JOIN brands   b ON b.id  = p.brand_id
+            WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+        """),
+        {"supplier_id": supplier_id},
+    ).fetchone()
+    if row and row.min_date and row.max_date:
+        return row.min_date, row.max_date
+    today = datetime.now(tz=timezone.utc).date()
+    return today - timedelta(days=179), today
 
 
 def _to_iso(d: date) -> str:
@@ -91,7 +124,7 @@ def query_supplier_kpis(
     equivalent calendar period in the previous year. All other ranges use the
     immediately preceding window of equal length.
     """
-    sd, ed = _date_range(start_date, end_date)
+    sd, ed = _date_range(start_date, end_date, db=db, supplier_id=supplier_id)
     if is_year_to_date_range(sd, ed):
         prev_sd, prev_ed = prior_year_same_period(sd, ed)
         comparison_kind = "year_over_year"
@@ -149,7 +182,7 @@ def query_sales_over_time(
     if granularity not in _GRANULARITY_TRUNC:
         granularity = "month"
     trunc = _GRANULARITY_TRUNC[granularity]
-    sd, ed = _date_range(start_date, end_date)
+    sd, ed = _date_range(start_date, end_date, db=db, supplier_id=supplier_id)
 
     rows = db.execute(
         text(f"""
@@ -209,7 +242,7 @@ def query_top_products(
     Return top products by revenue for a supplier, optionally filtered by region.
     """
     limit = max(1, min(limit, 50))
-    sd, ed = _date_range(start_date, end_date)
+    sd, ed = _date_range(start_date, end_date, db=db, supplier_id=supplier_id)
 
     region_join = ""
     region_filter = ""
@@ -284,7 +317,7 @@ def query_sales_by_region(
     """
     Return revenue, orders, and units broken down by region for a supplier.
     """
-    sd, ed = _date_range(start_date, end_date)
+    sd, ed = _date_range(start_date, end_date, db=db, supplier_id=supplier_id)
 
     rows = db.execute(
         text("""
@@ -348,7 +381,7 @@ def query_market_share(
     Competitor data is returned as aggregate totals only — no competitor
     product names, SKUs, order IDs, or customer data are exposed.
     """
-    sd, ed = _date_range(start_date, end_date)
+    sd, ed = _date_range(start_date, end_date, db=db, supplier_id=supplier_id)
     params = {"supplier_id": supplier_id, "category_name": category_name, "start_date": sd, "end_date": ed}
 
     row = db.execute(
@@ -765,7 +798,7 @@ def query_data_status(
     Return data-freshness metadata for a supplier over a date range:
     latest transaction date, period order/unit counts, and request timestamp.
     """
-    sd, ed = _date_range(start_date, end_date)
+    sd, ed = _date_range(start_date, end_date, db=db, supplier_id=supplier_id)
 
     row = db.execute(
         text("""

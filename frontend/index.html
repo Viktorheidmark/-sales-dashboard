@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,7 +12,7 @@
         var key = 'solvigo-theme';
         var stored = null;
         try { stored = localStorage.getItem(key); } catch (e) {}
-        var theme = stored === 'light' ? 'light' : 'dark';
+        var theme = (stored === 'dark' || stored === 'light') ? stored : 'light';
         var root = document.documentElement;
         if (theme === 'dark') {
           root.classList.add('dark');

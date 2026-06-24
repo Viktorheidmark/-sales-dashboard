@@ -6,20 +6,20 @@ import { Card, CardHeader, CardBody } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
 import { ErrorState } from '../ui/ErrorState'
 
-const CATEGORIES = ['Läsk', 'Chips & snacks']
-
 interface MarketShareProps {
   data: MarketShareResponse | null
   loading: boolean
   error: string | null
   onRetry: () => void
-  selectedCategory: string
-  onCategoryChange: (c: string) => void
+  supplierCategory: string
 }
 
 export function MarketShare({
-  data, loading, error, onRetry,
-  selectedCategory, onCategoryChange,
+  data,
+  loading,
+  error,
+  onRetry,
+  supplierCategory,
 }: MarketShareProps) {
   const { chart, chartTooltipStyle } = useChartTheme()
 
@@ -33,49 +33,32 @@ export function MarketShare({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="text-sm font-semibold text-theme-heading">Marknadsandel</h2>
-            <p className="text-xs text-theme-muted mt-0.5">Andel av kategoriomsättning</p>
-          </div>
-          <div className="segment-control p-0.5">
-            {CATEGORIES.map(c => (
-              <button
-                key={c}
-                onClick={() => onCategoryChange(c)}
-                className={`text-xs px-2.5 py-1.5 rounded-md font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
-                  selectedCategory === c
-                    ? 'segment-btn-active'
-                    : 'segment-btn'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
+        <div>
+          <h2 className="text-sm font-semibold text-theme-heading">Marknadsandel</h2>
+          <p className="text-xs text-theme-muted mt-0.5">inom {supplierCategory}</p>
         </div>
       </CardHeader>
       <CardBody>
         {loading ? (
           <div className="space-y-3">
             <div className="flex justify-center">
-              <Skeleton className="w-40 h-40 rounded-full" />
+              <Skeleton className="w-36 h-36 rounded-full" />
             </div>
             <Skeleton className="h-4 w-1/2 mx-auto" />
           </div>
         ) : error || !data ? (
           <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
         ) : (
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
             <div className="shrink-0 flex flex-col items-center">
-              <ResponsiveContainer width={148} height={148}>
+              <ResponsiveContainer width={118} height={118}>
                 <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={44}
-                    outerRadius={68}
+                    innerRadius={38}
+                    outerRadius={56}
                     dataKey="value"
                     startAngle={90}
                     endAngle={-270}
@@ -88,29 +71,26 @@ export function MarketShare({
                   <Tooltip formatter={(v: number) => formatSEK(v)} contentStyle={chartTooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
-              <p className="-mt-1 text-2xl font-bold text-theme-heading tabular-nums leading-none">
+              <p className="-mt-2 text-xl font-bold text-theme-heading tabular-nums leading-none">
                 {formatPct(data.market_share_pct)}
               </p>
-              <p className="text-xs text-theme-muted mt-1">Vår andel</p>
+              <p className="text-[10px] text-theme-muted mt-0.5">Vår andel</p>
             </div>
 
-            <div className="flex-1 space-y-3">
+            <div className="flex-1 space-y-2 min-w-0">
               <div>
-                <p className="text-xs font-medium text-theme-muted">Vår omsättning</p>
-                <p className="text-lg font-bold text-theme-heading tabular-nums mt-0.5">{formatSEK(data.supplier_revenue)}</p>
+                <p className="text-[11px] text-theme-muted">Vår omsättning</p>
+                <p className="text-sm font-semibold text-theme-heading tabular-nums leading-tight">{formatSEK(data.supplier_revenue)}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-theme-muted">Kategoritotal</p>
-                <p className="text-lg font-bold text-theme-heading tabular-nums mt-0.5">{formatSEK(data.category_total_revenue)}</p>
+                <p className="text-[11px] text-theme-muted">Kategoritotal</p>
+                <p className="text-sm font-semibold text-theme-heading tabular-nums leading-tight">{formatSEK(data.category_total_revenue)}</p>
               </div>
-              <div className="surface-inset px-3 py-2">
-                <p className="text-xs text-theme-muted">
-                  {data.competitor_count} konkurrenter · enbart aggregat
+              {data.competitor_count > 0 && (
+                <p className="text-[10px] text-theme-faint leading-snug pt-0.5">
+                  Konkurrentdata visas aggregerat
                 </p>
-                <p className="text-sm font-semibold text-theme-body tabular-nums mt-0.5">
-                  {formatSEK(data.competitor_aggregate_revenue)}
-                </p>
-              </div>
+              )}
             </div>
           </div>
         )}

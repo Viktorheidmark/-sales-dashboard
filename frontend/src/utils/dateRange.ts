@@ -30,3 +30,17 @@ export function defaultCategory(supplierName: string): string {
   if (name.includes('orkla') || name.includes('snacks') || name.includes('estrella') || name.includes('olw')) return 'Chips & snacks'
   return 'Läsk'
 }
+
+/** Display label for the active overview period (products/regions cards). */
+export function overviewPeriodContextLabel(preset: DatePreset): string {
+  switch (preset) {
+    case '30d':
+      return 'Senaste 30 dagarna'
+    case '90d':
+      return 'Senaste 90 dagarna'
+    case '180d':
+      return 'Senaste 180 dagarna'
+    case 'all':
+      return 'Hela tillgängliga perioden'
+  }
+}

@@ -56,3 +56,11 @@ export function daysAgo(n: number): string {
 export function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
+
+export function formatShortDateSv(iso: string): string {
+  return new Date(iso + 'T12:00:00').toLocaleDateString('sv-SE', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}

@@ -3,7 +3,7 @@ import {
   CartesianGrid, Tooltip, ReferenceLine,
 } from 'recharts'
 import type { SalesOverTimeResponse } from '../../api/types'
-import { formatSEK, formatPeriod } from '../../utils/format'
+import { formatSEK, formatPeriod, formatShortDateSv } from '../../utils/format'
 import { useChartTheme, type ChartTokens } from '../../utils/chartTheme'
 import { Card, CardHeader, CardBody } from '../ui/Card'
 import { ChartSkeleton } from '../ui/Skeleton'
@@ -15,7 +15,8 @@ interface SalesTrendProps {
   error: string | null
   onRetry: () => void
   featured?: boolean
-  periodLabel?: string
+  periodContextLabel?: string
+  chartHeight?: number
 }
 
 function currentPeriodStart(granularity: string): string {
@@ -57,21 +58,21 @@ function CustomTooltip({ active, payload, label, granularity, incompletePeriod, 
   )
 }
 
-const GRAN_LABELS: Record<string, string> = {
-  day: 'Daglig vy',
-  week: 'Veckovis vy',
-  month: 'Månadsvis vy',
+const GRAN_SUBTITLES: Record<string, string> = {
+  day: 'Daglig omsättning',
+  week: 'Veckovis omsättning',
+  month: 'Månadsvis omsättning',
 }
 
-const INCOMPLETE_LABELS: Record<string, string> = {
-  day: 'dag',
-  week: 'vecka',
-  month: 'månad',
+const INCOMPLETE_NOTES: Record<string, string> = {
+  day: 'Pågående dag exkluderad.',
+  week: 'Pågående vecka exkluderad.',
+  month: 'Pågående månad exkluderad.',
 }
 
-export function SalesTrend({ data, loading, error, onRetry, featured = false, periodLabel }: SalesTrendProps) {
+export function SalesTrend({ data, loading, error, onRetry, featured = false, periodContextLabel, chartHeight: chartHeightProp }: SalesTrendProps) {
   const { chart, chartAxisTick } = useChartTheme()
-  const chartHeight = featured ? 340 : 280
+  const chartHeight = chartHeightProp ?? (featured ? 280 : 280)
   const headerPad = featured ? 'px-5 pt-5 pb-3' : undefined
   const bodyPad = featured ? 'px-5 pb-5' : undefined
 
@@ -99,32 +100,31 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
   const completedPoints = allPoints.filter(pt => pt.period < periodStart)
   const hasIncompleteTail = allPoints.length > completedPoints.length
   const chartData = completedPoints.length > 0 ? completedPoints : allPoints
-  const excludeNote = hasIncompleteTail && completedPoints.length > 0
-    ? ` · Exkl. pågående ${INCOMPLETE_LABELS[gran] ?? gran}`
+  const showIncompleteNote = hasIncompleteTail && completedPoints.length > 0
+  const incompleteNote = showIncompleteNote
+    ? INCOMPLETE_NOTES[gran] ?? 'Pågående period exkluderad.'
     : null
 
   const avgRevenue = chartData.length
     ? chartData.reduce((s, d) => s + d.revenue, 0) / chartData.length
     : 0
 
-  const total = chartData.reduce((s, d) => s + d.revenue, 0)
+  const granSubtitle = GRAN_SUBTITLES[gran] ?? 'Omsättning'
+  const dr = data.date_range
+  const periodPart =
+    periodContextLabel === 'Hela tillgängliga perioden' && dr?.start && dr?.end
+      ? `${formatShortDateSv(dr.start)} – ${formatShortDateSv(dr.end)}`
+      : periodContextLabel
+  const metadataLine = periodPart ? `${periodPart} · ${granSubtitle}` : granSubtitle
 
   return (
     <Card className={featured ? 'h-full' : ''}>
       <CardHeader className={headerPad}>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="text-sm font-semibold text-theme-heading">Försäljningstrend</h2>
-            <p className="text-xs text-theme-muted mt-1 leading-relaxed">
-              {GRAN_LABELS[gran] ?? gran}
-              {periodLabel && <span> · {periodLabel}</span>}
-              {' · '}Total {formatSEK(total)}
-              {excludeNote && <span className="text-amber-600 dark:text-amber-400/90">{excludeNote}</span>}
-            </p>
-          </div>
-          <span className="text-xs font-medium text-theme-muted">
-            {gran === 'day' ? 'Dag' : gran === 'week' ? 'Vecka' : 'Månad'}
-          </span>
+        <div>
+          <h2 className="text-sm font-semibold text-theme-heading">Försäljningstrend</h2>
+          <p className="text-xs text-theme-muted mt-1 leading-relaxed">
+            {metadataLine}
+          </p>
         </div>
       </CardHeader>
       <CardBody className={bodyPad}>
@@ -133,6 +133,7 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
             Inga försäljningsdata för vald period
           </div>
         ) : (
+          <>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
@@ -174,6 +175,12 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
               />
             </LineChart>
           </ResponsiveContainer>
+          {incompleteNote && (
+            <p className="mt-2 text-[11px] text-theme-faint leading-snug">
+              {incompleteNote}
+            </p>
+          )}
+          </>
         )}
       </CardBody>
     </Card>

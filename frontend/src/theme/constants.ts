@@ -2,7 +2,7 @@ export const THEME_STORAGE_KEY = 'solvigo-theme'
 
 export type Theme = 'dark' | 'light'
 
-export const DEFAULT_THEME: Theme = 'dark'
+export const DEFAULT_THEME: Theme = 'light'
 
 export function isTheme(value: string | null): value is Theme {
   return value === 'dark' || value === 'light'
@@ -11,7 +11,8 @@ export function isTheme(value: string | null): value is Theme {
 export function readStoredTheme(): Theme {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY)
-    return stored === 'light' ? 'light' : DEFAULT_THEME
+    if (isTheme(stored)) return stored
+    return DEFAULT_THEME
   } catch {
     return DEFAULT_THEME
   }
