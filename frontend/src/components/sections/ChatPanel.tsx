@@ -568,7 +568,7 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
                   key={card.prompt}
                   onClick={() => sendMessage(card.prompt)}
                   disabled={loading}
-                  className="text-left px-4 py-3.5 rounded-xl border border-workspace-border bg-workspace-surface hover:border-workspace-border hover:bg-workspace-elevated transition-colors disabled:opacity-40 group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                  className="prompt-suggestion-card group"
                 >
                   <p className="text-sm font-medium text-theme-strong group-hover:text-theme-heading">
                     {card.label}
