@@ -12,62 +12,6 @@ import {
   visibleResponseLimitations,
 } from '../../utils/sourcePresentation'
 
-// ---------------------------------------------------------------------------
-// Suggestion cards with icons
-// ---------------------------------------------------------------------------
-
-const PROMPT_CARDS = [
-  {
-    label: '30-dagars utveckling',
-    sub: 'Hur har försäljningen utvecklats de senaste 30 dagarna?',
-    prompt: 'Hur har försäljningen utvecklats de senaste 30 dagarna?',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-      </svg>
-    ),
-    iconColor: 'text-blue-500',
-    iconBg: 'bg-blue-50 dark:bg-blue-500/10',
-  },
-  {
-    label: 'Produkt i nedgång',
-    sub: 'Vilken produkt har tappat mest de senaste 30 dagarna?',
-    prompt: 'Vilken produkt har tappat mest de senaste 30 dagarna?',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-      </svg>
-    ),
-    iconColor: 'text-amber-500',
-    iconBg: 'bg-amber-50 dark:bg-amber-500/10',
-  },
-  {
-    label: 'Starkaste region',
-    sub: 'Vilken region genererar mest intäkter?',
-    prompt: 'Vilken region genererar mest intäkter?',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-      </svg>
-    ),
-    iconColor: 'text-emerald-500',
-    iconBg: 'bg-emerald-50 dark:bg-emerald-500/10',
-  },
-  {
-    label: 'Marknadsandel',
-    sub: 'Hur stor är vår marknadsandel?',
-    prompt: 'Hur stor är vår marknadsandel?',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" />
-      </svg>
-    ),
-    iconColor: 'text-purple-500',
-    iconBg: 'bg-purple-50 dark:bg-purple-500/10',
-  },
-]
 
 const LOADING_STATUSES = [
   'Analyserar försäljningsdata…',
@@ -234,6 +178,44 @@ function BookmarkIcon({ filled }: { filled?: boolean }) {
   )
 }
 
+function SendButton({ onClick, disabled, loading }: { onClick: () => void; disabled: boolean; loading: boolean }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-busy={loading}
+      aria-label="Skicka"
+      onMouseEnter={() => !disabled && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'absolute',
+        right: 10,
+        top: '50%',
+        transform: hovered && !disabled ? 'translateY(-50%) scale(1.05)' : 'translateY(-50%)',
+        width: 40,
+        height: 40,
+        borderRadius: '50%',
+        background: disabled ? 'var(--text-muted)' : 'var(--accent)',
+        color: 'white',
+        border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.3 : 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'transform 0.15s, opacity 0.15s, background 0.15s',
+        flexShrink: 0,
+      }}
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style={{ width: 15, height: 15 }}>
+        <path d="M3.105 2.288a.75.75 0 00-.826.95l1.414 4.926A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.897 28.897 0 0015.293-7.155.75.75 0 000-1.114A28.897 28.897 0 003.105 2.288z" />
+      </svg>
+    </button>
+  )
+}
+
 function LoadingDots() {
   return (
     <span className="flex gap-0.5">
@@ -340,7 +322,7 @@ function AssistantBubble({
   if (msg.loading && !msg.streamingContent) {
     return (
       <article
-        className="self-start w-full bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4"
+        className="self-start w-full py-2"
         style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
       >
         <div className="flex items-center gap-2.5 text-sm text-theme-muted">
@@ -354,10 +336,10 @@ function AssistantBubble({
   if (msg.loading && msg.streamingContent) {
     return (
       <article
-        className="self-start w-full bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4"
+        className="self-start w-full py-1"
         style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
       >
-        <div className="text-[15px] text-theme-body leading-[1.7] min-h-[4.5rem]">
+        <div style={{ fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.6 }} className="min-h-[4.5rem]">
           <ReactMarkdown components={markdownComponents}>
             {msg.streamingContent}
           </ReactMarkdown>
@@ -370,7 +352,7 @@ function AssistantBubble({
   if (msg.error) {
     return (
       <article
-        className="self-start w-full bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4 space-y-3"
+        className="self-start w-full py-1 space-y-3"
         style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
       >
         <p className="text-sm text-theme-body leading-relaxed">{msg.error}</p>
@@ -395,13 +377,13 @@ function AssistantBubble({
 
   return (
     <article
-      className="self-start w-full bg-white dark:bg-workspace-elevated border border-[#F1F5F9] dark:border-workspace-border rounded-[18px] rounded-tl-[4px] px-5 py-4 space-y-3"
-      style={{ animation: 'chatMsgIn 0.25s ease-out both' }}
+      className="self-start w-full space-y-3"
+      style={{ padding: '4px 0', maxWidth: '80%', animation: 'chatMsgIn 0.3s ease-out both' }}
     >
       {!isGrounded ? (
         <UnsupportedAnswerCard content={msg.content} />
       ) : (
-        <div className="text-[15px] text-theme-body leading-[1.7]">
+        <div style={{ fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.6 }}>
           <ReactMarkdown components={markdownComponents}>
             {msg.content}
           </ReactMarkdown>
@@ -494,6 +476,47 @@ function AssistantBubble({
 }
 
 // ---------------------------------------------------------------------------
+// InsightChip — single chip with hover via inline state
+// ---------------------------------------------------------------------------
+
+function InsightChip({ insight, onSendMessage }: { insight: InsightSummary; onSendMessage: (t: string) => void }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      key={insight.id}
+      onClick={() => onSendMessage(insight.question)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '6px 14px',
+        borderRadius: 20,
+        background: 'var(--bg-card)',
+        border: `1px solid ${hovered ? 'var(--accent)' : 'var(--border-subtle)'}`,
+        fontSize: 12,
+        color: hovered ? 'var(--accent)' : 'var(--text-secondary)',
+        cursor: 'pointer',
+        maxWidth: 200,
+        overflow: 'hidden',
+        whiteSpace: 'nowrap',
+        textOverflow: 'ellipsis',
+        transition: 'border-color 0.15s, color 0.15s',
+      }}
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+    >
+      <svg style={{ width: 12, height: 12, opacity: 0.5, flexShrink: 0 }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {insight.question.length > 40 ? insight.question.slice(0, 40) + '…' : insight.question}
+      </span>
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // RecentInsightsRow — shows up to 3 recent saved insights as chips
 // ---------------------------------------------------------------------------
 
@@ -507,26 +530,87 @@ function RecentInsightsRow({ onSendMessage }: { onSendMessage: (text: string) =>
   if (insights.length === 0) return null
 
   return (
-    <div className="mt-6" style={{ animation: 'greetingIn 0.5s ease-out 0.2s both' }}>
-      <p className="text-[11px] uppercase tracking-widest text-[#9CA3AF] font-medium mb-2.5 text-center">
+    <div style={{ animation: 'fadeInUp 0.4s ease-out 0.15s both', textAlign: 'center' }}>
+      <p style={{
+        fontSize: 11,
+        fontWeight: 500,
+        letterSpacing: '0.05em',
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase',
+        marginBottom: 8,
+      }}>
         Senaste analyser
       </p>
-      <div className="flex flex-wrap justify-center gap-2">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
         {insights.map(insight => (
-          <button
-            key={insight.id}
-            onClick={() => onSendMessage(insight.question)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-workspace-elevated border border-[#E2E8F0] dark:border-workspace-border text-[12px] text-[#374151] dark:text-theme-body hover:border-[#3B82F6] hover:text-[#3B82F6] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
-          >
-            <svg className="w-3 h-3 opacity-50 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="truncate max-w-[200px]">
-              {insight.question.length > 40 ? insight.question.slice(0, 40) + '…' : insight.question}
-            </span>
-          </button>
+          <InsightChip key={insight.id} insight={insight} onSendMessage={onSendMessage} />
         ))}
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ChatInputBar — shared pill input used in both empty and active states
+// ---------------------------------------------------------------------------
+
+function ChatInputBar({
+  inputRef,
+  value,
+  onChange,
+  onKeyDown,
+  placeholder,
+  disabled,
+  onSend,
+}: {
+  inputRef: React.RefObject<HTMLTextAreaElement>
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  placeholder: string
+  disabled: boolean
+  onSend: () => void
+}) {
+  return (
+    <div
+      className="relative flex items-center transition-all"
+      style={{
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 28,
+      }}
+      onFocusCapture={e => {
+        const el = e.currentTarget
+        el.style.borderColor = 'var(--accent)'
+        el.style.boxShadow = 'var(--shadow-focus)'
+      }}
+      onBlurCapture={e => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          const el = e.currentTarget
+          el.style.borderColor = 'var(--border-color)'
+          el.style.boxShadow = ''
+        }
+      }}
+    >
+      <textarea
+        ref={inputRef}
+        value={value}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        rows={1}
+        disabled={disabled}
+        className="flex-1 resize-none bg-transparent text-theme-strong placeholder:text-theme-muted focus:outline-none disabled:opacity-50 scrollbar-thin"
+        style={{
+          fontSize: 16,
+          color: 'var(--text-primary)',
+          borderRadius: 28,
+          minHeight: 56,
+          padding: '16px 56px 16px 24px',
+          lineHeight: 1.5,
+        }}
+      />
+      <SendButton onClick={onSend} disabled={!value.trim() || disabled} loading={disabled} />
     </div>
   )
 }
@@ -674,18 +758,25 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
   }
 
   const isEmpty = messages.length === 0
-  const showPresence = isEmpty && !loading && input.trim().length === 0
-  const hasConversation = messages.length > 0 || loading
-  const placeholder = supplierName
-    ? `Fråga om ${supplierName}s försäljning, produkter eller marknadsandel…`
-    : 'Fråga om försäljning, produkter eller marknadsandel…'
+  const placeholder = 'Vad kan jag hjälpa dig med?'
+
+  const inputBar = (
+    <ChatInputBar
+      inputRef={inputRef}
+      value={input}
+      onChange={e => setInput(e.target.value)}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      disabled={loading}
+      onSend={() => sendMessage(input)}
+    />
+  )
 
   return (
     <>
-      {/* Keyframe animations injected once */}
       <style>{`
-        @keyframes greetingIn {
-          from { opacity: 0; transform: translateY(12px); }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes chatMsgIn {
@@ -694,216 +785,178 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
         }
       `}</style>
 
-      <div className="flex flex-col flex-1 min-h-0 w-full max-w-3xl lg:max-w-[60rem] xl:max-w-[62.5rem] mx-auto">
-        {hasConversation && (
-          <div className="shrink-0 flex justify-end pb-2">
-            <button
-              type="button"
-              onClick={resetChat}
-              className="inline-flex items-center gap-1.5 text-xs text-theme-muted hover:text-theme-body transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded px-2 py-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-              Ny chatt
-            </button>
-          </div>
-        )}
-
-        {/* Conversation workspace */}
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
-          {isEmpty ? (
-            /* ── Empty / greeting state ── */
-            <div
-              className="flex flex-col min-h-full px-2 py-10 sm:py-16 relative"
-              style={{
-                background: 'radial-gradient(ellipse at 50% 40%, rgba(59,130,246,0.06) 0%, rgba(248,250,252,0) 70%)',
-              }}
-            >
-              {/* Greeting */}
-              <div
-                className="w-full text-center mb-10"
-                style={{ animation: 'greetingIn 0.5s ease-out both' }}
-              >
-                <p style={{ fontSize: 18, fontWeight: 400, color: '#6B7280', lineHeight: 1.3 }}>
-                  Hej,
-                </p>
-                <p style={{ fontSize: 32, fontWeight: 700, color: '#0F172A', lineHeight: 1.2, marginBottom: 8 }}>
-                  {supplierName ?? 'välkommen'}
-                </p>
-                <p style={{ fontSize: 16, fontWeight: 400, color: '#6B7280' }}>
-                  Vad vill du analysera idag?
-                </p>
-              </div>
-
-              {/* Suggestion cards */}
-              <div
-                className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3"
-                style={{ animation: 'greetingIn 0.5s ease-out 0.08s both' }}
-              >
-                {PROMPT_CARDS.map(card => (
-                  <button
-                    key={card.prompt}
-                    onClick={() => sendMessage(card.prompt)}
-                    disabled={loading}
-                    className="group relative text-left flex items-start gap-4 rounded-xl px-5 py-4 transition-all duration-200 disabled:opacity-50"
-                    style={{
-                      background: 'white',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: 12,
-                    }}
-                    onMouseEnter={e => {
-                      const el = e.currentTarget
-                      el.style.transform = 'translateY(-2px)'
-                      el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'
-                      el.style.borderColor = '#3B82F6'
-                    }}
-                    onMouseLeave={e => {
-                      const el = e.currentTarget
-                      el.style.transform = ''
-                      el.style.boxShadow = ''
-                      el.style.borderColor = '#E2E8F0'
-                    }}
-                  >
-                    {/* Icon */}
-                    <span className={`shrink-0 flex items-center justify-center w-9 h-9 rounded-lg mt-0.5 ${card.iconBg} ${card.iconColor}`}>
-                      {card.icon}
-                    </span>
-
-                    {/* Text */}
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-semibold text-[#0F172A] dark:text-theme-heading leading-snug">
-                        {card.label}
-                      </span>
-                      <span className="block mt-1 text-xs text-[#6B7280] dark:text-theme-muted leading-relaxed">
-                        {card.sub}
-                      </span>
-                    </span>
-
-                    {/* Arrow appears on hover */}
-                    <span
-                      className="shrink-0 self-center text-[#3B82F6] opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-sm font-medium"
-                      aria-hidden
-                    >
-                      →
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Recent insights */}
-              <RecentInsightsRow onSendMessage={sendMessage} />
-
-              {/* Presence indicator */}
-              <div
-                className="flex-1 flex items-end justify-center min-h-[4.5rem] pt-10 pb-2"
-                aria-hidden={!showPresence}
-              >
-                {showPresence && (
-                  <div className="chat-presence">
-                    <span className="chat-presence-outer" />
-                    <span className="chat-presence-mid" />
-                    <span className="chat-presence-center" />
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* ── Conversation messages ── */
-            <div className="py-6 sm:py-8 space-y-4">
-              {messages.map(msg =>
-                msg.role === 'user' ? (
-                  /* User bubble */
-                  <div
-                    key={msg.id}
-                    className="flex justify-end"
-                    style={{ animation: 'chatMsgIn 0.2s ease-out both' }}
-                  >
-                    <p
-                      className="text-sm font-medium text-white leading-snug px-4 py-2.5"
-                      style={{
-                        background: '#3B82F6',
-                        borderRadius: '18px 18px 4px 18px',
-                        maxWidth: '60%',
-                      }}
-                    >
-                      {msg.content}
-                    </p>
-                  </div>
-                ) : (
-                  /* Assistant bubble */
-                  <AssistantBubble
-                    key={msg.id}
-                    msg={msg}
-                    supplierName={supplierName}
-                    fallbackDateRange={
-                      startDate && endDate ? { start: startDate, end: endDate } : undefined
-                    }
-                    onSendMessage={sendMessage}
-                  />
-                )
-              )}
-              <div ref={bottomRef} />
-            </div>
-          )}
-        </div>
-
-        {/* ── Composer / Input ── */}
-        <div className="shrink-0 pt-4 pb-2">
+      <div
+        className="flex flex-col flex-1 min-h-0 w-full"
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        {isEmpty ? (
+          /* ── Gemini-style empty state ── */
           <div
-            className="relative flex items-center bg-white dark:bg-workspace-elevated transition-all"
             style={{
-              border: '1.5px solid #E2E8F0',
-              borderRadius: 14,
-            }}
-            onFocusCapture={e => {
-              const el = e.currentTarget
-              el.style.borderColor = '#3B82F6'
-              el.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)'
-            }}
-            onBlurCapture={e => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                const el = e.currentTarget
-                el.style.borderColor = '#E2E8F0'
-                el.style.boxShadow = ''
-              }
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              gap: 40,
+              background: 'var(--bg-primary)',
+              padding: '0 24px',
             }}
           >
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              rows={2}
-              disabled={loading}
-              className="flex-1 resize-none bg-transparent px-5 py-4 pr-14 text-[15px] text-theme-strong placeholder:text-theme-muted focus:outline-none disabled:opacity-50 scrollbar-thin leading-relaxed"
-              style={{ borderRadius: 14, minHeight: 56 }}
-            />
-            <button
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || loading}
-              aria-busy={loading}
-              className={`absolute right-3 bottom-3 flex items-center justify-center text-white transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
-                !input.trim() || loading ? 'opacity-35 cursor-not-allowed' : 'opacity-100 hover:scale-105'
-              }`}
+            {/* Free-floating greeting — no box, no border */}
+            <p
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: loading ? '#94A3B8' : '#3B82F6',
+                fontSize: 28,
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                textAlign: 'center',
+                lineHeight: 1.3,
+                animation: 'fadeInUp 0.4s ease-out both',
               }}
-              aria-label="Skicka"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path d="M3.105 2.288a.75.75 0 00-.826.95l1.414 4.926A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.897 28.897 0 0015.293-7.155.75.75 0 000-1.114A28.897 28.897 0 003.105 2.288z" />
-              </svg>
-            </button>
+              Hej, {supplierName ?? 'välkommen'}
+            </p>
+
+            {/* Input centered in page */}
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                maxWidth: 580,
+                animation: 'fadeInUp 0.4s ease-out 0.12s both',
+              }}
+            >
+              {/* Animated blue glow behind input */}
+              <div
+                aria-hidden
+                className="gemini-glow"
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  width: 700,
+                  height: 500,
+                  pointerEvents: 'none',
+                  zIndex: 0,
+                }}
+              />
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                {inputBar}
+              </div>
+            </div>
+
+            {/* Hint text */}
+            <p
+              style={{
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+                marginTop: -24,
+                animation: 'fadeInUp 0.4s ease-out 0.18s both',
+              }}
+            >
+              Enter för att skicka · Shift+Enter för ny rad
+            </p>
+
+            {/* Recent saved insights */}
+            <RecentInsightsRow onSendMessage={sendMessage} />
           </div>
-          <p className="text-[11px] text-theme-faint mt-2 text-center">
-            Enter för att skicka · Shift+Enter för ny rad
-          </p>
-        </div>
+        ) : (
+          /* ── Active conversation ── */
+          <>
+            {/* Ny chatt button */}
+            <div className="shrink-0 flex justify-end" style={{ padding: '8px 24px 0' }}>
+              <button
+                type="button"
+                onClick={resetChat}
+                className="inline-flex items-center gap-1.5 text-xs text-theme-muted hover:text-theme-body transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded px-2 py-1"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                Ny chatt
+              </button>
+            </div>
+
+            {/* Scrollable messages */}
+            <div
+              className="flex-1 min-h-0 overflow-y-auto scrollbar-thin"
+              style={{ paddingBottom: 8 }}
+            >
+              <div
+                style={{
+                  maxWidth: 720,
+                  margin: '0 auto',
+                  padding: '24px 24px 0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 16,
+                }}
+              >
+                {messages.map(msg =>
+                  msg.role === 'user' ? (
+                    <div
+                      key={msg.id}
+                      className="flex justify-end"
+                      style={{ animation: 'chatMsgIn 0.2s ease-out both' }}
+                    >
+                      <p
+                        className="text-white"
+                        style={{
+                          fontSize: 15,
+                          background: 'var(--accent)',
+                          borderRadius: '20px 20px 4px 20px',
+                          padding: '12px 18px',
+                          maxWidth: '55%',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {msg.content}
+                      </p>
+                    </div>
+                  ) : (
+                    <AssistantBubble
+                      key={msg.id}
+                      msg={msg}
+                      supplierName={supplierName}
+                      fallbackDateRange={
+                        startDate && endDate ? { start: startDate, end: endDate } : undefined
+                      }
+                      onSendMessage={sendMessage}
+                    />
+                  )
+                )}
+                <div ref={bottomRef} />
+              </div>
+            </div>
+
+            {/* Sticky bottom input */}
+            <div
+              className="shrink-0"
+              style={{
+                position: 'sticky',
+                bottom: 0,
+                background: 'var(--bg-primary)',
+                padding: '12px 24px 20px',
+              }}
+            >
+              <div style={{ maxWidth: 680, margin: '0 auto' }}>
+                {inputBar}
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
+                    textAlign: 'center',
+                    marginTop: 8,
+                  }}
+                >
+                  Enter för att skicka · Shift+Enter för ny rad
+                </p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   )

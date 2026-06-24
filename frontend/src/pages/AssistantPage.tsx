@@ -13,7 +13,7 @@ export function AssistantPage({ user }: AssistantPageProps) {
   const initialPrompt = (location.state as { initialPrompt?: string } | null)?.initialPrompt
 
   return (
-    <div className="flex flex-col min-h-[calc(100dvh-4rem)]">
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <ChatPanel
         supplierName={user.supplier_name}
         startDate={startDate}

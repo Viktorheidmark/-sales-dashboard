@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 
 interface AppShellProps {
@@ -9,6 +9,8 @@ interface AppShellProps {
 
 export function AppShell({ supplierName, onLogout }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const location = useLocation()
+  const isFullBleed = location.pathname === '/assistant'
 
   return (
     <div className="min-h-screen bg-workspace">
@@ -51,10 +53,14 @@ export function AppShell({ supplierName, onLogout }: AppShellProps) {
       )}
 
       {/* Content */}
-      <main className="md:pl-60">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="md:pl-60" style={isFullBleed ? { display: 'flex', flexDirection: 'column', minHeight: '100vh' } : undefined}>
+        {isFullBleed ? (
           <Outlet />
-        </div>
+        ) : (
+          <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <Outlet />
+          </div>
+        )}
       </main>
     </div>
   )
