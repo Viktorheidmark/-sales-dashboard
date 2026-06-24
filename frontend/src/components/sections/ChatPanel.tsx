@@ -519,18 +519,50 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
     }
   }
 
+  const resetChat = () => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setMessages([])
+    setInput('')
+    setLoading(false)
+    inputRef.current?.focus()
+  }
+
   const isEmpty = messages.length === 0
+  const showPresence = isEmpty && !loading && input.trim().length === 0
+  const hasConversation = messages.length > 0 || loading
   const placeholder = supplierName
     ? `Fråga om ${supplierName}s försäljning, produkter eller marknadsandel…`
     : 'Fråga om försäljning, produkter eller marknadsandel…'
 
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full max-w-3xl mx-auto">
+      {hasConversation && (
+        <div className="shrink-0 flex justify-end pb-2">
+          <button
+            type="button"
+            onClick={resetChat}
+            className="inline-flex items-center gap-1.5 text-xs text-theme-muted hover:text-theme-body transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded px-2 py-1"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            Ny chatt
+          </button>
+        </div>
+      )}
+
       {/* Conversation workspace */}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center min-h-full px-2 py-10 sm:py-16">
-            <div className="w-full max-w-xl text-center mb-10">
+          <div className="flex flex-col min-h-full px-2 py-10 sm:py-16">
+            <div className="w-full max-w-xl mx-auto text-center mb-10">
+              {supplierName && (
+                <p className="text-xs text-theme-muted mb-3 leading-relaxed">
+                  Du analyserar{' '}
+                  <span className="text-theme-body font-medium">{supplierName}</span>
+                </p>
+              )}
               <h2 className="text-2xl sm:text-[1.75rem] font-semibold text-theme-heading tracking-tight">
                 Vad vill du analysera?
               </h2>
@@ -558,12 +590,25 @@ export function ChatPanel({ startDate, endDate, supplierName }: ChatPanelProps) 
             </div>
 
             {supplierName && (
-              <p className="mt-10 text-[11px] text-theme-muted text-center leading-relaxed max-w-sm">
+              <p className="mt-10 text-[11px] text-theme-muted text-center leading-relaxed max-w-sm mx-auto">
                 Analys baserad på syntetisk försäljningsdata för{' '}
                 <span className="text-theme-muted">{supplierName}</span>.
                 Konkurrentdata visas enbart aggregerat.
               </p>
             )}
+
+            <div
+              className="flex-1 flex items-end justify-center min-h-[4.5rem] pt-10 pb-2"
+              aria-hidden={!showPresence}
+            >
+              {showPresence && (
+                <div className="chat-presence">
+                  <span className="chat-presence-outer" />
+                  <span className="chat-presence-mid" />
+                  <span className="chat-presence-center" />
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div className="py-6 sm:py-8 space-y-10">

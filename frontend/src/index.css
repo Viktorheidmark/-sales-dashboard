@@ -101,4 +101,166 @@
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
   }
+
+  @keyframes chat-presence-float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-2px);
+    }
+  }
+
+  @keyframes chat-presence-outer {
+    0%, 100% {
+      opacity: 0.42;
+      transform: scale(1);
+    }
+    55% {
+      opacity: 0.72;
+      transform: scale(1.07);
+    }
+  }
+
+  @keyframes chat-presence-mid {
+    0%, 100% {
+      opacity: 0.48;
+    }
+    42% {
+      opacity: 0.78;
+    }
+    68% {
+      opacity: 0.55;
+    }
+  }
+
+  @keyframes chat-presence-center {
+    0%, 100% {
+      opacity: 0.35;
+    }
+    45% {
+      opacity: 0.58;
+    }
+  }
+
+  .chat-presence {
+    position: relative;
+    width: 840px;
+    height: 480px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    animation: chat-presence-float 7.5s ease-in-out infinite;
+  }
+
+  .chat-presence-outer {
+    position: absolute;
+    width: 840px;
+    height: 840px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 50% 52%,
+      rgba(62, 98, 158, 0.14) 0%,
+      rgba(52, 82, 138, 0.07) 32%,
+      rgba(42, 68, 118, 0.03) 52%,
+      transparent 70%
+    );
+    filter: blur(32px);
+    animation: chat-presence-outer 8s ease-in-out infinite;
+  }
+
+  .chat-presence-mid {
+    position: absolute;
+    width: 360px;
+    height: 360px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 48% 50%,
+      rgba(68, 105, 168, 0.2) 0%,
+      rgba(58, 92, 152, 0.1) 40%,
+      rgba(48, 78, 132, 0.04) 58%,
+      transparent 72%
+    );
+    filter: blur(18px);
+    animation: chat-presence-mid 7s ease-in-out infinite;
+  }
+
+  .chat-presence-center {
+    position: absolute;
+    width: 156px;
+    height: 156px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 50% 48%,
+      rgba(78, 112, 175, 0.24) 0%,
+      rgba(65, 98, 158, 0.1) 45%,
+      transparent 68%
+    );
+    filter: blur(12px);
+    animation: chat-presence-center 6.5s ease-in-out infinite;
+  }
+
+  .dark .chat-presence-outer {
+    background: radial-gradient(
+      circle at 50% 52%,
+      rgba(72, 108, 168, 0.18) 0%,
+      rgba(58, 90, 148, 0.09) 32%,
+      rgba(45, 72, 125, 0.04) 52%,
+      transparent 70%
+    );
+  }
+
+  .dark .chat-presence-mid {
+    background: radial-gradient(
+      circle at 48% 50%,
+      rgba(78, 115, 178, 0.26) 0%,
+      rgba(62, 98, 158, 0.12) 40%,
+      rgba(50, 82, 138, 0.05) 58%,
+      transparent 72%
+    );
+  }
+
+  .dark .chat-presence-center {
+    background: radial-gradient(
+      circle at 50% 48%,
+      rgba(88, 122, 185, 0.3) 0%,
+      rgba(72, 108, 168, 0.12) 45%,
+      transparent 68%
+    );
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-presence {
+      animation: none;
+    }
+
+    .chat-presence-outer {
+      animation: none;
+      opacity: 0.55;
+      transform: scale(1.02);
+    }
+
+    .chat-presence-mid {
+      animation: none;
+      opacity: 0.62;
+    }
+
+    .chat-presence-center {
+      animation: none;
+      opacity: 0.42;
+    }
+
+    .dark .chat-presence-outer {
+      opacity: 0.65;
+    }
+
+    .dark .chat-presence-mid {
+      opacity: 0.72;
+    }
+
+    .dark .chat-presence-center {
+      opacity: 0.5;
+    }
+  }
 }

@@ -49,74 +49,78 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         <ThemeToggle compact />
       </div>
 
-      <div
-        className="pointer-events-none absolute inset-0 bg-workspace-canvas/40 dark:bg-workspace-canvas/25"
-        aria-hidden
-      />
-
-      <main className="relative z-[1] flex flex-1 items-center justify-center px-4 py-10 sm:px-6 sm:py-12">
-        <div className="w-full max-w-[32rem]">
-          <header className="text-center mb-8 sm:mb-9">
-            <div className="inline-flex items-center justify-center gap-3 mb-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-workspace-border bg-workspace-surface">
-                <span className="text-brand-600 dark:text-brand-500 text-xl font-bold leading-none">◈</span>
+      <main className="relative z-[1] flex flex-1 items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
+        <div className="w-full max-w-[26rem]">
+          <header className="text-center mb-7">
+            <div className="inline-flex items-center justify-center gap-2.5 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-workspace-border bg-workspace-surface">
+                <span className="text-brand-600 dark:text-brand-500 text-lg font-bold leading-none">◈</span>
               </div>
               <div className="text-left">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-theme-muted">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-theme-muted">
                   Solvigo
                 </p>
-                <p className="text-lg font-semibold text-theme-heading tracking-tight">
+                <p className="text-base font-semibold text-theme-heading tracking-tight leading-tight">
                   Sales Intelligence
                 </p>
               </div>
             </div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-theme-heading tracking-tight leading-snug">
+            <h1 className="text-xl font-semibold text-theme-heading tracking-tight leading-snug">
               Leverantörsanalys med datadriven insikt
             </h1>
-            <p className="mt-2.5 text-sm text-theme-muted leading-relaxed max-w-md mx-auto">
+            <p className="mt-2 text-sm text-theme-muted leading-relaxed">
               Följ försäljning, produkter och marknadsandel per leverantör — isolerat och grundat i verifierad analysdata.
             </p>
           </header>
 
-          <div className="surface-card border-workspace-border/80 px-7 py-7 sm:px-8 sm:py-8">
-            <div className="mb-6">
-              <h2 className="text-base font-semibold text-theme-heading">Logga in</h2>
-              <p className="text-sm text-theme-muted mt-1">Fortsätt till er leverantörsdashboard</p>
+          <div className="surface-card border-workspace-border px-6 py-6 sm:px-7 sm:py-7">
+            <div className="mb-5 pb-5 border-b border-workspace-border/70">
+              <h2 className="text-[15px] font-semibold text-theme-heading">Logga in</h2>
+              <p className="text-xs text-theme-muted mt-1 leading-relaxed">
+                Fortsätt till er leverantörsdashboard
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-theme-muted mb-1.5">
+                <label htmlFor="login-email" className="block text-xs font-medium text-theme-muted mb-1.5">
                   E-post
                 </label>
                 <input
+                  id="login-email"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   required
                   disabled={loading}
+                  autoComplete="username"
                   className="input-field"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-theme-muted mb-1.5">
+                <label htmlFor="login-password" className="block text-xs font-medium text-theme-muted mb-1.5">
                   Lösenord
                 </label>
                 <input
+                  id="login-password"
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                   disabled={loading}
+                  autoComplete="current-password"
                   className="input-field"
                 />
               </div>
 
               {error && (
-                <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg px-3 py-2">
+                <p
+                  role="alert"
+                  className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg px-3 py-2 leading-snug"
+                >
                   {error}
                 </p>
               )}
@@ -134,52 +138,59 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </form>
           </div>
 
-          <section className="mt-5 surface-card border-workspace-border/80 px-6 py-6 sm:px-7 sm:py-7">
-            <div className="flex items-baseline justify-between gap-3 mb-4">
-              <div>
-                <p className="text-sm font-semibold text-theme-heading">Välj demoarbetsyta</p>
-                <p className="text-xs text-theme-muted mt-0.5">Klicka för att fylla i inloggningen</p>
-              </div>
-              <p className="text-[11px] text-theme-faint shrink-0">
-                Lösenord: <span className="font-mono text-theme-muted">{DEMO_PASSWORD}</span>
+          <section className="mt-4 surface-card border-workspace-border px-5 py-5 sm:px-6 sm:py-6">
+            <div className="mb-3.5">
+              <p className="text-sm font-semibold text-theme-heading">Demoarbetsytor</p>
+              <p className="text-xs text-theme-muted mt-0.5 leading-relaxed">
+                Välj leverantör — fyller i e-post och lösenord automatiskt
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <ul className="space-y-2">
               {DEMO_ACCOUNTS.map(account => {
                 const selected = email === account.email
                 return (
-                  <button
-                    key={account.email}
-                    type="button"
-                    onClick={() => fillDemo(account.email)}
-                    disabled={loading}
-                    className={[
-                      'flex flex-col items-start gap-2 rounded-xl border px-4 py-3.5 text-left transition-colors',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40',
-                      selected
-                        ? 'border-brand-500/40 bg-brand-500/[0.06]'
-                        : 'border-workspace-border bg-workspace-elevated/60 hover:border-brand-500/25 hover:bg-brand-500/[0.04]',
-                    ].join(' ')}
-                  >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-workspace-border bg-workspace-surface text-xs font-semibold text-theme-muted">
-                      {account.label.charAt(0)}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-theme-strong leading-snug">
-                        {account.label}
+                  <li key={account.email}>
+                    <button
+                      type="button"
+                      onClick={() => fillDemo(account.email)}
+                      disabled={loading}
+                      className={[
+                        'w-full flex items-center gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40',
+                        selected
+                          ? 'border-brand-500/45 bg-brand-500/[0.07]'
+                          : 'border-workspace-border bg-workspace-elevated/50 hover:border-brand-500/30 hover:bg-brand-500/[0.04]',
+                      ].join(' ')}
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-workspace-border bg-workspace-surface text-xs font-semibold text-theme-muted">
+                        {account.label.charAt(0)}
                       </span>
-                      <span className="block text-[11px] text-theme-faint font-mono truncate mt-0.5">
-                        {account.email}
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-theme-strong leading-snug truncate">
+                          {account.label}
+                        </span>
+                        <span className="block text-[11px] text-theme-faint font-mono truncate mt-0.5">
+                          {account.email}
+                        </span>
                       </span>
-                    </span>
-                  </button>
+                      {selected && (
+                        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-brand-600 dark:text-brand-400">
+                          Vald
+                        </span>
+                      )}
+                    </button>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
+
+            <p className="mt-4 pt-3.5 border-t border-workspace-border/70 text-[11px] text-theme-faint">
+              Demolösenord: <span className="font-mono text-theme-muted">{DEMO_PASSWORD}</span>
+            </p>
           </section>
 
-          <p className="mt-5 text-center text-[11px] text-theme-faint leading-relaxed">
+          <p className="mt-4 text-center text-[11px] text-theme-muted leading-relaxed px-2">
             Demo med syntetisk försäljningsdata. Ingen riktig kunddata visas.
           </p>
         </div>

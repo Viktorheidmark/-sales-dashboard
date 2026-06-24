@@ -97,6 +97,9 @@ export function OverviewPage({ user }: OverviewPageProps) {
   const currentPreset = DATE_PRESETS.find(p => p.value === datePreset)
   const periodLabel = currentPreset?.label?.toLowerCase() ?? datePreset
   const periodDisplay = currentPreset?.label ?? datePreset
+  const supplierInitial = user.supplier_name
+    ? user.supplier_name.charAt(0).toUpperCase()
+    : '?'
 
   return (
     <div className="space-y-7 pb-2">
@@ -106,8 +109,21 @@ export function OverviewPage({ user }: OverviewPageProps) {
           <h1 className="text-xl font-semibold text-theme-heading tracking-tight">
             Försäljningsöversikt
           </h1>
+          <div className="mt-2 flex items-center gap-2 min-w-0">
+            <div
+              className="w-6 h-6 rounded-full bg-workspace-elevated border border-workspace-border flex items-center justify-center shrink-0 text-[10px] font-semibold text-brand-600 dark:text-brand-400"
+              aria-hidden
+            >
+              {supplierInitial}
+            </div>
+            <p className="text-sm text-theme-muted truncate leading-snug">
+              <span className="text-theme-body font-medium">{user.supplier_name}</span>
+              <span className="text-theme-faint mx-1.5" aria-hidden>·</span>
+              <span>Leverantörsvy</span>
+            </p>
+          </div>
           {latestOrderDate && (
-            <p className="mt-1 text-xs text-theme-muted">
+            <p className="mt-1.5 text-xs text-theme-muted">
               Senast transaktionsdatum: {formatShortDate(latestOrderDate)}
             </p>
           )}
