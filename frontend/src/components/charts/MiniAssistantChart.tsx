@@ -2,7 +2,7 @@ import {
   AreaChart, Area,
   BarChart, Bar, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, ResponsiveContainer,
+  PieChart, ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts'
 import type { CSSProperties } from 'react'
 import type { ChartPayload, ChartHighlights } from '../../api/types'
@@ -92,6 +92,172 @@ function ChartTooltip({
         <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">
           {units.toLocaleString('sv-SE')} st
         </p>
+      )}
+    </div>
+  )
+}
+
+/** Decline ranking — bar length from absolute SEK change, pct shown as secondary. */
+function DeclineRankingChart({
+  chart,
+  emphasisIndex,
+}: {
+  chart: ChartPayload
+  emphasisIndex: number
+}) {
+  const values = chart.data.map(row => Math.abs(Number(row.revenue_change) || 0))
+  const maxVal = Math.max(...values, 1)
+
+  return (
+    <div className="space-y-2.5">
+      {chart.data.map((row, i) => {
+        const isLead = i === emphasisIndex
+        const sekChange = Number(row.revenue_change)
+        const value = Number.isNaN(sekChange) ? 0 : sekChange
+        const pct = Number(row.revenue_change_pct)
+        const pctWidth = (Math.abs(value) / maxVal) * 100
+        const name = rowLabel(chart, row)
+        const pctLabel = Number.isNaN(pct)
+          ? ''
+          : ` · ${pct > 0 ? '+' : ''}${pct.toLocaleString('sv-SE', { maximumFractionDigits: 1 }).replace('.', ',')} %`
+        return (
+          <div key={`${name}-${i}`} className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm leading-snug truncate ${
+                isLead ? 'font-semibold text-theme-heading' : 'font-medium text-theme-strong'
+              }`}>
+                {name}
+                <span className="text-theme-muted font-normal">
+                  {' · '}{formatCompactSEK(value)}{pctLabel}
+                </span>
+              </p>
+              <div className="mt-1.5 h-1.5 bg-workspace-border/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-red-500/70"
+                  style={{ width: `${pctWidth}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function DeclineTrendChart({
+  chart,
+  compact,
+}: {
+  chart: ChartPayload
+  compact?: boolean
+}) {
+  const { chart: colors, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
+  const trendHeight = compact ? 220 : 280
+  const gradId = `declineTrendFill-${chart.source_tool}`
+  const splitIndex = chart.data.findIndex(row => row.period_phase === 'latest')
+  const splitLabel = splitIndex >= 0 ? String(chart.data[splitIndex]?.display_label ?? '') : ''
+  const metrics = chart.decline_metrics
+  const revChange = Number(metrics?.revenue_change ?? 0)
+  const revPct = Number(metrics?.revenue_change_pct ?? 0)
+  const isDecline = revChange < 0
+
+  return (
+    <div>
+      <ResponsiveContainer width="100%" height={trendHeight}>
+        <AreaChart data={chart.data} margin={{ top: 12, right: 16, left: 4, bottom: 8 }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={colors.line} stopOpacity={0.22} />
+              <stop offset="95%" stopColor={colors.line} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
+          {splitIndex > 0 && (
+            <ReferenceArea
+              x1={String(chart.data[0]?.display_label ?? '')}
+              x2={splitLabel}
+              fill={colors.grid}
+              fillOpacity={0.12}
+              strokeOpacity={0}
+            />
+          )}
+          {splitLabel && (
+            <ReferenceLine
+              x={splitLabel}
+              stroke={colors.referenceLine}
+              strokeDasharray="4 4"
+              label={{
+                value: chart.period_split_label ?? 'Senaste period',
+                position: 'insideTopRight',
+                fill: colors.axis,
+                fontSize: 10,
+              }}
+            />
+          )}
+          <XAxis
+            dataKey={chart.x_key}
+            tick={chartAxisTickSm}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+            dy={4}
+          />
+          <YAxis
+            tick={chartAxisTickSm}
+            tickLine={false}
+            axisLine={false}
+            width={48}
+            tickFormatter={formatRevenueTick}
+            domain={revenueYAxisDomain}
+          />
+          <Tooltip
+            content={(
+              <ChartTooltip
+                tooltipKey={chart.tooltip_key}
+                tooltipStyle={chartTooltipStyle as CSSProperties}
+                yKey={chart.y_key}
+              />
+            )}
+          />
+          <Area
+            type="monotone"
+            dataKey={chart.y_key}
+            stroke={colors.line}
+            strokeWidth={2.5}
+            fill={`url(#${gradId})`}
+            dot={{ r: 3.5, strokeWidth: 2, stroke: colors.line, fill: 'var(--workspace-surface, #fff)' }}
+            activeDot={{ r: 5, strokeWidth: 0, fill: colors.line }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+      {metrics && (
+        <div className="mt-3 pt-3 border-t border-workspace-border/40 grid grid-cols-2 gap-3 text-[11px]">
+          <div>
+            <p className="text-theme-muted">Föregående period</p>
+            <p className="font-semibold text-theme-heading tabular-nums mt-0.5">
+              {formatCompactSEK(Number(metrics.prior_revenue ?? 0))}
+            </p>
+          </div>
+          <div>
+            <p className="text-theme-muted">Senaste period</p>
+            <p className="font-semibold text-theme-heading tabular-nums mt-0.5">
+              {formatCompactSEK(Number(metrics.latest_revenue ?? 0))}
+            </p>
+          </div>
+          <div>
+            <p className="text-theme-muted">Förändring</p>
+            <p className={`font-semibold tabular-nums mt-0.5 ${isDecline ? 'text-red-600 dark:text-red-400' : 'text-theme-heading'}`}>
+              {formatCompactSEK(revChange)}
+            </p>
+          </div>
+          <div>
+            <p className="text-theme-muted">Förändring</p>
+            <p className={`font-semibold tabular-nums mt-0.5 ${isDecline ? 'text-red-600 dark:text-red-400' : 'text-theme-heading'}`}>
+              {revPct > 0 ? '+' : ''}{revPct.toLocaleString('sv-SE', { maximumFractionDigits: 1 }).replace('.', ',')} %
+            </p>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -332,8 +498,10 @@ export function MiniAssistantChart({
 
   const isHorizontal = chart.layout === 'horizontal'
   const isDeclineComp = chart.chart_variant === 'decline_comparison'
+  const isDeclineTrend = chart.chart_variant === 'decline_trend'
+  const isDeclineRanking = chart.chart_variant === 'decline_ranking'
   const emphasisIndex = chart.emphasis_index ?? 0
-  const useRankList = isHorizontal && !isDeclineComp
+  const useRankList = isHorizontal && !isDeclineComp && !isDeclineRanking
   const barCount = chart.data.length
 
   const trendHeight = compact ? 220 : 280
@@ -342,6 +510,9 @@ export function MiniAssistantChart({
     : isDeclineComp ? 200 : Math.max(120, barCount * 32)
 
   if (chart.chart_type === 'line_chart') {
+    if (isDeclineTrend) {
+      return <DeclineTrendChart chart={chart} compact={compact} />
+    }
     const tickInterval = chart.data.length > 10 ? 'preserveStartEnd' : 0
     const usePreformattedLabels = chart.tooltip_key === 'display_label'
     const showMarkers = chart.show_markers !== false && chart.trend_granularity !== 'day'
@@ -462,6 +633,10 @@ export function MiniAssistantChart({
           </div>
         </div>
       )
+    }
+
+    if (isDeclineRanking) {
+      return <DeclineRankingChart chart={chart} emphasisIndex={emphasisIndex} />
     }
 
     if (useRankList) {

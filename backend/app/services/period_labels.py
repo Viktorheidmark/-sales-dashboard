@@ -20,6 +20,36 @@ from app.services.period_utils import (
 )
 
 
+def decline_comparison_period_label(result: dict) -> str:
+    """User-facing label for both decline comparison windows."""
+    prior = result.get("prior_period") or {}
+    latest = result.get("latest_period") or {}
+    ps, pe = prior.get("start"), prior.get("end")
+    ls, le = latest.get("start"), latest.get("end")
+    if ps and pe and ls and le:
+        return f"Jämförelse: {format_date_range_sv(ps, pe)} mot {format_date_range_sv(ls, le)}"
+    days = int(result.get("comparison_days") or 30)
+    return f"Jämförelse: senaste {days} dagarna mot föregående {days} dagarna"
+
+
+def enrich_declining_products_metadata(result: dict) -> dict:
+    """Attach shared decline view-model fields used by chart, synthesis, and sources."""
+    if not isinstance(result, dict):
+        return result
+    products = result.get("products") or []
+    result["has_declining_products"] = len(products) > 0
+    prior = result.get("prior_period") or {}
+    latest = result.get("latest_period") or {}
+    if prior.get("start") and latest.get("end"):
+        result["date_range"] = {
+            "start": prior["start"],
+            "end": latest["end"],
+        }
+    if prior.get("start") and prior.get("end") and latest.get("start") and latest.get("end"):
+        result["comparison_period_label"] = decline_comparison_period_label(result)
+    return result
+
+
 def _parse(d: str | None) -> date | None:
     if not d:
         return None
@@ -213,6 +243,8 @@ def apply_period_labels(
     if not isinstance(result, dict):
         return result
     plan_args = plan_args or {}
+    if tool_name == "get_declining_products":
+        result = enrich_declining_products_metadata(result)
     date_range = _date_range_from_result(result, tool_name)
     kind = infer_period_kind(
         date_range,

@@ -169,6 +169,8 @@ def _infer_prior_intent(by_tool: dict[str, dict], question: str = "") -> str:
         return "revenue_drivers"
     if "get_market_share" in by_tool:
         return "market_share"
+    if "get_declining_products" in by_tool:
+        return "product_decline"
     return "unknown"
 
 
@@ -216,6 +218,10 @@ def extract_analysis_context(
     products = top.get("products") or []
     if products and products[0].get("product_name"):
         ctx.product_name = str(products[0]["product_name"])
+    declining = by_tool.get("get_declining_products") or {}
+    decl_products = declining.get("products") or []
+    if decl_products and decl_products[0].get("product_name"):
+        ctx.product_name = str(decl_products[0]["product_name"])
     return ctx.to_dict()
 
 
@@ -240,6 +246,14 @@ def analysis_context_from_prior_data(
     analysis_context: Optional[dict] = None,
 ) -> Optional[AnalysisContext]:
     if analysis_context:
+        if analysis_context.get("awaiting_decline_period"):
+            return AnalysisContext(
+                prior_intent="product_decline",
+                start_date="",
+                end_date="",
+                period_kind="awaiting_decline_period",
+                prior_tool_calls=list(tool_calls),
+            )
         ctx = AnalysisContext.from_dict(analysis_context)
         if ctx:
             ctx.prior_tool_calls = list(tool_calls)
@@ -559,7 +573,19 @@ def _nl_apply_period_to_intent(ctx: AnalysisContext, new_period: dict, supplier_
             days = (date.fromisoformat(new_period["end_date"]) - date.fromisoformat(new_period["start_date"])).days + 1
         except (ValueError, KeyError):
             days = 30
-        return [ToolPlan("get_declining_products", {"days": min(days, 90), "limit": 5}, reason="nl-context: period → product_decline")]
+        pk = new_period.get("_period_kind") or f"rolling_{days}"
+        if pk == "current_year":
+            pk = "year_to_date"
+        return [ToolPlan(
+            "get_declining_products",
+            {
+                "days": min(days, 365),
+                "limit": 5,
+                "_period_kind": pk,
+                "_period_explicit": True,
+            },
+            reason="nl-context: period → product_decline",
+        )]
 
     return []
 

@@ -43,6 +43,7 @@ class SourceMeta(BaseModel):
     generated_at: str
     row_count: Optional[int] = None
     date_range: Optional[Any] = None
+    comparison_period_label: Optional[str] = None
     limitations: list[str] = []
 
 

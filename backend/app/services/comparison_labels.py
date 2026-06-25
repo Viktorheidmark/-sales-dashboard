@@ -12,6 +12,7 @@ from app.services.period_utils import format_date_range_sv
 from app.services.period_labels import (
     answer_period_phrase,
     chart_period_suffix,
+    decline_comparison_period_label,
     infer_period_kind,
 )
 
@@ -190,20 +191,24 @@ def build_comparison_context_block(
 
     if "get_declining_products" in by_tool:
         dec = by_tool["get_declining_products"]
-        days = int(dec.get("comparison_days") or 30)
-        prior = dec.get("prior_period") or {}
-        if dec.get("_period_kind") == "full_history_halves" and prior.get("start") and prior.get("end"):
+        products = dec.get("products") or []
+        if not products:
             lines.append(
-                "Produktnedgång: jämför senaste halvan av tillgänglig historik "
-                f"med föregående lika långa period ({format_date_range_sv(prior['start'], prior['end'])})."
-            )
-        elif prior.get("start") and prior.get("end"):
-            lines.append(
-                f"Produktnedgång jämfört med föregående {days} dagarna "
-                f"({format_date_range_sv(prior['start'], prior['end'])})."
+                "INGA PRODUKTER I NEDGÅNG: products-listan är tom. "
+                "Säg att inga produkter har negativ omsättningsförändring i vald jämförelse. "
+                "Nämn INGEN produkt som tappat."
             )
         else:
-            lines.append(f"Produktnedgång jämfört med föregående {days} dagarna.")
+            comp_label = dec.get("comparison_period_label") or decline_comparison_period_label(dec)
+            lines.append(
+                f"Produktnedgång — {comp_label}. "
+                "Nämn ENDAST produkter som finns i products-listan."
+            )
+            prior = dec.get("prior_period") or {}
+            if prior.get("start") and prior.get("end"):
+                lines.append(
+                    f"Jämförelsebas: {comp_label}"
+                )
 
     if "get_top_products" in by_tool:
         top = by_tool["get_top_products"]

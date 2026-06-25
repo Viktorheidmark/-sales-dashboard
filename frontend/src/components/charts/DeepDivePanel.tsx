@@ -113,21 +113,14 @@ export function DeepDivePanel({ deepDive }: { deepDive: DeepDivePayload }) {
 
   if (deepDive.kind === 'product_decline') {
     const focus = deepDive.focus_product
+    if (!focus) return null
     const decliningRegions = (focus?.top_regions ?? []).filter(r => (r.revenue_change ?? 0) < 0)
-    const portfolio = (deepDive.portfolio_comparison ?? []).filter(
-      (p, i) => i > 0 || (p.revenue_change ?? 0) < 0,
-    )
 
     return (
       <div className="space-y-2.5">
         {decliningRegions.length > 0 && (
           <div className="assistant-support-card">
             <DriverList title="Var syns tappet?" items={decliningRegions} labelKey="region" compact />
-          </div>
-        )}
-        {portfolio.length > 1 && (
-          <div className="assistant-support-card">
-            <DriverList title="Jämfört med övriga produkter" items={portfolio.slice(0, 4)} labelKey="product_name" compact />
           </div>
         )}
       </div>

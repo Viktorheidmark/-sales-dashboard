@@ -2,13 +2,13 @@ import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../../api/client'
 import type { ChatResponse, DateRange, InsightSummary, PriorTurnContext, SourceMeta } from '../../api/types'
-import { formatDate } from '../../utils/format'
 import { MiniAssistantChart } from '../charts/MiniAssistantChart'
 import { DeepDivePanel } from '../charts/DeepDivePanel'
 import {
-  formatSourcePeriod,
   isMarketShareResponse,
   resolveResponseDateRange,
+  resolveSourceSummaryLine,
+  toolLabelSv,
   visibleResponseLimitations,
 } from '../../utils/sourcePresentation'
 import { useChatState } from '../../context/ChatStateContext'
@@ -77,7 +77,11 @@ const markdownComponents = {
 function buildPriorContext(messages: Message[]): PriorTurnContext | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]
-    if (msg.role !== 'assistant' || !msg.response || msg.response.tool_calls.length === 0) {
+    if (msg.role !== 'assistant' || !msg.response) continue
+    const hasTools = msg.response.tool_calls.length > 0
+    // Also include clarification responses (e.g. awaiting_decline_period) even if no tool was called
+    const isAwaitingDecline = msg.response.analysis_context?.awaiting_decline_period === true
+    if (!hasTools && !isAwaitingDecline) {
       continue
     }
     const priorUser = messages.slice(0, i).reverse().find(m => m.role === 'user')
@@ -105,27 +109,24 @@ function SourceSummary({
   sources: SourceMeta[]
   fallbackDateRange?: DateRange
 }) {
-  const dateRange = resolveResponseDateRange(sources, fallbackDateRange)
-  if (!dateRange) return null
-  const periodLabel = formatSourcePeriod(dateRange)
+  const summaryLine = resolveSourceSummaryLine(sources, fallbackDateRange)
+  if (!summaryLine) return null
 
   return (
     <p className="text-[10px] text-theme-faint leading-snug">
-      Data: Försäljningsdata · {periodLabel}
+      {summaryLine}
     </p>
   )
 }
 
 // ---------------------------------------------------------------------------
-// TechnicalSourceDetails (unchanged)
+// TechnicalSourceDetails — tool metadata only (dates live in SourceSummary)
 // ---------------------------------------------------------------------------
 
 function TechnicalSourceDetails({
   sources,
-  fallbackDateRange,
 }: {
   sources: SourceMeta[]
-  fallbackDateRange?: DateRange
 }) {
   if (sources.length === 0) return null
 
@@ -137,28 +138,20 @@ function TechnicalSourceDetails({
       </summary>
       <div className="mt-2 pl-2 border-l border-workspace-border/40">
         <div className="space-y-3">
-          {sources.map((s, i) => {
-            const period =
-              s.date_range?.start && s.date_range?.end
-                ? s.date_range
-                : fallbackDateRange
-
-            return (
-              <div
-                key={i}
-                className={`space-y-1 text-[10px] text-theme-faint leading-relaxed ${
-                  i > 0 ? 'pt-3 border-t border-workspace-border/40' : ''
-                }`}
-              >
-                {s.generated_at && (
-                  <p>Uppdaterad: {formatDate(s.generated_at)}</p>
-                )}
-                {period?.start && period?.end && (
-                  <p>Period: {formatSourcePeriod(period)}</p>
-                )}
-              </div>
-            )
-          })}
+          {sources.map((s, i) => (
+            <div
+              key={i}
+              className={`space-y-1 text-[10px] text-theme-faint leading-relaxed ${
+                i > 0 ? 'pt-3 border-t border-workspace-border/40' : ''
+              }`}
+            >
+              <p>{toolLabelSv(s.tool)}</p>
+              {s.source && <p className="font-mono text-[9px] opacity-80">{s.source}</p>}
+              {s.row_count != null && (
+                <p>{s.row_count.toLocaleString('sv-SE')} rader</p>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </details>
@@ -507,7 +500,7 @@ function AssistantBubble({
       {showSourceFooter && (
         <div className="space-y-1 pt-2 border-t border-workspace-border/30">
           <SourceSummary sources={r.sources} fallbackDateRange={fallbackDateRange} />
-          <TechnicalSourceDetails sources={r.sources} fallbackDateRange={fallbackDateRange} />
+          <TechnicalSourceDetails sources={r.sources} />
         </div>
       )}
     </article>

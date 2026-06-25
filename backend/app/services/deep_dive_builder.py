@@ -146,13 +146,7 @@ def _build_revenue_development(
 def _build_product_decline(declining: dict) -> Optional[dict]:
     products = declining.get("products") or []
     if not products:
-        return {
-            "kind": "product_decline",
-            "comparison_days": declining.get("comparison_days", 30),
-            "period_summary": None,
-            "focus_product": None,
-            "portfolio_comparison": [],
-        }
+        return None
 
     focus = products[0]
     days = declining.get("comparison_days", 30)

@@ -223,10 +223,13 @@ FRÅGETYP: Omsättningsutveckling (30 dagar)
     if "get_declining_products" in tools or _DECLINING_RE.search(q):
         return """
 FRÅGETYP: Produkter i nedgång
-- Styck 1: Börja med produkten som tappat mest — exakt product_name, procent och omsättningsförändring.
-- Styck 2: Jämförelseperiod i naturligt språk (period_label_answer / jämförelsebas från verktygsdata).
-- Styck 3: En kort tolkning — brett eller koncentrerat — endast om datan stödjer det. Säg inte "risk" utan tydlig nedgång.
-- Ignorera produkter med marginell förändring.
+- Om products-listan är tom: säg att inga produkter har negativ omsättningsförändring i vald jämförelse.
+  Nämn INGEN produkt som tappat.
+- Om products innehåller rader: börja med produkten med störst absolut omsättningstapp i kronor (revenue_change)
+  — exakt product_name, absolut SEK-förändring, sedan procent.
+- products-listan är sorterad efter störst absolut SEK-tapp — använd alltid första raden som huvudprodukt.
+- Använd comparison_period_label / jämförelsebas från verktygsdata för båda jämförelsefönstren.
+- Nämn ENDAST produkter som finns i products-listan.
 - Inga antaganden om pris, lager eller marknadsföring.
 """
 

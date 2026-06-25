@@ -11,6 +11,7 @@ from app.services.comparison_labels import (
     revenue_drivers_comparison_label,
     weekly_sales_comparison_label,
 )
+from app.services.period_labels import decline_comparison_period_label
 from app.services.follow_up_builder import build_contextual_follow_ups
 from app.services.response_guidance import (
     has_generic_recommendation,
@@ -96,7 +97,23 @@ class ComparisonLabelTests(unittest.TestCase):
         self.assertIn("start_date", weekly.get("context", {}))
         self.assertTrue(any("i år" in a["message"] for a in actions))
 
-    def test_market_share_follow_ups(self):
+    def test_decline_comparison_period_label(self):
+        label = decline_comparison_period_label({
+            "comparison_days": 365,
+            "prior_period": {"start": "2024-06-23", "end": "2025-06-23"},
+            "latest_period": {"start": "2025-06-24", "end": "2026-06-23"},
+        })
+        self.assertIn("Jämförelse:", label)
+        self.assertIn("mot", label)
+        self.assertIn("2024", label)
+        self.assertIn("2026", label)
+
+    def test_decline_empty_products_synthesis_instruction(self):
+        block = build_comparison_context_block(
+            [("get_declining_products", {"products": [], "comparison_days": 30})],
+            "Vilken produkt har tappat mest?",
+        )
+        self.assertIn("INGA PRODUKTER I NEDGÅNG", block)
         ms = {
             "category_name": "Läsk",
             "date_range": {"start": "2026-03-26", "end": "2026-06-23"},

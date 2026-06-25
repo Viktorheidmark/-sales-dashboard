@@ -1,7 +1,12 @@
 import unittest
 from datetime import date, timedelta
 
-from app.services.chart_builder import build_chart, _truncate_label, _compute_highlights, _DECLINE_CHART_THRESHOLD_PCT
+from app.services.chart_builder import build_chart, _truncate_label, _compute_highlights, build_decline_trend_chart
+from app.services.period_labels import (
+    apply_period_labels,
+    decline_comparison_period_label,
+    enrich_declining_products_metadata,
+)
 from app.services.period_utils import apply_sales_over_time_period_policy
 
 
@@ -27,9 +32,10 @@ class ChartBuilderTests(unittest.TestCase):
         self.assertIn("display_label", chart["data"][0])
 
     def test_declining_products_filters_flat_changes(self):
-        # Only "Big Drop" passes the -5 % threshold → 1 product → comparison bar chart
-        chart = build_chart("get_declining_products", {
+        chart = build_chart("get_declining_products", enrich_declining_products_metadata({
             "comparison_days": 30,
+            "latest_period": {"start": "2026-05-24", "end": "2026-06-23"},
+            "prior_period": {"start": "2026-04-24", "end": "2026-05-23"},
             "products": [
                 {
                     "product_name": "Big Drop",
@@ -38,20 +44,52 @@ class ChartBuilderTests(unittest.TestCase):
                     "prior_period_revenue": 20000.0,
                     "revenue_change": -15000.0,
                 },
-                {"product_name": "Flat Product", "revenue_change_pct": -1.0},
-                {"product_name": "Tiny Dip", "revenue_change_pct": _DECLINE_CHART_THRESHOLD_PCT + 0.5},
+                {"product_name": "Flat Product", "revenue_change_pct": -1.0,
+                 "latest_period_revenue": 990.0, "prior_period_revenue": 1000.0},
+                {"product_name": "Tiny Dip", "revenue_change_pct": -3.0,
+                 "latest_period_revenue": 970.0, "prior_period_revenue": 1000.0},
             ],
-        })
+        }))
         self.assertIsNotNone(chart)
         assert chart is not None
         self.assertEqual(chart["chart_type"], "bar_chart")
-        self.assertEqual(chart["chart_variant"], "decline_comparison")
-        self.assertEqual(chart["title"], "Big Drop")
-        self.assertEqual(len(chart["data"]), 2)  # prior + current
+        self.assertEqual(chart["title"], "Produkter i nedgång")
+        self.assertEqual(len(chart["data"]), 3)
 
-    def test_declining_one_product_returns_comparison_chart(self):
-        chart = build_chart("get_declining_products", {
+    def test_declining_one_product_with_weekly_series_returns_trend_chart(self):
+        payload = enrich_declining_products_metadata({
             "comparison_days": 30,
+            "latest_period": {"start": "2026-05-24", "end": "2026-06-23"},
+            "prior_period": {"start": "2026-04-24", "end": "2026-05-23"},
+            "_period_kind": "rolling_30",
+            "products": [
+                {
+                    "product_name": "OLW Jordnötsringar 175 g",
+                    "revenue_change_pct": -42.0,
+                    "latest_period_revenue": 8500.0,
+                    "prior_period_revenue": 14650.0,
+                    "revenue_change": -6150.0,
+                },
+            ],
+            "focus_product_weekly_series": [
+                {"period": "2026-04-28", "revenue": 3000.0},
+                {"period": "2026-05-05", "revenue": 2800.0},
+                {"period": "2026-05-26", "revenue": 1500.0},
+                {"period": "2026-06-02", "revenue": 1200.0},
+            ],
+        })
+        chart = build_decline_trend_chart(payload)
+        self.assertIsNotNone(chart)
+        assert chart is not None
+        self.assertEqual(chart["chart_type"], "line_chart")
+        self.assertEqual(chart["chart_variant"], "decline_trend")
+        self.assertIn("OLW Jordnötsringar", chart["title"])
+
+    def test_declining_one_product_without_series_returns_comparison_chart(self):
+        payload = enrich_declining_products_metadata({
+            "comparison_days": 30,
+            "latest_period": {"start": "2026-05-24", "end": "2026-06-23"},
+            "prior_period": {"start": "2026-04-24", "end": "2026-05-23"},
             "products": [
                 {
                     "product_name": "OLW Jordnötsringar 175 g",
@@ -62,33 +100,30 @@ class ChartBuilderTests(unittest.TestCase):
                 },
             ],
         })
+        chart = build_chart("get_declining_products", payload)
         self.assertIsNotNone(chart)
         assert chart is not None
         self.assertEqual(chart["chart_type"], "bar_chart")
         self.assertEqual(chart["chart_variant"], "decline_comparison")
         self.assertEqual(chart["generated_from_row_count"], 1)
-        self.assertEqual(chart["title"], "OLW Jordnötsringar 175 g")
-        self.assertIn("42", chart["description"])  # pct in description
-        labels = [row["period"] for row in chart["data"]]
-        self.assertIn("Föregående period", labels)
-        self.assertIn("Senaste period", labels)
-        prior_row = next(r for r in chart["data"] if r["period"] == "Föregående period")
-        current_row = next(r for r in chart["data"] if r["period"] == "Senaste period")
-        self.assertAlmostEqual(prior_row["revenue"], 14650.0)
-        self.assertAlmostEqual(current_row["revenue"], 8500.0)
+        self.assertEqual(chart["title"], "Produkter i nedgång")
+        self.assertIn("OLW Jordnötsringar", chart["description"])
+        self.assertIn("42", chart["description"])
+        self.assertIn("Jämförelse:", chart["description"])
 
     def test_declining_two_plus_products_returns_ranked_bar_chart(self):
         chart = build_chart("get_declining_products", {
             "comparison_days": 30,
             "products": [
-                {"product_name": "Produkt A", "revenue_change_pct": -25.0},
-                {"product_name": "Produkt B", "revenue_change_pct": -15.0},
+                {"product_name": "Produkt A", "revenue_change_pct": -25.0, "revenue_change": -25000.0},
+                {"product_name": "Produkt B", "revenue_change_pct": -15.0, "revenue_change": -10000.0},
             ],
         })
         self.assertIsNotNone(chart)
         assert chart is not None
         self.assertEqual(chart["chart_type"], "bar_chart")
         self.assertEqual(chart["layout"], "horizontal")
+        self.assertEqual(chart["y_key"], "revenue_change")
         self.assertEqual(len(chart["data"]), 2)
         self.assertEqual(chart["data"][0]["product_name"], "Produkt A")
 
@@ -101,22 +136,52 @@ class ChartBuilderTests(unittest.TestCase):
         assert chart is not None
         self.assertEqual(chart["chart_type"], "empty_state")
         self.assertEqual(chart["generated_from_row_count"], 0)
-        self.assertIn("stabila", chart["description"])
+        self.assertIn("negativ omsättningsförändring", chart["description"])
+
+    def test_declining_small_negative_change_still_shows_chart(self):
+        chart = build_chart("get_declining_products", enrich_declining_products_metadata({
+            "comparison_days": 365,
+            "latest_period": {"start": "2025-06-24", "end": "2026-06-23"},
+            "prior_period": {"start": "2024-06-24", "end": "2025-06-23"},
+            "products": [
+                {
+                    "product_name": "Coca-Cola Original 33 cl",
+                    "revenue_change_pct": -2.5,
+                    "latest_period_revenue": 97500.0,
+                    "prior_period_revenue": 100000.0,
+                    "revenue_change": -2500.0,
+                },
+            ],
+        }))
+        self.assertIsNotNone(chart)
+        assert chart is not None
+        self.assertNotEqual(chart["chart_type"], "empty_state")
+        self.assertEqual(chart["title"], "Produkter i nedgång")
 
     def test_declining_all_flat_products_returns_empty_state(self):
-        # All products above threshold → filtered out → empty_state
-        chart = build_chart("get_declining_products", {
+        chart = build_chart("get_declining_products", enrich_declining_products_metadata({
             "comparison_days": 30,
-            "products": [
-                {"product_name": "Flat A", "revenue_change_pct": -1.0},
-                {"product_name": "Flat B", "revenue_change_pct": -2.0},
-            ],
-        })
+            "latest_period": {"start": "2026-05-24", "end": "2026-06-23"},
+            "prior_period": {"start": "2026-04-24", "end": "2026-05-23"},
+            "products": [],
+        }))
         self.assertIsNotNone(chart)
         assert chart is not None
         self.assertEqual(chart["chart_type"], "empty_state")
 
-    def test_trend_chart_includes_highlights(self):
+    def test_decline_comparison_period_label_shows_both_windows(self):
+        payload = enrich_declining_products_metadata({
+            "comparison_days": 365,
+            "latest_period": {"start": "2025-06-25", "end": "2026-06-24"},
+            "prior_period": {"start": "2024-06-25", "end": "2025-06-24"},
+            "products": [{"product_name": "A", "revenue_change_pct": -10.0}],
+        })
+        label = decline_comparison_period_label(payload)
+        self.assertIn("Jämförelse:", label)
+        self.assertIn("mot", label)
+        labeled = apply_period_labels(payload, tool_name="get_declining_products")
+        self.assertTrue(labeled.get("has_declining_products"))
+        self.assertIn("comparison_period_label", labeled)
         result = {
             "granularity": "week",
             "_force_time_series": True,

@@ -31,6 +31,11 @@ export function isMarketShareChart(chart: ChartPayload): boolean {
   return chart.source_tool === 'get_market_share'
 }
 
+export function resolveDeclineComparisonLabel(sources: SourceMeta[]): string | null {
+  const declining = sources.find(s => s.tool === 'get_declining_products')
+  return declining?.comparison_period_label ?? null
+}
+
 export function resolveResponseDateRange(
   sources: SourceMeta[],
   fallback?: DateRange,
@@ -49,16 +54,45 @@ export function resolveResponseDateRange(
   }
 }
 
+export function resolveSourceSummaryLine(
+  sources: SourceMeta[],
+  fallback?: DateRange,
+): string | null {
+  const declineComparison = resolveDeclineComparisonLabel(sources)
+  if (declineComparison) {
+    const label = declineComparison.startsWith('Jämförelse:')
+      ? declineComparison
+      : `Jämförelse: ${declineComparison}`
+    return `Data: Försäljningsdata · ${label}`
+  }
+  const dateRange = resolveResponseDateRange(sources, fallback)
+  if (!dateRange) return null
+  return `Data: Försäljningsdata · ${formatSourcePeriod(dateRange)}`
+}
+
+function parseLocalDate(iso: string): Date {
+  return new Date(`${iso.slice(0, 10)}T12:00:00`)
+}
+
+/** Swedish readable range — year on both ends when the range crosses calendar years. */
 export function formatSourcePeriod({ start, end }: DateRange): string {
-  const startDate = new Date(`${start}T12:00:00`)
-  const endDate = new Date(`${end}T12:00:00`)
-  const startLabel = startDate.toLocaleDateString('sv-SE', { day: 'numeric', month: 'long' })
-  const endLabel = endDate.toLocaleDateString('sv-SE', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  return `${startLabel}–${endLabel}`
+  const startDate = parseLocalDate(start)
+  const endDate = parseLocalDate(end)
+  const startYear = startDate.getFullYear()
+  const endYear = endDate.getFullYear()
+  const startMonth = startDate.getMonth()
+  const endMonth = endDate.getMonth()
+
+  const monthLong = (d: Date) => d.toLocaleDateString('sv-SE', { month: 'long' })
+  const day = (d: Date) => d.getDate()
+
+  if (startYear === endYear && startMonth === endMonth) {
+    return `${day(startDate)}–${day(endDate)} ${monthLong(endDate)} ${endYear}`
+  }
+  if (startYear === endYear) {
+    return `${day(startDate)} ${monthLong(startDate)}–${day(endDate)} ${monthLong(endDate)} ${endYear}`
+  }
+  return `${day(startDate)} ${monthLong(startDate)} ${startYear}–${day(endDate)} ${monthLong(endDate)} ${endYear}`
 }
 
 export function formatSharePct(value: number): string {

@@ -23,11 +23,11 @@ from app.services.intent_router import (
 )
 from app.services.intent_router import PriorTurnContext as RouterPriorContext
 from app.services.ranking_limits import extract_ranking_limit, resolve_product_ranking_limit
+from app.services.decline_period import DECLINE_PERIOD_CLARIFICATION
 from app.services.period_labels import message_specifies_period
 from app.services.period_utils import (
     completed_week_bounds,
     default_data_bounds,
-    default_decline_comparison_days,
     is_current_year_phrase,
     resolve_period_range,
 )
@@ -75,6 +75,7 @@ class NormalizedPlan:
     use_fallback: bool = False
     meta: Optional[NormalizedPlanMeta] = None
     raw_plan: Optional[dict[str, Any]] = None
+    clarification_answer: Optional[str] = None
 
 
 def _infer_intent_from_prior(prior: RouterPriorContext) -> str:
@@ -293,21 +294,24 @@ def _build_tool_plans(
         return plans
 
     if intent == "product_decline":
-        explicit = message_specifies_period(message)
-        if explicit:
-            days = int(
-                plan.time_period.days
-                or resolve_period_range(message).get("days")
-                or 30
-            )
-        else:
-            days = default_decline_comparison_days()
+        days = int(
+            plan.time_period.days
+            or resolve_period_range(message).get("days")
+            or 30
+        )
+        period_kind = str(
+            resolve_period_range(message).get("period_kind")
+            or f"rolling_{days}"
+        )
+        if period_kind == "current_year":
+            period_kind = "year_to_date"
         plans.append(ToolPlan(
             "get_declining_products",
             {
                 "days": min(days, 365),
                 "limit": 5,
-                "_period_kind": "full_history_halves" if not explicit else f"rolling_{days}",
+                "_period_kind": period_kind,
+                "_period_explicit": True,
             },
             reason="planner: product decline",
         ))
@@ -383,6 +387,9 @@ def normalize_plan(
 
     granularity = _granularity_for(plan, start_date, end_date, period_kind)
     chart_intent = _chart_intent_for(plan)
+
+    if intent == "product_decline" and not message_specifies_period(message):
+        return NormalizedPlan(clarification_answer=DECLINE_PERIOD_CLARIFICATION)
 
     tool_plans = _build_tool_plans(
         plan,

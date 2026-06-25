@@ -190,7 +190,7 @@ def _record_tool_result(
     if tool_name == "get_sales_over_time":
         parsed = apply_sales_over_time_period_policy(parsed)
     raw_source = parsed.get("source", "")
-    sources.append({
+    source_entry: dict = {
         "tool": tool_name,
         "source": raw_source if raw_source.startswith("MCP:") else f"MCP:{tool_name}",
         "supplier_id": supplier_id,
@@ -198,7 +198,10 @@ def _record_tool_result(
         "row_count": parsed.get("row_count"),
         "date_range": parsed.get("date_range"),
         "limitations": parsed.get("limitations", []),
-    })
+    }
+    if tool_name == "get_declining_products" and parsed.get("comparison_period_label"):
+        source_entry["comparison_period_label"] = parsed["comparison_period_label"]
+    sources.append(source_entry)
     if parsed.get("limitations"):
         limitations.extend(parsed["limitations"])
     raw_tool_results.append((tool_name, parsed))
@@ -298,6 +301,26 @@ def _ensure_period_labels(
             result = apply_period_labels(result, question, tool_name=name)
         out.append((name, result))
     return out
+
+
+def _decline_period_clarification_response(supplier_id: str) -> dict:
+    from app.services.decline_period import DECLINE_PERIOD_CLARIFICATION
+    return {
+        "answer": DECLINE_PERIOD_CLARIFICATION,
+        "tool_calls": [],
+        "sources": [],
+        "chart": None,
+        "charts": [],
+        "deep_dive": None,
+        "follow_up_actions": [],
+        "limitations": [],
+        "supplier_id": supplier_id,
+        "analysis_context": {
+            "awaiting_decline_period": True,
+            "prior_intent": "product_decline",
+        },
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
 
 
 def _diagram_clarification_response(supplier_id: str) -> dict:
@@ -588,6 +611,8 @@ async def run_chat(
                 follow_up_action=follow_up_action,
             )
             analysis_meta = resolution.analysis_meta
+            if resolution.clarification_answer:
+                return _decline_period_clarification_response(supplier_id)
             forced = resolution.plans
             if forced:
                 await _execute_planned_tools(
@@ -690,6 +715,9 @@ async def stream_chat(
                     follow_up_action=follow_up_action,
                 )
                 analysis_meta = resolution.analysis_meta
+                if resolution.clarification_answer:
+                    yield sse("complete", _decline_period_clarification_response(supplier_id))
+                    return
                 forced = resolution.plans
                 if forced:
                     await _execute_planned_tools(

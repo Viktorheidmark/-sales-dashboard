@@ -236,17 +236,14 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(plans[0].tool_name, "get_declining_products")
         self.assertEqual(plans[0].args.get("days"), 30)
 
-    def test_product_decline_without_period_uses_full_history_halves(self):
+    def test_product_decline_without_period_returns_no_plans(self):
         plans = plan_forced_tools(
             "Vilken produkt har tappat mest?",
             "Orkla Snacks Sverige",
             self.UI_START,
             self.UI_END,
         )
-        self.assertEqual(plans[0].tool_name, "get_declining_products")
-        self.assertEqual(plans[0].args.get("days"), default_decline_comparison_days())
-        self.assertEqual(plans[0].args.get("_period_kind"), "full_history_halves")
-        self.assertNotEqual(plans[0].args.get("days"), 90)
+        self.assertEqual(plans, [])
 
     def test_sales_development_without_period_uses_full_history(self):
         plans = plan_forced_tools(

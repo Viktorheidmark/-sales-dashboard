@@ -77,6 +77,10 @@ class DeepDiveBuilderTests(unittest.TestCase):
         self.assertEqual(deep["strongest_region"]["region"], "Stockholm")
         self.assertEqual(deep["weakest_region"]["region"], "Malmö")
 
+    def test_product_decline_empty_products_returns_none(self):
+        deep = build_deep_dive([("get_declining_products", {"products": [], "comparison_days": 30})])
+        self.assertIsNone(deep)
+
     def test_product_decline_deep_dive(self):
         declining = {
             "comparison_days": 30,

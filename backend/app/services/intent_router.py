@@ -949,22 +949,10 @@ def plan_forced_tools(
         return plans
 
     if _DECLINING_RE.search(msg) and re.search(r"tappat|minskat|nedgång|fallit|sjunk", msg, re.I):
-        args = _period_args_from_message(msg, start_date, end_date)
-        explicit_days = extract_period_args(msg).get("days")
-        if explicit_days:
-            days = int(explicit_days)
-        else:
-            days = default_decline_comparison_days()
-        args.update({
-            "days": min(days, 365),
-            "limit": 5,
-            "_period_kind": "full_history_halves" if not explicit_days else f"rolling_{days}",
-        })
-        plans.append(ToolPlan(
-            tool_name="get_declining_products",
-            args=args,
-            reason="declining products",
-        ))
+        from app.services.decline_period import decline_question_needs_period, build_decline_tool_plan
+        if decline_question_needs_period(msg):
+            return []
+        plans.append(build_decline_tool_plan(msg, reason="declining products"))
         return plans
 
     if _KPI_COMPARISON_RE.search(msg):

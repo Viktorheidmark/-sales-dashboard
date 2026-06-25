@@ -217,6 +217,17 @@ def resolve_period_range(
             "period_kind": "rolling_180",
         }
 
+    if re.search(r"senaste\s+12\s+mån", msg):
+        days = 365
+        end = completed_end
+        start, end = clamp_date_range(end - timedelta(days=days - 1), end, data_min, data_max)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "days": days,
+            "period_kind": "rolling_365",
+        }
+
     return {}
 
 

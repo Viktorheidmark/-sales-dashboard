@@ -5,7 +5,8 @@ from datetime import date, timedelta
 
 from app.schemas.analysis_plan import AnalysisPlan, AnalysisFilters, TimePeriod, VisualizationSpec
 from app.services.intent_router import PriorTurnContext
-from app.services.period_utils import latest_completed_date, default_data_bounds, default_decline_comparison_days
+from app.services.decline_period import DECLINE_PERIOD_CLARIFICATION
+from app.services.period_utils import latest_completed_date, default_data_bounds
 from app.services.plan_normalizer import normalize_plan, ALLOWED_TOOLS
 
 
@@ -208,7 +209,7 @@ class PlanNormalizerTests(unittest.TestCase):
         self.assertEqual(norm.meta.resolved_end_date, latest_completed_date().isoformat())
         self.assertNotEqual(norm.meta.resolved_start_date, self.UI_START)
 
-    def test_decline_without_period_uses_full_history_halves(self):
+    def test_decline_without_period_returns_clarification(self):
         norm = normalize_plan(
             AnalysisPlan(intent="product_decline", time_period=TimePeriod(kind="unspecified"), confidence=0.9),
             "Vilken produkt har tappat mest?",
@@ -216,10 +217,8 @@ class PlanNormalizerTests(unittest.TestCase):
             ui_start=self.UI_START,
             ui_end=self.UI_END,
         )
-        self.assertEqual(norm.tool_plans[0].tool_name, "get_declining_products")
-        self.assertEqual(norm.tool_plans[0].args["days"], default_decline_comparison_days())
-        self.assertEqual(norm.tool_plans[0].args.get("_period_kind"), "full_history_halves")
-        self.assertNotEqual(norm.tool_plans[0].args["days"], 90)
+        self.assertEqual(norm.clarification_answer, DECLINE_PERIOD_CLARIFICATION)
+        self.assertEqual(norm.tool_plans, [])
 
 
 if __name__ == "__main__":

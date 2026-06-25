@@ -12,7 +12,8 @@ from app.services.comparison_labels import (
     market_share_period_label,
     revenue_drivers_comparison_label,
 )
-from app.services.period_labels import append_chart_period
+from app.services.decline_period import decline_trend_subtitle
+from app.services.period_labels import append_chart_period, decline_comparison_period_label
 from app.services.period_utils import (
     apply_sales_over_time_period_policy,
     format_compact_date_range_sv,
@@ -34,7 +35,145 @@ _FLAT_REVENUE_PCT_THRESHOLD = 3.0
 _FLAT_SERIES_CV_THRESHOLD = 0.05
 
 _LABEL_MAX = 22
-_DECLINE_CHART_THRESHOLD_PCT = -5.0
+
+
+def _declining_product_rows(products: list[dict]) -> list[dict]:
+    """Chart rows from the same products list used for narrative and deep dive."""
+    rows: list[dict] = []
+    for p in products:
+        pct = p.get("revenue_change_pct")
+        if pct is None:
+            prior = float(p.get("prior_period_revenue") or 0)
+            latest = float(p.get("latest_period_revenue") or 0)
+            if prior > 0:
+                pct = round(100.0 * (latest - prior) / prior, 2)
+        if pct is None or pct >= 0:
+            continue
+        name = p["product_name"]
+        latest = float(p.get("latest_period_revenue") or 0)
+        prior = float(p.get("prior_period_revenue") or 0)
+        change = p.get("revenue_change")
+        if change is None:
+            change = round(latest - prior, 2)
+        rows.append({
+            "product_name": name,
+            "display_label": _truncate_label(name),
+            "revenue_change_pct": pct,
+            "latest_period_revenue": latest,
+            "prior_period_revenue": prior,
+            "revenue_change": change,
+        })
+    rows.sort(key=lambda r: float(r.get("revenue_change") or 0))
+    return rows
+
+
+def _decline_chart_description(result: dict) -> str:
+    label = result.get("comparison_period_label") or decline_comparison_period_label(result)
+    return label
+
+
+def build_decline_trend_chart(result: dict) -> Optional[dict]:
+    """Primary decline visualization — weekly revenue trend with period split."""
+    products = result.get("products") or []
+    if not products:
+        return None
+    focus = products[0]
+    weekly = result.get("focus_product_weekly_series") or []
+    if len(weekly) < 2:
+        return None
+
+    latest_period = result.get("latest_period") or {}
+    prior_period = result.get("prior_period") or {}
+    split_at = latest_period.get("start")
+    name = focus["product_name"]
+
+    data: list[dict] = []
+    for point in weekly:
+        period = str(point.get("period") or "")
+        axis_label, tooltip_label = _series_row_label(period, "week")
+        phase = "latest"
+        if split_at and period < split_at:
+            phase = "prior"
+        data.append({
+            "label": period,
+            "display_label": axis_label,
+            "tooltip_label": tooltip_label,
+            "revenue": float(point.get("revenue") or 0),
+            "period_phase": phase,
+        })
+
+    rev_change = focus.get("revenue_change")
+    if rev_change is None:
+        rev_change = round(
+            float(focus.get("latest_period_revenue") or 0) - float(focus.get("prior_period_revenue") or 0),
+            2,
+        )
+
+    prior_label = "Föregående period"
+    latest_label = "Senaste period"
+    if prior_period.get("start") and prior_period.get("end"):
+        prior_label = format_compact_date_range_sv(prior_period["start"], prior_period["end"])
+    if latest_period.get("start") and latest_period.get("end"):
+        latest_label = format_compact_date_range_sv(latest_period["start"], latest_period["end"])
+
+    return {
+        "chart_type": LINE_CHART,
+        "chart_variant": "decline_trend",
+        "title": f"Utveckling för {name}",
+        "description": decline_trend_subtitle(result),
+        "x_key": "display_label",
+        "y_key": "revenue",
+        "tooltip_key": "tooltip_label",
+        "data": data,
+        "source_tool": "get_declining_products",
+        "generated_from_row_count": len(data),
+        "period_split_at": split_at,
+        "period_split_label": "Senaste period",
+        "prior_period_label": prior_label,
+        "latest_period_label": latest_label,
+        "decline_metrics": {
+            "prior_revenue": focus.get("prior_period_revenue"),
+            "latest_revenue": focus.get("latest_period_revenue"),
+            "revenue_change": rev_change,
+            "revenue_change_pct": focus.get("revenue_change_pct"),
+        },
+        "show_markers": True,
+        "y_axis_from_zero": True,
+        "trend_granularity": "week",
+    }
+
+
+def build_decline_ranking_chart(result: dict) -> Optional[dict]:
+    """Secondary decline ranking — sorted by absolute SEK decline."""
+    products = result.get("products") or []
+    rows = _declining_product_rows(products)
+    if not rows:
+        return None
+    data = [
+        {
+            "product_name": row["product_name"],
+            "display_label": row["display_label"],
+            "revenue_change": float(row.get("revenue_change") or 0),
+            "revenue_change_pct": row.get("revenue_change_pct"),
+        }
+        for row in rows
+    ]
+    title = "Andra produkter i nedgång" if len(data) > 1 else "Produkter i nedgång"
+    return {
+        "chart_type": BAR_CHART,
+        "chart_variant": "decline_ranking",
+        "layout": "horizontal",
+        "title": title,
+        "description": _decline_chart_description(result),
+        "x_key": "display_label",
+        "y_key": "revenue_change",
+        "tooltip_key": "product_name",
+        "data": data,
+        "source_tool": "get_declining_products",
+        "generated_from_row_count": len(data),
+        "emphasis_index": 0,
+        "compact": True,
+    }
 
 
 def _truncate_label(text: str, max_len: int = _LABEL_MAX) -> str:
@@ -421,31 +560,17 @@ def _build_market_share(result: dict) -> Optional[dict]:
 
 def _build_declining_products(result: dict) -> Optional[dict]:
     products = result.get("products") or []
-    days = result.get("comparison_days", 30)
-    data = []
-    for p in products:
-        value = p.get("revenue_change_pct")
-        if value is None:
-            value = p.get("revenue_change")
-        if value is None:
-            continue
-        if isinstance(value, (int, float)) and value > _DECLINE_CHART_THRESHOLD_PCT:
-            continue
-        name = p["product_name"]
-        data.append({
-            "product_name": name,
-            "display_label": _truncate_label(name),
-            "revenue_change_pct": value,
-            "latest_period_revenue": p.get("latest_period_revenue"),
-            "prior_period_revenue": p.get("prior_period_revenue"),
-            "revenue_change": p.get("revenue_change"),
-        })
+    data = _declining_product_rows(products)
+    period_desc = _decline_chart_description(result)
 
-    if len(data) == 0:
+    if len(products) == 0 or len(data) == 0:
         return {
             "chart_type": "empty_state",
             "title": "Inga produkter i nedgång",
-            "description": f"Alla produkter är stabila eller växer de senaste {days} dagarna.",
+            "description": (
+                f"Inga produkter har negativ omsättningsförändring i vald jämförelse. "
+                f"{period_desc}"
+            ),
             "data": [],
             "x_key": "",
             "y_key": "",
@@ -457,8 +582,8 @@ def _build_declining_products(result: dict) -> Optional[dict]:
         return {
             "chart_type": BAR_CHART,
             "layout": "horizontal",
-            "title": "Produktjämförelse",
-            "description": f"Omsättningsförändring % · senaste {days} dagar",
+            "title": "Produkter i nedgång",
+            "description": period_desc,
             "x_key": "display_label",
             "y_key": "revenue_change_pct",
             "tooltip_key": "product_name",
@@ -470,6 +595,7 @@ def _build_declining_products(result: dict) -> Optional[dict]:
 
     if result.get("_deep_dive_focus") == "product_trend":
         weekly = result.get("focus_product_weekly_series") or []
+        days = result.get("comparison_days", 30)
         if len(weekly) >= 2:
             trend_data = [
                 {"label": p["period"], "revenue": p["revenue"]}
@@ -481,7 +607,7 @@ def _build_declining_products(result: dict) -> Optional[dict]:
                 payload: dict = {
                     "chart_type": LINE_CHART,
                     "title": name,
-                    "description": f"Veckovis omsättning · senaste {days} dagar",
+                    "description": period_desc,
                     "x_key": "label",
                     "y_key": "revenue",
                     "data": trend_data,
@@ -498,7 +624,7 @@ def _build_declining_products(result: dict) -> Optional[dict]:
         region_data = []
         for r in regions:
             change_pct = r.get("revenue_change_pct")
-            if change_pct is None:
+            if change_pct is None or change_pct >= 0:
                 continue
             region_data.append({
                 "region": r["region"],
@@ -510,7 +636,7 @@ def _build_declining_products(result: dict) -> Optional[dict]:
                 "chart_type": BAR_CHART,
                 "layout": "horizontal",
                 "title": "Var syns tappet?",
-                "description": f"Omsättningsförändring % per region · senaste {days} dagar",
+                "description": period_desc,
                 "x_key": "display_label",
                 "y_key": "revenue_change_pct",
                 "tooltip_key": "region",
@@ -521,20 +647,31 @@ def _build_declining_products(result: dict) -> Optional[dict]:
             }
 
     if len(data) == 1:
+        trend = build_decline_trend_chart(result)
+        if trend:
+            return trend
         p = data[0]
         latest = p.get("latest_period_revenue") or 0.0
         prior = p.get("prior_period_revenue") or 0.0
         pct = abs(p.get("revenue_change_pct") or 0.0)
         name = p["product_name"]
+        prior_label = "Föregående period"
+        latest_label = "Senaste period"
+        prior_period = result.get("prior_period") or {}
+        latest_period = result.get("latest_period") or {}
+        if prior_period.get("start") and prior_period.get("end"):
+            prior_label = format_compact_date_range_sv(prior_period["start"], prior_period["end"])
+        if latest_period.get("start") and latest_period.get("end"):
+            latest_label = format_compact_date_range_sv(latest_period["start"], latest_period["end"])
         if prior > 0 or latest > 0:
             return {
                 "chart_type": BAR_CHART,
                 "chart_variant": "decline_comparison",
-                "title": name,
-                "description": f"−{pct:.0f} % omsättningsfall de senaste {days} dagarna",
+                "title": "Produkter i nedgång",
+                "description": f"{name} · −{pct:.1f} % · {period_desc}",
                 "data": [
-                    {"period": "Föregående period", "revenue": round(prior, 2)},
-                    {"period": "Senaste period", "revenue": round(latest, 2)},
+                    {"period": prior_label, "revenue": round(prior, 2)},
+                    {"period": latest_label, "revenue": round(latest, 2)},
                 ],
                 "x_key": "period",
                 "y_key": "revenue",
@@ -544,8 +681,8 @@ def _build_declining_products(result: dict) -> Optional[dict]:
             }
         return {
             "chart_type": "insight_card",
-            "title": "Produkt i nedgång",
-            "description": f"Tydligast nedgång de senaste {days} dagarna",
+            "title": "Produkter i nedgång",
+            "description": f"{name} · −{pct:.1f} % · {period_desc}",
             "data": [p],
             "x_key": "product_name",
             "y_key": "revenue_change_pct",
@@ -553,15 +690,27 @@ def _build_declining_products(result: dict) -> Optional[dict]:
             "generated_from_row_count": 1,
         }
 
+    trend = build_decline_trend_chart(result)
+    if trend:
+        return trend
+
     return {
         "chart_type": BAR_CHART,
         "layout": "horizontal",
         "title": "Produkter i nedgång",
-        "description": f"Omsättningsförändring % · senaste {days} dagar",
+        "description": period_desc,
         "x_key": "display_label",
-        "y_key": "revenue_change_pct",
+        "y_key": "revenue_change",
         "tooltip_key": "product_name",
-        "data": data,
+        "data": [
+            {
+                "product_name": row["product_name"],
+                "display_label": row["display_label"],
+                "revenue_change": float(row.get("revenue_change") or 0),
+                "revenue_change_pct": row.get("revenue_change_pct"),
+            }
+            for row in data
+        ],
         "source_tool": "get_declining_products",
         "generated_from_row_count": len(data),
         "emphasis_index": 0,

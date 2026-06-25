@@ -15,6 +15,8 @@ from app.services.chart_builder import (
     LINE_CHART,
     PIE_CHART,
     build_chart,
+    build_decline_ranking_chart,
+    build_decline_trend_chart,
     build_period_comparison_chart,
     build_time_series_chart,
     build_weekly_kpi_comparison_chart,
@@ -189,9 +191,18 @@ def select_charts(
 
     if intent == ChartIntent.SINGLE_PRODUCT_DECLINE:
         declining = tools.get("get_declining_products", {})
-        chart = build_chart("get_declining_products", declining)
-        if chart:
-            charts.append({**chart, "chart_role": "primary"})
+        focus = declining.get("_deep_dive_focus")
+        if focus in ("portfolio", "regions", "product_trend"):
+            chart = build_chart("get_declining_products", declining)
+            if chart:
+                charts.append({**chart, "chart_role": "primary"})
+            return charts
+        trend = build_decline_trend_chart(declining)
+        if trend:
+            charts.append({**trend, "chart_role": "primary"})
+        ranking = build_decline_ranking_chart(declining)
+        if ranking:
+            charts.append({**ranking, "chart_role": "secondary", "compact": True})
         return charts
 
     if intent == ChartIntent.RANKING:

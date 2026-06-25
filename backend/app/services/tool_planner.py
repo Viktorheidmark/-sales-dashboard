@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Optional
 
 from app.schemas.analysis_plan import AnalysisPlan, NormalizedPlanMeta
 from app.services.intent_router import (
@@ -35,6 +35,7 @@ class ToolResolution:
     plans: list[ToolPlan] = field(default_factory=list)
     source: str = "none"
     analysis_meta: dict[str, Any] = field(default_factory=dict)
+    clarification_answer: Optional[str] = None
 
 
 def plan_deterministic_tools(
@@ -47,6 +48,14 @@ def plan_deterministic_tools(
 ) -> list[ToolPlan]:
     """Secure follow-ups and UI actions — always bypass the AI planner."""
     msg = message.strip()
+    if prior_context:
+        from app.services.decline_period import plan_awaiting_decline_period
+        ac = prior_context.analysis_context or {}
+        if ac.get("awaiting_decline_period"):
+            awaiting = plan_awaiting_decline_period(msg)
+            if awaiting:
+                return awaiting
+
     if prior_context and follow_up_action:
         from app.services.follow_up_context import validate_and_resolve_follow_up
         structured = validate_and_resolve_follow_up(
@@ -129,6 +138,18 @@ def resolve_tool_plans(
         meta.update({"source": "deterministic", "tools": [p.tool_name for p in det]})
         return ToolResolution(plans=det, source="deterministic", analysis_meta=meta)
 
+    from app.services.decline_period import (
+        DECLINE_PERIOD_CLARIFICATION,
+        decline_question_needs_period,
+    )
+    if decline_question_needs_period(message):
+        meta.update({"source": "clarification", "intent": "product_decline"})
+        return ToolResolution(
+            clarification_answer=DECLINE_PERIOD_CLARIFICATION,
+            source="clarification",
+            analysis_meta=meta,
+        )
+
     if _use_ai_planner():
         try:
             plan = injected_plan or call_planner(
@@ -149,6 +170,13 @@ def resolve_tool_plans(
             )
             if normalized.meta:
                 meta["normalized"] = normalized.meta.model_dump()
+            if normalized.clarification_answer:
+                meta.update({"source": "clarification", "intent": "product_decline"})
+                return ToolResolution(
+                    clarification_answer=normalized.clarification_answer,
+                    source="clarification",
+                    analysis_meta=meta,
+                )
             if not normalized.use_fallback and normalized.tool_plans:
                 meta.update({
                     "source": "planner",

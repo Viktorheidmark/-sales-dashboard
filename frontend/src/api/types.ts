@@ -20,6 +20,7 @@ export interface SourceMeta {
   generated_at: string
   row_count?: number
   date_range?: DateRange
+  comparison_period_label?: string
   limitations?: string[]
 }
 
@@ -54,10 +55,20 @@ export interface ChartPayload {
   show_markers?: boolean
   y_axis_from_zero?: boolean
   trend_granularity?: string
-  chart_variant?: 'decline_comparison'
+  chart_variant?: 'decline_comparison' | 'decline_trend' | 'decline_ranking'
   chart_role?: 'primary' | 'secondary'
   compact?: boolean
   stability_note?: string
+  period_split_at?: string
+  period_split_label?: string
+  prior_period_label?: string
+  latest_period_label?: string
+  decline_metrics?: {
+    prior_revenue?: number
+    latest_revenue?: number
+    revenue_change?: number
+    revenue_change_pct?: number | null
+  }
 }
 
 export interface DeepDivePeriodTotals {
@@ -120,8 +131,8 @@ export interface FollowUpAction {
 
 export interface AnalysisContext {
   prior_intent?: string
-  start_date: string
-  end_date: string
+  start_date?: string
+  end_date?: string
   period_kind?: string
   granularity?: string
   region?: string
@@ -129,6 +140,7 @@ export interface AnalysisContext {
   product_name?: string
   limit?: number
   prior_tool_calls?: string[]
+  awaiting_decline_period?: boolean
 }
 
 export interface PriorTurnContext {

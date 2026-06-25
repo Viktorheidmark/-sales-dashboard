@@ -127,19 +127,29 @@ class ChartPolicyTests(unittest.TestCase):
         self.assertEqual(charts[0]["chart_type"], PIE_CHART)
         self.assertEqual(charts[0]["data"][0]["name"], "Vår andel")
 
-    def test_product_decline_comparison(self):
+    def test_product_decline_trend_primary(self):
         q = "Vilken produkt har tappat mest de senaste 30 dagarna?"
         raw = [("get_declining_products", {
             "comparison_days": 30,
+            "latest_period": {"start": "2026-05-24", "end": "2026-06-23"},
+            "prior_period": {"start": "2026-04-24", "end": "2026-05-23"},
+            "_period_kind": "rolling_30",
             "products": [{
                 "product_name": "OLW Grillchips",
                 "revenue_change_pct": -25.0,
+                "revenue_change": -3000.0,
                 "latest_period_revenue": 5000.0,
                 "prior_period_revenue": 8000.0,
             }],
+            "focus_product_weekly_series": [
+                {"period": "2026-04-28", "revenue": 2000.0},
+                {"period": "2026-05-05", "revenue": 1800.0},
+                {"period": "2026-05-26", "revenue": 1200.0},
+            ],
         })]
         charts = select_charts(q, raw)
-        self.assertEqual(charts[0]["chart_variant"], "decline_comparison")
+        self.assertEqual(charts[0]["chart_variant"], "decline_trend")
+        self.assertEqual(charts[0]["chart_role"], "primary")
 
     def test_supplier_id_preserved_in_chart_source(self):
         q = "Hur har försäljningen utvecklats de senaste 30 dagarna?"
