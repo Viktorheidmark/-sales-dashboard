@@ -144,3 +144,36 @@ export function visibleResponseLimitations(
   }
   return filtered
 }
+
+const CONVERSATIONAL_QUESTION_RE =
+  /^(hej|hejsan|hallå|tack|okej|ok|bra|toppen|perfekt|kul)\b|vad kan du (hjälpa|göra)|hur kan du hjälpa/i
+
+const MISSING_DATA_ANSWER_RE =
+  /lagerdata|inte den typen av data|finns inte i datakällan|utanför vad jag kan|aggregerad form|det är inte tillåtet/i
+
+export function isPlainConversationalResponse(
+  response: Pick<ChatResponse, 'tool_calls' | 'chart' | 'deep_dive' | 'response_kind' | 'analysis_context'>,
+  question?: string,
+): boolean {
+  if (response.tool_calls.length > 0) return false
+  if (response.chart || response.deep_dive) return false
+  if (response.response_kind === 'conversational') return true
+  if (response.response_kind === 'insufficient_data' || response.response_kind === 'unsupported') return false
+  if (response.analysis_context?.awaiting_decline_period) return true
+  if (question && CONVERSATIONAL_QUESTION_RE.test(question.trim())) return true
+  return false
+}
+
+export function isCompactMissingDataResponse(
+  response: Pick<ChatResponse, 'tool_calls' | 'response_kind' | 'answer' | 'limitations'>,
+): boolean {
+  if (response.tool_calls.length > 0) return false
+  if (response.response_kind === 'insufficient_data' || response.response_kind === 'unsupported') {
+    return true
+  }
+  if (response.response_kind === 'conversational') return false
+  if (MISSING_DATA_ANSWER_RE.test(response.answer ?? '')) return true
+  return response.limitations.some(l =>
+    /finns inte i datakällan|säkerhetsskäl|aggregerat/i.test(l),
+  )
+}

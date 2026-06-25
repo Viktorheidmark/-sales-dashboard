@@ -208,6 +208,7 @@ export interface ChatResponse {
   limitations: string[]
   supplier_id: string
   generated_at: string
+  response_kind?: 'conversational' | 'insufficient_data' | 'unsupported'
 }
 
 // --- /api/chat/stream SSE events ---

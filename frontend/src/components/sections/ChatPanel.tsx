@@ -5,7 +5,9 @@ import type { ChatResponse, DateRange, InsightSummary, PriorTurnContext, SourceM
 import { MiniAssistantChart } from '../charts/MiniAssistantChart'
 import { DeepDivePanel } from '../charts/DeepDivePanel'
 import {
+  isCompactMissingDataResponse,
   isMarketShareResponse,
+  isPlainConversationalResponse,
   resolveResponseDateRange,
   resolveSourceSummaryLine,
   toolLabelSv,
@@ -424,6 +426,8 @@ function AssistantBubble({
 
   const r = msg.response!
   const isGrounded = r.tool_calls.length > 0
+  const isPlainConversational = !isGrounded && isPlainConversationalResponse(r, msg.question)
+  const isMissingDataCard = !isGrounded && !isPlainConversational && isCompactMissingDataResponse(r)
   const displayLimitations = visibleResponseLimitations(r.limitations, r)
   const sourcePeriod = resolveResponseDateRange(r.sources, fallbackDateRange)
   const showSourceFooter = isGrounded && (sourcePeriod != null || r.sources.length > 0)
@@ -433,7 +437,7 @@ function AssistantBubble({
       className="self-start w-full space-y-3"
       style={{ padding: '4px 0', maxWidth: '75%', animation: 'messageIn 0.3s ease-out both' }}
     >
-      {!isGrounded ? (
+      {isMissingDataCard ? (
         <UnsupportedAnswerCard content={msg.content} />
       ) : (
         <div style={{ fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.6 }}>
@@ -489,7 +493,7 @@ function AssistantBubble({
         </div>
       )}
 
-      {displayLimitations.length > 0 && (
+      {displayLimitations.length > 0 && isGrounded && (
         <div className="space-y-1">
           {displayLimitations.map((l, i) => (
             <p key={i} className="text-xs text-amber-600 dark:text-amber-400/90 leading-relaxed">⚠ {l}</p>
