@@ -60,15 +60,22 @@ export function TopProducts({
                     compact ? 'py-2' : 'py-2.5'
                   }`}
                 >
-                  <span className={`text-xs font-semibold tabular-nums w-4 shrink-0 ${isTop ? 'text-brand-600 dark:text-brand-400' : 'text-theme-muted'}`}>
+                  <span
+                    className="text-xs font-semibold tabular-nums w-4 shrink-0"
+                    style={{ color: isTop ? 'var(--tenant-primary)' : 'var(--color-muted)' }}
+                  >
                     {p.rank}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-theme-strong truncate leading-snug">{p.product_name}</p>
                     <div className="mt-1 h-1 bg-workspace-border/50 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${isTop ? 'bg-brand-500/85 dark:bg-brand-400/75' : 'bg-brand-500/40 dark:bg-brand-400/35'}`}
-                        style={{ width: `${pct}%` }}
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${pct}%`,
+                          backgroundColor: 'var(--tenant-chart-primary)',
+                          opacity: isTop ? 0.85 : 0.4,
+                        }}
                       />
                     </div>
                   </div>

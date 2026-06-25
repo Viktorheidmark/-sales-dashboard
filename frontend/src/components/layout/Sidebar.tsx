@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { useChatState } from '../../context/ChatStateContext'
+import { useTenantBranding } from '../../context/TenantBrandingContext'
 
 interface SidebarProps {
   supplierName: string
@@ -42,6 +43,7 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
   const initial = supplierName ? supplierName.charAt(0).toUpperCase() : '?'
   const location = useLocation()
   const { hasMessages, onNewChat } = useChatState()
+  const branding = useTenantBranding()
   const isAssistant = location.pathname === '/assistant'
   const showNewChat = isAssistant && hasMessages && onNewChat != null
 
@@ -73,17 +75,23 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
             to={item.to}
             end={item.to === '/'}
             onClick={onNavigate}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-                isActive
-                  ? 'bg-brand-500/10 text-theme-heading border-l-2 border-brand-500 pl-[10px]'
-                  : 'text-theme-muted hover:text-theme-strong hover:bg-[var(--surface-hover)] border-l-2 border-transparent pl-[10px]'
-              }`
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 border-l-2 pl-[10px]"
+            style={({ isActive }) => isActive
+              ? {
+                  background: branding.soft,
+                  color: 'var(--color-heading)',
+                  borderColor: branding.primary,
+                  outlineColor: branding.primary + '66',
+                }
+              : {
+                  color: 'var(--color-muted)',
+                  borderColor: 'transparent',
+                }
             }
           >
             {({ isActive }) => (
               <>
-                <span className={isActive ? 'text-brand-600 dark:text-brand-400' : 'text-theme-faint'}>{item.icon}</span>
+                <span style={isActive ? { color: branding.primary } : { color: 'var(--color-faint)' }}>{item.icon}</span>
                 {item.label}
               </>
             )}
@@ -107,7 +115,14 @@ export function Sidebar({ supplierName, onLogout, onNavigate }: SidebarProps) {
           Aktiv leverantör
         </p>
         <div className="surface-inset flex items-center gap-2.5 px-3 py-2.5 mb-3">
-          <div className="w-8 h-8 rounded-full bg-workspace-elevated border border-workspace-border flex items-center justify-center shrink-0 text-xs font-semibold text-brand-600 dark:text-brand-400">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+            style={{
+              background: branding.soft,
+              border: `1px solid ${branding.primary}44`,
+              color: branding.primary,
+            }}
+          >
             {initial}
           </div>
           <div className="min-w-0 flex-1">

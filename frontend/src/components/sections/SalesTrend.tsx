@@ -5,6 +5,7 @@ import {
 import type { SalesOverTimeResponse } from '../../api/types'
 import { formatSEK, formatPeriod, formatShortDateSv } from '../../utils/format'
 import { useChartTheme, type ChartTokens } from '../../utils/chartTheme'
+import { useTenantBranding } from '../../context/TenantBrandingContext'
 import { Card, CardHeader, CardBody } from '../ui/Card'
 import { ChartSkeleton } from '../ui/Skeleton'
 import { ErrorState } from '../ui/ErrorState'
@@ -72,6 +73,7 @@ const INCOMPLETE_NOTES: Record<string, string> = {
 
 export function SalesTrend({ data, loading, error, onRetry, featured = false, periodContextLabel, chartHeight: chartHeightProp }: SalesTrendProps) {
   const { chart, chartAxisTick } = useChartTheme()
+  const { chartPrimary } = useTenantBranding()
   const chartHeight = chartHeightProp ?? (featured ? 280 : 280)
   const headerPad = featured ? 'px-5 pt-5 pb-3' : undefined
   const bodyPad = featured ? 'px-5 pb-5' : undefined
@@ -168,10 +170,10 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
               <Line
                 type="monotone"
                 dataKey="revenue"
-                stroke={chart.line}
+                stroke={chartPrimary}
                 strokeWidth={2.5}
-                dot={chartData.length <= 14 ? { fill: chart.line, r: 3, strokeWidth: 0 } : false}
-                activeDot={{ r: 5, fill: chart.line, strokeWidth: 0 }}
+                dot={chartData.length <= 14 ? { fill: chartPrimary, r: 3, strokeWidth: 0 } : false}
+                activeDot={{ r: 5, fill: chartPrimary, strokeWidth: 0 }}
               />
             </LineChart>
           </ResponsiveContainer>

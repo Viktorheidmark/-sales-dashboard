@@ -8,6 +8,8 @@ import { OverviewPage } from './pages/OverviewPage'
 import { AssistantPage } from './pages/AssistantPage'
 import { InsightsPage } from './pages/InsightsPage'
 import { ChatStateProvider } from './context/ChatStateContext'
+import { TenantBrandingProvider } from './context/TenantBrandingContext'
+import { applyTenantTheme, getTenantBranding, resetTenantTheme } from './theme/tenantBranding'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
 
@@ -15,10 +17,11 @@ export default function App() {
   const [authState, setAuthState] = useState<AuthState>('loading')
   const [user, setUser] = useState<AuthUser | null>(null)
 
-  // Bootstrap session on mount
+  // Bootstrap session on mount — apply tenant theme immediately on restore
   useEffect(() => {
     api.me()
       .then(u => {
+        applyTenantTheme(getTenantBranding(u.supplier_name))
         setUser(u)
         setAuthState('authenticated')
       })
@@ -28,6 +31,7 @@ export default function App() {
   // Return to login on session expiry from any API call
   useEffect(() => {
     const handler = () => {
+      resetTenantTheme()
       setUser(null)
       setAuthState('unauthenticated')
     }
@@ -36,11 +40,13 @@ export default function App() {
   }, [])
 
   const handleLogin = (u: AuthUser) => {
+    applyTenantTheme(getTenantBranding(u.supplier_name))
     setUser(u)
     setAuthState('authenticated')
   }
 
   const handleLogout = async () => {
+    resetTenantTheme()
     await api.logout().catch(() => {})
     setUser(null)
     setAuthState('unauthenticated')
@@ -62,22 +68,24 @@ export default function App() {
 
   // Authenticated app
   return (
-    <ChatStateProvider>
-    <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
-      <Routes>
-        <Route element={<AppShell supplierName={user.supplier_name} onLogout={handleLogout} />}>
-          <Route path="/" element={<OverviewPage user={user} />} />
-          <Route path="/assistant" element={<AssistantPage user={user} />} />
-          <Route path="/insights" element={<InsightsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
-    </ChatStateProvider>
+    <TenantBrandingProvider user={user}>
+      <ChatStateProvider>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
+          <Routes>
+            <Route element={<AppShell supplierName={user.supplier_name} onLogout={handleLogout} />}>
+              <Route path="/" element={<OverviewPage user={user} />} />
+              <Route path="/assistant" element={<AssistantPage user={user} />} />
+              <Route path="/insights" element={<InsightsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ChatStateProvider>
+    </TenantBrandingProvider>
   )
 }

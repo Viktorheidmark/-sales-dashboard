@@ -4,10 +4,10 @@ import type { AuthUser } from '../../api/types'
 import { ThemeToggle } from '../ui/ThemeToggle'
 
 const DEMO_ACCOUNTS = [
-  { email: 'cocacola@demo.solvigo', label: 'Coca-Cola Europacific Partners Sverige' },
-  { email: 'pepsico@demo.solvigo', label: 'PepsiCo Northern Europe' },
-  { email: 'olw@demo.solvigo', label: 'Orkla Snacks Sverige' },
-  { email: 'estrella@demo.solvigo', label: 'Estrella AB' },
+  { email: 'cocacola@demo.solvigo', label: 'Coca-Cola Europacific Partners Sverige', color: '#C62828' },
+  { email: 'pepsico@demo.solvigo',  label: 'PepsiCo Northern Europe',                color: '#1463D8' },
+  { email: 'olw@demo.solvigo',      label: 'Orkla Snacks Sverige',                   color: '#E56A25' },
+  { email: 'estrella@demo.solvigo', label: 'Estrella AB',                            color: '#6C3CCB' },
 ]
 
 const DEMO_PASSWORD = 'demo1234'
@@ -548,6 +548,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                           justifyContent: 'center',
                           flexShrink: 0,
                           transition: 'all 0.15s ease',
+                          background: account.color + '18',
+                          color: account.color,
+                          border: `1px solid ${account.color}44`,
                         }}>
                           {account.label.charAt(0)}
                         </span>

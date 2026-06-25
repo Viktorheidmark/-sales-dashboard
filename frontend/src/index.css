@@ -19,6 +19,15 @@
     --shadow-sm: 0 1px 4px rgba(0,0,0,0.06);
     --shadow-focus: 0 0 0 3px rgba(59,130,246,0.08);
 
+    /* Tenant branding tokens — overridden per supplier via JS */
+    --tenant-primary: #3B82F6;
+    --tenant-primary-hover: #2563EB;
+    --tenant-soft: rgba(59,130,246,0.10);
+    --tenant-muted: #93C5FD;
+    --tenant-glow: rgba(59,130,246,0.18);
+    --tenant-chart-primary: #3B82F6;
+    --tenant-chart-muted: #93C5FD;
+
     --ws-bg: #f4f6f9;
     --ws-canvas: #eef1f6;
     --ws-surface: #ffffff;

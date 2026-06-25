@@ -75,15 +75,22 @@ export function RegionalSales({
                   compact ? 'py-2' : 'py-2.5'
                 }`}
               >
-                <span className={`text-xs font-semibold w-4 shrink-0 tabular-nums ${i === 0 ? 'text-brand-600 dark:text-brand-400' : 'text-theme-muted'}`}>
+                <span
+                  className="text-xs font-semibold w-4 shrink-0 tabular-nums"
+                  style={{ color: i === 0 ? 'var(--tenant-primary)' : 'var(--color-muted)' }}
+                >
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-theme-strong truncate">{r.region}</p>
                   <div className="mt-1 h-1 bg-workspace-border/50 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${i === 0 ? 'bg-brand-500/85 dark:bg-brand-400/75' : 'bg-brand-500/40 dark:bg-brand-400/35'}`}
-                      style={{ width: `${maxRev > 0 ? ((r.revenue ?? 0) / maxRev) * 100 : 0}%` }}
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${maxRev > 0 ? ((r.revenue ?? 0) / maxRev) * 100 : 0}%`,
+                        backgroundColor: 'var(--tenant-chart-primary)',
+                        opacity: i === 0 ? 0.85 : 0.4,
+                      }}
                     />
                   </div>
                 </div>

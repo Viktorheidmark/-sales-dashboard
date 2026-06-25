@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import type { MarketShareResponse } from '../../api/types'
 import { formatSEK } from '../../utils/format'
 import { useChartTheme } from '../../utils/chartTheme'
+import { useTenantBranding } from '../../context/TenantBrandingContext'
 import { Card, CardHeader, CardBody } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
 import { ErrorState } from '../ui/ErrorState'
@@ -42,10 +43,11 @@ export function MarketShare({
   fullWidth = false,
 }: MarketShareProps) {
   const { chart, chartTooltipStyle } = useChartTheme()
+  const { chartPrimary } = useTenantBranding()
 
   const pieData = data
     ? [
-        { name: 'Vår andel', value: data.supplier_revenue, color: chart.barPrimary },
+        { name: 'Vår andel', value: data.supplier_revenue, color: chartPrimary },
         { name: 'Konkurrenter (aggregat)', value: data.competitor_aggregate_revenue ?? 0, color: chart.pieMuted },
       ]
     : []

@@ -192,7 +192,7 @@ function SendButton({ onClick, disabled, loading }: { onClick: () => void; disab
         width: 40,
         height: 40,
         borderRadius: '50%',
-        background: disabled ? 'var(--text-muted)' : 'var(--accent)',
+        background: disabled ? 'var(--text-muted)' : 'var(--tenant-primary)',
         color: 'white',
         border: 'none',
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -304,15 +304,15 @@ function SaveInsightButton({ saveState, onSave }: { saveState: SaveState; onSave
   const isError = saveState === 'error'
   const isSaving = saveState === 'saving'
 
-  const borderColor = isSaved ? '#10B981' : isError ? '#EF4444' : 'var(--accent)'
+  const borderColor = isSaved ? '#10B981' : isError ? '#EF4444' : 'var(--tenant-primary)'
   const color = isSaved
     ? '#10B981'
     : isError
     ? '#EF4444'
     : hovered && !isSaving && !isSaved
     ? 'white'
-    : 'var(--accent)'
-  const bg = hovered && !isSaving && !isSaved && !isError ? 'var(--accent)' : 'transparent'
+    : 'var(--tenant-primary)'
+  const bg = hovered && !isSaving && !isSaved && !isError ? 'var(--tenant-primary)' : 'transparent'
 
   return (
     <button
@@ -530,9 +530,9 @@ function InsightChip({ insight, onSendMessage }: { insight: InsightSummary; onSe
         padding: '6px 14px',
         borderRadius: 20,
         background: 'var(--bg-card)',
-        border: `1px solid ${hovered ? 'var(--accent)' : 'var(--border-subtle)'}`,
+        border: `1px solid ${hovered ? 'var(--tenant-primary)' : 'var(--border-subtle)'}`,
         fontSize: 12,
-        color: hovered ? 'var(--accent)' : 'var(--text-secondary)',
+        color: hovered ? 'var(--tenant-primary)' : 'var(--text-secondary)',
         cursor: 'pointer',
         maxWidth: 200,
         overflow: 'hidden',
@@ -617,7 +617,7 @@ function ChatInputBar({
       }}
       onFocusCapture={e => {
         const el = e.currentTarget
-        el.style.borderColor = 'var(--accent)'
+        el.style.borderColor = 'var(--tenant-primary)'
         el.style.boxShadow = 'var(--shadow-focus)'
       }}
       onBlurCapture={e => {
@@ -948,7 +948,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
                         className="text-white"
                         style={{
                           fontSize: 15,
-                          background: 'var(--accent)',
+                          background: 'var(--tenant-primary)',
                           borderRadius: '20px 20px 4px 20px',
                           padding: '12px 18px',
                           maxWidth: '55%',
