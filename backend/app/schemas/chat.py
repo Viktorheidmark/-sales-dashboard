@@ -59,3 +59,4 @@ class ChatResponse(BaseModel):
     limitations: list[str]
     supplier_id: str
     generated_at: str
+    response_kind: Optional[str] = None

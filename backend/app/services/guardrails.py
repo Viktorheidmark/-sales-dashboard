@@ -118,9 +118,37 @@ _ANALYTICS_SIGNALS = re.compile(
 _VAGUE_ONLY = re.compile(
     r"^(hur\s+går\s+det|hur\s+ser\s+det\s+ut|berätta|vad\s+händer|vad\s+tycker\s+du|"
     r"something|anything|help|hjälp|info|information|tell\s+me\s+something|show\s+me\s+something|"
-    r"what\s+do\s+you\s+think|vad\s+tänker\s+du|vad\s+kan\s+du)\s*\??$",
+    r"what\s+do\s+you\s+think|vad\s+tänker\s+du)\s*\??$",
     re.IGNORECASE,
 )
+
+_CONVERSATIONAL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"^hej\b", re.IGNORECASE), "Hej! Vad vill du analysera i försäljningen?"),
+    (re.compile(r"^hejsan\b", re.IGNORECASE), "Hej! Vad vill du analysera i försäljningen?"),
+    (re.compile(r"^hallå\b", re.IGNORECASE), "Hej! Vad vill du analysera i försäljningen?"),
+    (re.compile(r"^tack\b", re.IGNORECASE), "Tack! Vad vill du titta närmare på?"),
+    (re.compile(r"^okej\b", re.IGNORECASE), "Okej. Vad vill du analysera?"),
+    (re.compile(r"^ok\b", re.IGNORECASE), "Okej. Vad vill du analysera?"),
+    (re.compile(r"^bra\b", re.IGNORECASE), "Bra. Vad vill du titta närmare på?"),
+    (re.compile(r"^(toppen|perfekt|kul)\b", re.IGNORECASE), "Bra. Vad vill du analysera?"),
+    (
+        re.compile(r"^vad kan du (hjälpa|göra)", re.IGNORECASE),
+        "Jag kan hjälpa dig analysera försäljning, produkter, regioner och marknadsandel.",
+    ),
+    (
+        re.compile(r"^hur kan du hjälpa", re.IGNORECASE),
+        "Jag kan hjälpa dig analysera försäljning, produkter, regioner och marknadsandel.",
+    ),
+]
+
+
+def conversational_reply(message: str) -> str | None:
+    """Short neutral reply for greetings and capability questions."""
+    msg = message.strip()
+    for pattern, reply in _CONVERSATIONAL_PATTERNS:
+        if pattern.search(msg):
+            return reply
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +236,18 @@ def classify(message: str) -> GuardrailResult:
                 should_call_mcp=False,
             )
 
-    # 5. Clarification needed — vague with no analytics signal
+    # 5. Conversational — greetings, thanks, capability questions
+    conv = conversational_reply(msg)
+    if conv:
+        return GuardrailResult(
+            classification="conversational",
+            answer=conv,
+            limitations=[],
+            should_call_llm=False,
+            should_call_mcp=False,
+        )
+
+    # 6. Clarification needed — vague with no analytics signal
     if _VAGUE_ONLY.match(msg) and not _ANALYTICS_SIGNALS.search(msg):
         return GuardrailResult(
             classification="clarification_needed",
@@ -225,7 +264,7 @@ def classify(message: str) -> GuardrailResult:
             should_call_mcp=False,
         )
 
-    # 6. Supported — pass through to LLM + MCP
+    # 7. Supported — pass through to LLM + MCP
     return GuardrailResult(
         classification="supported",
         answer="",

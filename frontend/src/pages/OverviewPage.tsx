@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react'
+import { useTenantBranding } from '../context/TenantBrandingContext'
 import { api } from '../api/client'
 import type {
   AuthUser,
@@ -46,6 +47,7 @@ interface OverviewPageProps {
 export function OverviewPage({ user }: OverviewPageProps) {
   const [datePreset, setDatePreset] = useState<DatePreset>('all')
   const [refreshTick, setRefreshTick] = useState(0)
+  const branding = useTenantBranding()
 
   const supplierCategory = useMemo(
     () => defaultCategory(user.supplier_name),
@@ -92,12 +94,15 @@ export function OverviewPage({ user }: OverviewPageProps) {
     <div className="space-y-8 pb-2">
       {/* Zone 1 — Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+        <div
+          className="min-w-0 pl-4"
+          style={{ borderLeft: `3px solid ${branding.primary}`, transition: 'border-color 0.4s ease' }}
+        >
           <h1 className="text-xl font-semibold text-theme-heading tracking-tight">
             Försäljningsöversikt
           </h1>
           <p className="mt-1.5 text-sm leading-snug truncate">
-            <span className="text-theme-body font-medium">{user.supplier_name}</span>
+            <span className="font-semibold" style={{ color: branding.primary }}>{user.supplier_name}</span>
             <span className="text-theme-faint mx-1.5" aria-hidden>·</span>
             <span className="text-theme-muted">Leverantörsvy</span>
           </p>

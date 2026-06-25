@@ -27,6 +27,9 @@
     --tenant-glow: rgba(59,130,246,0.18);
     --tenant-chart-primary: #3B82F6;
     --tenant-chart-muted: #93C5FD;
+    --tenant-nav-active-bg: rgba(59,130,246,0.13);
+    --tenant-sidebar-top-glow: rgba(59,130,246,0.14);
+    --tenant-card-glow: rgba(59,130,246,0.16);
 
     --ws-bg: #f4f6f9;
     --ws-canvas: #eef1f6;
@@ -115,7 +118,10 @@
   }
 
   .segment-btn-active {
-    @apply bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/25;
+    background: var(--tenant-soft);
+    color: var(--tenant-primary);
+    border: 1px solid color-mix(in srgb, var(--tenant-primary) 25%, transparent);
+    font-weight: 600;
   }
 
   .btn-ghost {
@@ -158,6 +164,277 @@
     box-shadow: 0 0 18px -6px rgba(77, 124, 255, 0.14);
   }
 
+  .tenant-supplier-card {
+    background: linear-gradient(135deg, var(--tenant-nav-active-bg) 0%, var(--tenant-soft) 100%);
+    border: 1px solid color-mix(in srgb, var(--tenant-primary) 22%, transparent);
+    border-radius: 12px;
+    transition: box-shadow 0.3s ease;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .tenant-supplier-card {
+      animation: tenantCardPulse 4s ease-in-out infinite;
+    }
+  }
+  .tenant-supplier-card:not([data-animated]) {
+    box-shadow: 0 4px 20px -4px var(--tenant-card-glow), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ── Tenant workspace sidebar (always dark, both app themes) ─────────── */
+  .tenant-sidebar {
+    --sb-surface-base: #0b1020;
+    --sb-text-heading: #f8fafc;
+    --sb-text-muted: rgba(203, 213, 225, 0.68);
+    --sb-text-faint: rgba(148, 163, 184, 0.78);
+    --sb-text-inactive: rgba(203, 213, 225, 0.76);
+    --sb-divider: color-mix(in srgb, var(--tenant-primary) 22%, rgba(255, 255, 255, 0.08));
+
+    color: var(--sb-text-inactive);
+    background-color: var(--sb-surface-base);
+    background-image:
+      radial-gradient(ellipse 130% 42% at 50% -8%, var(--tenant-sidebar-top-glow) 0%, transparent 62%),
+      radial-gradient(ellipse 95% 38% at 50% 108%, var(--tenant-glow) 0%, transparent 68%),
+      linear-gradient(180deg, #12182a 0%, var(--sb-surface-base) 58%, #0d1324 100%);
+    border-right: 1px solid color-mix(in srgb, var(--tenant-primary) 26%, #1a2234);
+    box-shadow:
+      6px 0 28px rgba(0, 0, 0, 0.22),
+      inset -1px 0 0 rgba(255, 255, 255, 0.04);
+  }
+
+  @supports (background: color-mix(in srgb, red 50%, blue)) {
+    .tenant-sidebar {
+      background-image:
+        radial-gradient(ellipse 130% 42% at 50% -8%, var(--tenant-sidebar-top-glow) 0%, transparent 62%),
+        radial-gradient(ellipse 95% 38% at 50% 108%, var(--tenant-glow) 0%, transparent 68%),
+        linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--tenant-primary) 36%, var(--sb-surface-base)) 0%,
+          var(--sb-surface-base) 58%,
+          color-mix(in srgb, var(--tenant-primary) 18%, var(--sb-surface-base)) 100%
+        );
+    }
+  }
+
+  .tenant-sidebar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, transparent 88%);
+    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, transparent 88%);
+  }
+
+  .tenant-sidebar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse 85% 92% at 50% 50%, transparent 38%, rgba(0, 0, 0, 0.38) 100%);
+  }
+
+  .tenant-sidebar > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .tenant-sidebar-brand {
+    border-bottom: 1px solid var(--sb-divider);
+  }
+
+  .tenant-sidebar-brand-mark {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--tenant-primary) 30%, rgba(0, 0, 0, 0.35)) 0%,
+      color-mix(in srgb, var(--tenant-primary) 14%, rgba(0, 0, 0, 0.25)) 100%
+    );
+    border: 1px solid color-mix(in srgb, var(--tenant-primary) 42%, transparent);
+    box-shadow: 0 0 18px -4px var(--tenant-glow);
+  }
+
+  .tenant-sidebar-brand-icon {
+    color: color-mix(in srgb, var(--tenant-primary) 55%, #f8fafc);
+  }
+
+  .tenant-sidebar-brand-title {
+    color: var(--sb-text-heading);
+  }
+
+  .tenant-sidebar-brand-sub {
+    color: var(--sb-text-faint);
+  }
+
+  .tenant-sidebar-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    padding-left: 12px;
+    margin-bottom: 12px;
+    color: var(--sb-text-faint);
+  }
+
+  .tenant-sidebar .sidebar-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px 10px 10px;
+    font-size: 14px;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+    border-radius: 0 10px 10px 0;
+    color: var(--sb-text-inactive);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .tenant-sidebar .sidebar-nav-link:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tenant-primary) 45%, transparent);
+  }
+
+  .tenant-sidebar .sidebar-nav-link:not(.is-active):hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #f1f5f9;
+  }
+
+  .tenant-sidebar .sidebar-nav-link:not(.is-active):hover .sidebar-nav-icon {
+    color: color-mix(in srgb, var(--tenant-primary) 50%, #e2e8f0);
+  }
+
+  .tenant-sidebar .sidebar-nav-link.is-active {
+    font-weight: 600;
+    color: var(--sb-text-heading);
+    border-left-color: var(--tenant-primary);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--tenant-primary) 34%, rgba(0, 0, 0, 0.45)) 0%,
+      color-mix(in srgb, var(--tenant-primary) 14%, transparent) 62%,
+      transparent 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 0 22px -6px var(--tenant-glow);
+  }
+
+  .tenant-sidebar .sidebar-nav-icon {
+    color: var(--sb-text-faint);
+    transition: color 0.15s ease, filter 0.15s ease;
+  }
+
+  .tenant-sidebar .sidebar-nav-link.is-active .sidebar-nav-icon {
+    color: #f8fafc;
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--tenant-primary) 70%, transparent));
+  }
+
+  .tenant-sidebar .tenant-supplier-card {
+    background: linear-gradient(
+      145deg,
+      rgba(0, 0, 0, 0.38) 0%,
+      color-mix(in srgb, var(--tenant-primary) 16%, rgba(0, 0, 0, 0.28)) 100%
+    );
+    border: 1px solid color-mix(in srgb, var(--tenant-primary) 44%, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+    box-shadow:
+      0 8px 28px -6px var(--tenant-card-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    animation: none;
+  }
+
+  .tenant-sidebar .tenant-supplier-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--tenant-primary) 72%, #fff) 0%,
+      var(--tenant-primary) 100%
+    );
+    border: 2px solid color-mix(in srgb, var(--tenant-primary) 65%, #fff);
+    box-shadow: 0 0 18px -2px var(--tenant-card-glow);
+  }
+
+  .tenant-sidebar-supplier-name {
+    color: var(--sb-text-heading);
+  }
+
+  .tenant-sidebar-supplier-sub {
+    color: color-mix(in srgb, var(--tenant-muted) 88%, #fff);
+  }
+
+  .tenant-sidebar-footer {
+    border-top: 1px solid var(--sb-divider);
+  }
+
+  .tenant-sidebar-new-chat {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--sb-text-heading);
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid color-mix(in srgb, var(--tenant-primary) 48%, rgba(255, 255, 255, 0.1));
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .tenant-sidebar-new-chat:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: color-mix(in srgb, var(--tenant-primary) 68%, rgba(255, 255, 255, 0.15));
+    box-shadow: 0 0 18px -6px var(--tenant-glow);
+  }
+
+  .tenant-sidebar-new-chat:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tenant-primary) 45%, transparent);
+  }
+
+  .tenant-sidebar-logout {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 8px;
+    padding: 6px 8px;
+    color: var(--sb-text-muted);
+    background: transparent;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  .tenant-sidebar-logout:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .tenant-sidebar-logout:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tenant-primary) 40%, transparent);
+  }
+
+  .tenant-sidebar .sidebar-theme-toggle {
+    border-color: color-mix(in srgb, var(--tenant-primary) 32%, rgba(255, 255, 255, 0.14)) !important;
+    background: rgba(0, 0, 0, 0.34) !important;
+    color: rgba(226, 232, 240, 0.88) !important;
+  }
+
+  .tenant-sidebar .sidebar-theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.09) !important;
+    color: #f8fafc !important;
+  }
+
   .assistant-chart-card {
     width: 100%;
     max-width: 100%;
@@ -189,6 +466,11 @@
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+
+  @keyframes tenantCardPulse {
+    0%, 100% { box-shadow: 0 4px 20px -4px var(--tenant-card-glow), inset 0 1px 0 rgba(255,255,255,0.08); }
+    50%       { box-shadow: 0 6px 28px -4px var(--tenant-card-glow), inset 0 1px 0 rgba(255,255,255,0.12); }
   }
 
   @keyframes glowPulse {

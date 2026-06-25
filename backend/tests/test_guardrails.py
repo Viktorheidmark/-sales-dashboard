@@ -15,6 +15,21 @@ class GuardrailTests(unittest.TestCase):
         self.assertNotIn("verktyg", result.answer.lower())
         self.assertNotIn("mcp", result.answer.lower())
 
+    def test_greeting_is_conversational(self):
+        result = classify("hej")
+        self.assertEqual(result.classification, "conversational")
+        self.assertIn("Vad vill du analysera", result.answer)
+
+    def test_thanks_is_conversational(self):
+        result = classify("tack")
+        self.assertEqual(result.classification, "conversational")
+        self.assertIn("Vad vill du titta", result.answer)
+
+    def test_capability_question_is_conversational(self):
+        result = classify("vad kan du hjälpa mig med?")
+        self.assertEqual(result.classification, "conversational")
+        self.assertIn("försäljning", result.answer.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

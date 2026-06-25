@@ -314,6 +314,7 @@ def _decline_period_clarification_response(supplier_id: str) -> dict:
         "deep_dive": None,
         "follow_up_actions": [],
         "limitations": [],
+        "response_kind": "conversational",
         "supplier_id": supplier_id,
         "analysis_context": {
             "awaiting_decline_period": True,
@@ -336,6 +337,7 @@ def _diagram_clarification_response(supplier_id: str) -> dict:
         "deep_dive": None,
         "follow_up_actions": [],
         "limitations": [],
+        "response_kind": "conversational",
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
@@ -351,6 +353,7 @@ def _diagram_already_shown_response(supplier_id: str) -> dict:
         "deep_dive": None,
         "follow_up_actions": [],
         "limitations": [],
+        "response_kind": "conversational",
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
@@ -421,6 +424,14 @@ async def _finalize_answer(
     return answer
 
 
+def _response_kind(classification: str) -> str:
+    if classification in ("conversational", "clarification_needed"):
+        return "conversational"
+    if classification == "insufficient_data":
+        return "insufficient_data"
+    return "unsupported"
+
+
 def _guardrail_response(guard, supplier_id: str) -> dict:
     return {
         "answer": guard.answer,
@@ -431,6 +442,7 @@ def _guardrail_response(guard, supplier_id: str) -> dict:
         "deep_dive": None,
         "follow_up_actions": [],
         "limitations": guard.limitations,
+        "response_kind": _response_kind(guard.classification),
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
@@ -468,6 +480,10 @@ def _final_payload(
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
+    if not tools_used:
+        from app.services.guardrails import conversational_reply
+        if conversational_reply(question):
+            payload["response_kind"] = "conversational"
     if analysis_meta and os.environ.get("CHAT_INCLUDE_ANALYSIS_META", "").lower() in ("1", "true", "yes"):
         payload["analysis_meta"] = analysis_meta
     return payload

@@ -16,9 +16,15 @@ export interface TenantBranding {
   glow: string
   chartPrimary: string
   chartMuted: string
+  // Premium sidebar tokens
+  /** Active nav background gradient start — slightly stronger than soft */
+  navActiveBg: string
+  /** Top atmospheric radial in sidebar */
+  sidebarTopGlow: string
+  /** Supplier card box-shadow glow */
+  cardGlow: string
 }
 
-// Default Solvigo blue — used when no tenant matches or on logout
 export const SOLVIGO_DEFAULT: TenantBranding = {
   monogram: 'S',
   primary: '#3B82F6',
@@ -28,6 +34,9 @@ export const SOLVIGO_DEFAULT: TenantBranding = {
   glow: 'rgba(59,130,246,0.18)',
   chartPrimary: '#3B82F6',
   chartMuted: '#93C5FD',
+  navActiveBg: 'rgba(59,130,246,0.13)',
+  sidebarTopGlow: 'rgba(59,130,246,0.14)',
+  cardGlow: 'rgba(59,130,246,0.16)',
 }
 
 const TENANT_CONFIGS: Array<{
@@ -46,6 +55,9 @@ const TENANT_CONFIGS: Array<{
       glow: 'rgba(198,40,40,0.18)',
       chartPrimary: '#C62828',
       chartMuted: '#F2B8B5',
+      navActiveBg: 'rgba(198,40,40,0.13)',
+      sidebarTopGlow: 'rgba(198,40,40,0.16)',
+      cardGlow: 'rgba(198,40,40,0.18)',
     },
   },
   {
@@ -60,6 +72,9 @@ const TENANT_CONFIGS: Array<{
       glow: 'rgba(20,99,216,0.18)',
       chartPrimary: '#1463D8',
       chartMuted: '#A9C8FF',
+      navActiveBg: 'rgba(20,99,216,0.13)',
+      sidebarTopGlow: 'rgba(20,99,216,0.16)',
+      cardGlow: 'rgba(20,99,216,0.18)',
     },
   },
   {
@@ -74,6 +89,9 @@ const TENANT_CONFIGS: Array<{
       glow: 'rgba(229,106,37,0.18)',
       chartPrimary: '#E56A25',
       chartMuted: '#F6C3A5',
+      navActiveBg: 'rgba(229,106,37,0.13)',
+      sidebarTopGlow: 'rgba(229,106,37,0.16)',
+      cardGlow: 'rgba(229,106,37,0.18)',
     },
   },
   {
@@ -88,6 +106,9 @@ const TENANT_CONFIGS: Array<{
       glow: 'rgba(108,60,203,0.18)',
       chartPrimary: '#6C3CCB',
       chartMuted: '#D1B8F6',
+      navActiveBg: 'rgba(108,60,203,0.13)',
+      sidebarTopGlow: 'rgba(108,60,203,0.17)',
+      cardGlow: 'rgba(108,60,203,0.19)',
     },
   },
 ]
@@ -98,13 +119,16 @@ export function getTenantBranding(supplierName: string): TenantBranding {
 }
 
 const CSS_VAR_MAP: Array<[string, keyof TenantBranding]> = [
-  ['--tenant-primary',       'primary'],
-  ['--tenant-primary-hover', 'primaryHover'],
-  ['--tenant-soft',          'soft'],
-  ['--tenant-muted',         'muted'],
-  ['--tenant-glow',          'glow'],
-  ['--tenant-chart-primary', 'chartPrimary'],
-  ['--tenant-chart-muted',   'chartMuted'],
+  ['--tenant-primary',          'primary'],
+  ['--tenant-primary-hover',    'primaryHover'],
+  ['--tenant-soft',             'soft'],
+  ['--tenant-muted',            'muted'],
+  ['--tenant-glow',             'glow'],
+  ['--tenant-chart-primary',    'chartPrimary'],
+  ['--tenant-chart-muted',      'chartMuted'],
+  ['--tenant-nav-active-bg',    'navActiveBg'],
+  ['--tenant-sidebar-top-glow', 'sidebarTopGlow'],
+  ['--tenant-card-glow',        'cardGlow'],
 ]
 
 /** Inject tenant CSS custom properties onto the document root. */
