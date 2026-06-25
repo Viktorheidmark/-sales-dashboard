@@ -31,9 +31,9 @@ export function RegionalSales({
 
   if (loading) {
     return (
-      <Card>
+      <Card variant="dashboard">
         <CardHeader>
-          <h2 className="text-sm font-semibold text-theme-heading">Försäljning per region</h2>
+          <h2 className="dashboard-panel-title">Försäljning per region</h2>
         </CardHeader>
         <CardBody>
           <div className="space-y-3">
@@ -46,20 +46,20 @@ export function RegionalSales({
 
   if (error || !data) {
     return (
-      <Card>
-        <CardHeader><h2 className="text-sm font-semibold text-theme-heading">Försäljning per region</h2></CardHeader>
+      <Card variant="dashboard">
+        <CardHeader><h2 className="dashboard-panel-title">Försäljning per region</h2></CardHeader>
         <CardBody><ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} /></CardBody>
       </Card>
     )
   }
 
   return (
-    <Card>
+    <Card variant="dashboard">
       <CardHeader>
         <div>
-          <h2 className="text-sm font-semibold text-theme-heading">Försäljning per region</h2>
+          <h2 className="dashboard-panel-title">Försäljning per region</h2>
           {periodContextLabel && (
-            <p className="text-xs text-theme-muted mt-0.5">{periodContextLabel}</p>
+            <p className="dashboard-panel-subtitle">{periodContextLabel}</p>
           )}
         </div>
       </CardHeader>
@@ -68,48 +68,51 @@ export function RegionalSales({
           <p className="text-sm text-theme-muted text-center py-8">Inga regionala försäljningsdata för vald period</p>
         ) : (
           <div className="space-y-0">
-            {regions.map((r, i) => (
+            {regions.map((r, i) => {
+              const isTop = i === 0
+              return (
               <div
                 key={r.region}
-                className={`flex items-center gap-3 border-b border-workspace-border/50 last:border-0 ${
+                className={`dashboard-list-row flex items-center gap-3 ${
                   compact ? 'py-2' : 'py-2.5'
                 }`}
               >
                 <span
-                  className="text-xs font-semibold w-4 shrink-0 tabular-nums"
-                  style={{ color: i === 0 ? 'var(--tenant-primary)' : 'var(--color-muted)' }}
+                  className={`dashboard-rank text-xs tabular-nums w-4 shrink-0 ${isTop ? 'dashboard-rank-top' : ''}`}
                 >
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-theme-strong truncate">{r.region}</p>
+                  <p className={`text-sm truncate ${isTop ? 'dashboard-rank-name-top' : 'font-medium text-theme-strong'}`}>{r.region}</p>
                   <div className="mt-1 h-1 bg-workspace-border/50 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full"
                       style={{
                         width: `${maxRev > 0 ? ((r.revenue ?? 0) / maxRev) * 100 : 0}%`,
                         backgroundColor: 'var(--tenant-chart-primary)',
-                        opacity: i === 0 ? 0.85 : 0.4,
+                        opacity: isTop ? 0.85 : 0.4,
                       }}
                     />
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-semibold text-theme-heading tabular-nums">{formatSEK(r.revenue)}</p>
+                  <p className={`text-sm tabular-nums ${isTop ? 'font-semibold text-theme-heading' : 'font-semibold text-theme-body'}`}>{formatSEK(r.revenue)}</p>
                   <p className="text-[11px] text-theme-muted tabular-nums">{formatNumber(r.orders)} ordrar</p>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
         {showAssistantLink && (
-          <Link
-            to="/assistant"
-            className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
-          >
-            Öppna analysassistenten
-            <span aria-hidden>→</span>
-          </Link>
+          <div className="dashboard-card-footer-link">
+            <Link
+              to="/assistant"
+              className="dashboard-inline-link inline-flex items-center gap-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+            >
+              Öppna analysassistenten
+              <span aria-hidden>→</span>
+            </Link>
+          </div>
         )}
       </CardBody>
     </Card>

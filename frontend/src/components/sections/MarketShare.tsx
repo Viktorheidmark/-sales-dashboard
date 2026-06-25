@@ -57,11 +57,11 @@ export function MarketShare({
     : null
 
   return (
-    <Card>
+    <Card variant="dashboard">
       <CardHeader>
         <div>
-          <h2 className="text-sm font-semibold text-theme-heading">Marknadsandel</h2>
-          <p className="text-xs text-theme-muted mt-0.5">inom {supplierCategory}</p>
+          <h2 className="dashboard-panel-title">Marknadsandel</h2>
+          <p className="dashboard-panel-subtitle">inom {supplierCategory}</p>
         </div>
       </CardHeader>
       <CardBody>
@@ -124,7 +124,7 @@ export function MarketShare({
               <Link
                 to="/assistant"
                 state={{ initialPrompt: marketShareAssistantPrompt(supplierCategory) }}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+                className="dashboard-inline-link inline-flex items-center gap-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
               >
                 Analysera marknadsandelen
                 <span aria-hidden>→</span>

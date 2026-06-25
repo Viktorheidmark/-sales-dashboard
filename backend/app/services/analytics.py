@@ -37,6 +37,7 @@ from mcp_server.query_helpers import (
     query_sales_by_region,
     query_sales_over_time,
     query_supplier_kpis,
+    query_supplier_product_assortment,
     query_top_products,
 )
 
@@ -161,6 +162,21 @@ def get_sales_by_region(
     db = get_session()
     try:
         return query_sales_by_region(db, sid, sd, ed)
+    finally:
+        db.close()
+
+
+def get_product_assortment(
+    supplier_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> dict:
+    sid = _validate_supplier_id(supplier_id)
+    sd = _parse_date(start_date, "start_date")
+    ed = _parse_date(end_date, "end_date")
+    db = get_session()
+    try:
+        return query_supplier_product_assortment(db, sid, sd, ed)
     finally:
         db.close()
 

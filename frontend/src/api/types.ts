@@ -295,6 +295,25 @@ export interface TopProductsResponse {
   limitations: string[]
 }
 
+export interface AssortmentProductItem {
+  product_id: string
+  product_name: string
+  sku: string
+  revenue: number
+  units: number
+  average_sale_price_per_unit: number | null
+}
+
+export interface ProductAssortmentResponse {
+  supplier_id: string
+  products: AssortmentProductItem[]
+  date_range: DateRange
+  source: string
+  generated_at: string
+  row_count: number
+  limitations: string[]
+}
+
 export interface RegionItem {
   rank: number
   region: string
@@ -321,6 +340,10 @@ export interface MarketShareResponse {
   market_share_pct: number
   competitor_aggregate_revenue: number | null
   competitor_count: number
+  supplier_rank: number | null
+  total_suppliers: number | null
+  prev_market_share_pct: number | null
+  prev_date_range: DateRange | null
   date_range: DateRange
   source: string
   generated_at: string

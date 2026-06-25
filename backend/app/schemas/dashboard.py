@@ -102,6 +102,27 @@ class TopProductsResponse(BaseModel):
     limitations: list[str]
 
 
+# --- /api/dashboard/products ---
+
+class AssortmentProductItem(BaseModel):
+    product_id: str
+    product_name: str
+    sku: str
+    revenue: float
+    units: int
+    average_sale_price_per_unit: Optional[float] = None
+
+
+class ProductAssortmentResponse(BaseModel):
+    supplier_id: str
+    products: list[AssortmentProductItem]
+    date_range: DateRange
+    source: str
+    generated_at: str
+    row_count: int
+    limitations: list[str]
+
+
 # --- /api/dashboard/regions ---
 
 class RegionItem(BaseModel):
@@ -132,6 +153,10 @@ class MarketShareResponse(BaseModel):
     market_share_pct: float
     competitor_aggregate_revenue: Optional[float]
     competitor_count: int
+    supplier_rank: Optional[int] = None
+    total_suppliers: Optional[int] = None
+    prev_market_share_pct: Optional[float] = None
+    prev_date_range: Optional[DateRange] = None
     date_range: DateRange
     source: str
     generated_at: str

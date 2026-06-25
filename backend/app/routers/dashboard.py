@@ -7,6 +7,7 @@ from app.schemas.dashboard import (
     DecliningProductsResponse,
     MarketShareResponse,
     OverviewResponse,
+    ProductAssortmentResponse,
     RegionsResponse,
     SalesOverTimeResponse,
     TopProductsResponse,
@@ -47,6 +48,16 @@ def top_products(
 ):
     """Top products by revenue, optionally filtered by region."""
     return analytics.get_top_products(supplier_id, start_date, end_date, limit, region)
+
+
+@router.get("/products", response_model=ProductAssortmentResponse)
+def product_assortment(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    supplier_id: str = Depends(get_current_supplier_id),
+):
+    """All products in the supplier assortment with sales volume, revenue, and average sale price."""
+    return analytics.get_product_assortment(supplier_id, start_date, end_date)
 
 
 @router.get("/regions", response_model=RegionsResponse)

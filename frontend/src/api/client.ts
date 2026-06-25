@@ -8,6 +8,7 @@ import type {
   InsightSummary,
   MarketShareResponse,
   OverviewResponse,
+  ProductAssortmentResponse,
   RegionsResponse,
   SalesOverTimeResponse,
   SaveInsightRequest,
@@ -109,6 +110,12 @@ export const api = {
       start_date: startDate,
       end_date: endDate,
       limit: 50,
+    }),
+
+  getProductAssortment: (startDate?: string, endDate?: string) =>
+    get<ProductAssortmentResponse>('/api/dashboard/products', {
+      start_date: startDate,
+      end_date: endDate,
     }),
 
   getRegions: (startDate?: string, endDate?: string) =>

@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { InsightDetail, InsightSummary } from '../api/types'
-import { PageHeader } from '../components/layout/PageHeader'
-import { MiniAssistantChart } from '../components/charts/MiniAssistantChart'
+import { InsightDetailDrawer } from '../components/sections/InsightDetailDrawer'
+import {
+  formatInsightDate,
+  insightChipLabels,
+  insightCountLabel,
+} from '../utils/insightPresentation'
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -14,16 +18,136 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-function formatDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' })
-  } catch {
-    return iso
-  }
+function stopCardClick(e: MouseEvent) {
+  e.stopPropagation()
 }
 
-function toolLabel(t: string) {
-  return t.replace('get_', '').replace(/_/g, ' ')
+function InsightCardSkeleton() {
+  return (
+    <div className="insight-library-card insight-library-card-skeleton" aria-hidden>
+      <div className="h-4 w-24 rounded bg-workspace-border/50 animate-pulse" />
+      <div className="mt-4 h-5 w-4/5 rounded bg-workspace-border/50 animate-pulse" />
+      <div className="mt-3 space-y-2">
+        <div className="h-3 w-full rounded bg-workspace-border/40 animate-pulse" />
+        <div className="h-3 w-full rounded bg-workspace-border/40 animate-pulse" />
+        <div className="h-3 w-2/3 rounded bg-workspace-border/40 animate-pulse" />
+      </div>
+      <div className="mt-4 flex gap-2">
+        <div className="h-6 w-16 rounded-full bg-workspace-border/40 animate-pulse" />
+        <div className="h-6 w-20 rounded-full bg-workspace-border/40 animate-pulse" />
+      </div>
+    </div>
+  )
+}
+
+interface InsightLibraryCardProps {
+  summary: InsightSummary
+  pdfLoading: string | null
+  deleteConfirm: string | null
+  onOpen: (id: string) => void
+  onExportPdf: (id: string, createdAt: string) => void
+  onDeleteRequest: (id: string) => void
+  onDeleteConfirm: (id: string) => void
+  onDeleteCancel: () => void
+}
+
+function InsightLibraryCard({
+  summary,
+  pdfLoading,
+  deleteConfirm,
+  onOpen,
+  onExportPdf,
+  onDeleteRequest,
+  onDeleteConfirm,
+  onDeleteCancel,
+}: InsightLibraryCardProps) {
+  const chips = insightChipLabels(summary)
+
+  function handleCardKeyDown(e: KeyboardEvent<HTMLElement>) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onOpen(summary.id)
+    }
+  }
+
+  return (
+    <article
+      className="insight-library-card"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(summary.id)}
+      onKeyDown={handleCardKeyDown}
+      aria-label={`Öppna insikt: ${summary.question}`}
+    >
+      <div className="insight-library-card-top">
+        <span className="insight-library-badge" aria-hidden>
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" />
+          </svg>
+        </span>
+        <time className="insight-library-date" dateTime={summary.created_at}>
+          {formatInsightDate(summary.created_at)}
+        </time>
+      </div>
+
+      <h2 className="insight-library-title">{summary.question}</h2>
+      <p className="insight-library-preview">{summary.answer_preview}</p>
+
+      {chips.length > 0 && (
+        <div className="insight-library-chips">
+          {chips.map(chip => (
+            <span key={chip} className="insight-library-chip">{chip}</span>
+          ))}
+        </div>
+      )}
+
+      <div className="insight-library-footer">
+        <button
+          type="button"
+          className="insight-library-btn insight-library-btn-primary"
+          onClick={e => { stopCardClick(e); onOpen(summary.id) }}
+        >
+          Öppna insikt
+        </button>
+        <button
+          type="button"
+          className="insight-library-btn insight-library-btn-secondary"
+          onClick={e => { stopCardClick(e); onExportPdf(summary.id, summary.created_at) }}
+          disabled={pdfLoading === summary.id}
+        >
+          {pdfLoading === summary.id ? 'Genererar…' : 'Exportera PDF'}
+        </button>
+
+        {deleteConfirm === summary.id ? (
+          <span className="insight-library-delete-confirm" onClick={stopCardClick}>
+            <span className="text-xs text-theme-muted">Bekräfta?</span>
+            <button
+              type="button"
+              className="insight-library-btn insight-library-btn-danger"
+              onClick={() => onDeleteConfirm(summary.id)}
+            >
+              Ja
+            </button>
+            <button
+              type="button"
+              className="insight-library-btn insight-library-btn-quiet"
+              onClick={onDeleteCancel}
+            >
+              Nej
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="insight-library-btn insight-library-btn-quiet insight-library-btn-delete"
+            onClick={e => { stopCardClick(e); onDeleteRequest(summary.id) }}
+          >
+            Ta bort
+          </button>
+        )}
+      </div>
+    </article>
+  )
 }
 
 export function InsightsPage() {
@@ -84,215 +208,82 @@ export function InsightsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Sparade insikter"
-        subtitle="Insikter du sparat från analysassistenten."
-      />
+    <div className="overview-page overview-content-stage space-y-6 pb-4">
+      <header className="overview-hero-zone">
+        <div className="overview-hero-atmosphere" aria-hidden />
+        <div className="overview-hero-content">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="overview-hero-heading min-w-0">
+              <p className="overview-hero-eyebrow">INSIKTSBIBLIOTEK</p>
+              <h1 className="overview-hero-title">Sparade insikter</h1>
+              <p className="overview-hero-subtitle">
+                Analyser och observationer du har sparat från analysassistenten.
+              </p>
+            </div>
+            {!loading && summaries.length > 0 && (
+              <p className="insight-library-count shrink-0">{insightCountLabel(summaries.length)}</p>
+            )}
+          </div>
+        </div>
+      </header>
 
       {error && (
         <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">{error}</p>
       )}
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="surface-card p-5 space-y-3">
-              <div className="h-4 w-3/4 bg-workspace-border/60 rounded animate-pulse" />
-              <div className="h-3 w-full bg-workspace-border/60 rounded animate-pulse" />
-              <div className="h-3 w-1/2 bg-workspace-border/60 rounded animate-pulse" />
-            </div>
-          ))}
+        <div className="insight-library-grid">
+          {[...Array(4)].map((_, i) => <InsightCardSkeleton key={i} />)}
         </div>
       ) : summaries.length === 0 ? (
-        <div className="surface-card py-20 px-6 text-center">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-workspace-elevated border border-workspace-border flex items-center justify-center mb-5">
-            <svg className="w-7 h-7 text-theme-muted" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" />
-            </svg>
+        <div className="insights-empty-wrap">
+          <div className="insights-empty-card dashboard-panel">
+            <div className="insights-empty-icon" aria-hidden>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 3h14a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z" />
+              </svg>
+            </div>
+            <p className="insights-empty-title">Inga sparade insikter ännu</p>
+            <p className="insights-empty-text">
+              Spara ett svar från analysassistenten för att bygga upp ditt insiktsbibliotek.
+            </p>
+            <Link to="/assistant" className="insights-empty-cta">
+              Öppna analysassistenten
+              <span aria-hidden>→</span>
+            </Link>
           </div>
-          <p className="text-base font-semibold text-theme-heading">Inga sparade insikter ännu</p>
-          <p className="text-sm text-theme-muted mt-1.5 max-w-xs mx-auto">
-            Spara ett svar från analysassistenten för att bygga upp ditt insiktsbibliotek.
-          </p>
-          <Link
-            to="/assistant"
-            className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-          >
-            Öppna analysassistenten →
-          </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="insight-library-grid">
           {summaries.map(s => (
-            <div key={s.id} className="surface-card p-5 flex flex-col hover:border-workspace-border/80 transition-colors">
-              <button
-                onClick={() => openDetail(s.id)}
-                className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
-              >
-                <p className="text-sm font-semibold text-theme-heading leading-snug line-clamp-2 hover:text-brand-600 dark:text-brand-400 transition-colors">
-                  {s.question}
-                </p>
-              </button>
-              <p className="mt-2 text-sm text-theme-muted leading-relaxed line-clamp-2 flex-1">{s.answer_preview}</p>
-
-              <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                <span className="text-xs text-theme-muted">{formatDate(s.created_at)}</span>
-                {s.has_chart && (
-                  <span className="text-xs bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 rounded px-1.5 py-0.5">Graf</span>
-                )}
-                {s.source_tools.slice(0, 2).map(t => (
-                  <span key={t} className="text-xs bg-workspace-muted text-theme-muted border border-workspace-border rounded px-1.5 py-0.5">{toolLabel(t)}</span>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-workspace-border/60">
-                <button
-                  onClick={() => openDetail(s.id)}
-                  className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
-                >
-                  Öppna
-                </button>
-                <button
-                  onClick={() => handleExportPdf(s.id, s.created_at)}
-                  disabled={pdfLoading === s.id}
-                  className="text-xs font-medium text-theme-muted hover:text-theme-body disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
-                >
-                  {pdfLoading === s.id ? 'Genererar…' : 'Exportera PDF'}
-                </button>
-
-                {deleteConfirm === s.id ? (
-                  <span className="ml-auto flex items-center gap-1.5">
-                    <span className="text-xs text-theme-muted">Bekräfta?</span>
-                    <button
-                      onClick={() => handleDelete(s.id)}
-                      className="text-xs font-medium px-2 py-1 rounded bg-red-500/90 text-white hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-                    >
-                      Ja
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm(null)}
-                      className="text-xs text-theme-muted hover:text-theme-body"
-                    >
-                      Nej
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => setDeleteConfirm(s.id)}
-                    className="ml-auto text-xs font-medium text-theme-muted hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 rounded"
-                  >
-                    Ta bort
-                  </button>
-                )}
-              </div>
-            </div>
+            <InsightLibraryCard
+              key={s.id}
+              summary={s}
+              pdfLoading={pdfLoading}
+              deleteConfirm={deleteConfirm}
+              onOpen={openDetail}
+              onExportPdf={handleExportPdf}
+              onDeleteRequest={setDeleteConfirm}
+              onDeleteConfirm={handleDelete}
+              onDeleteCancel={() => setDeleteConfirm(null)}
+            />
           ))}
         </div>
       )}
 
-      {exportError && (
-        <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">{exportError}</p>
-      )}
-
-      {/* Detail overlay */}
       {(detail || detailLoading) && (
-        <div className="fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setDetail(null)} aria-hidden />
-          <aside className="relative ml-auto h-full w-full max-w-lg bg-workspace-surface border-l border-workspace-border flex flex-col">
-            <div className="px-6 py-4 border-b border-workspace-border flex items-center justify-between shrink-0">
-              <h2 className="text-sm font-semibold text-theme-heading">Insiktsdetaljer</h2>
-              <button
-                onClick={() => setDetail(null)}
-                className="text-theme-muted hover:text-theme-body text-lg leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
-                aria-label="Stäng"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-              {detailLoading || !detail ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  <div>
-                    <p className="text-xs text-theme-muted mb-1">{formatDate(detail.created_at)}</p>
-                    <h3 className="text-base font-semibold text-theme-heading leading-snug">{detail.question}</h3>
-                  </div>
-
-                  <div className="text-sm text-theme-body leading-relaxed whitespace-pre-wrap surface-inset px-4 py-3">
-                    {detail.answer}
-                  </div>
-
-                  {detail.chart && (
-                    <div className="border border-workspace-border rounded-lg px-4 py-3 bg-workspace-muted/50">
-                      <p className="text-xs font-semibold text-theme-body mb-0.5">{detail.chart.title}</p>
-                      {detail.chart.description && (
-                        <p className="text-xs text-theme-muted mb-2">{detail.chart.description}</p>
-                      )}
-                      <MiniAssistantChart chart={detail.chart} />
-                    </div>
-                  )}
-
-                  {detail.tool_calls.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {detail.tool_calls.map(t => (
-                        <span key={t} className="text-xs bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 rounded px-1.5 py-0.5">
-                          {toolLabel(t)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {detail.limitations.length > 0 && (
-                    <div className="space-y-0.5">
-                      {detail.limitations.map((l, i) => (
-                        <p key={i} className="text-xs text-amber-400/90">⚠ {l}</p>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="space-y-2 pt-2">
-                    <button
-                      onClick={() => handleExportPdf(detail.id, detail.created_at)}
-                      disabled={pdfLoading === detail.id}
-                      className="w-full text-sm px-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-                    >
-                      {pdfLoading === detail.id ? '… Genererar rapport' : '↓ Exportera rapport som PDF'}
-                    </button>
-                    {deleteConfirm === detail.id ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="text-xs text-theme-muted">Bekräfta?</span>
-                        <button
-                          onClick={() => handleDelete(detail.id)}
-                          className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500/90 text-white hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-                        >
-                          Ta bort
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirm(null)}
-                          className="text-xs px-2 py-1.5 text-theme-muted hover:text-theme-body"
-                        >
-                          Avbryt
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setDeleteConfirm(detail.id)}
-                        className="w-full text-xs px-3 py-1.5 rounded-lg border border-workspace-border text-theme-muted hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-                      >
-                        Ta bort insikt
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </aside>
-        </div>
+        <InsightDetailDrawer
+          detail={detail}
+          loading={detailLoading}
+          pdfLoading={pdfLoading}
+          deleteConfirm={deleteConfirm}
+          exportError={exportError}
+          onClose={() => setDetail(null)}
+          onExportPdf={handleExportPdf}
+          onDeleteRequest={setDeleteConfirm}
+          onDeleteConfirm={handleDelete}
+          onDeleteCancel={() => setDeleteConfirm(null)}
+        />
       )}
     </div>
   )

@@ -1,9 +1,9 @@
 import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis,
+  ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, ReferenceLine,
 } from 'recharts'
 import type { SalesOverTimeResponse } from '../../api/types'
-import { formatSEK, formatPeriod, formatShortDateSv } from '../../utils/format'
+import { formatSEK, formatPeriod, formatShortDateSv, formatWeekRange } from '../../utils/format'
 import { useChartTheme, type ChartTokens } from '../../utils/chartTheme'
 import { useTenantBranding } from '../../context/TenantBrandingContext'
 import { Card, CardHeader, CardBody } from '../ui/Card'
@@ -18,6 +18,14 @@ interface SalesTrendProps {
   featured?: boolean
   periodContextLabel?: string
   chartHeight?: number
+}
+
+interface ChartPoint {
+  period: string
+  revenue: number
+  revenueMain: number | null
+  revenuePartial: number | null
+  revenueArea: number | null
 }
 
 function currentPeriodStart(granularity: string): string {
@@ -35,6 +43,65 @@ function currentPeriodStart(granularity: string): string {
   return now.toISOString().slice(0, 10)
 }
 
+function buildChartPoints(
+  series: SalesOverTimeResponse['series'],
+  granularity: string,
+  includeIncompleteWeek: boolean,
+): { chartData: ChartPoint[]; hasIncompleteTail: boolean; incompletePeriodStart: string | null } {
+  const periodStart = currentPeriodStart(granularity)
+  const allPoints = series.map(pt => ({
+    period: pt.period,
+    revenue: pt.revenue ?? 0,
+  }))
+
+  const hasIncompleteTail = allPoints.some(pt => pt.period >= periodStart)
+
+  if (!includeIncompleteWeek) {
+    const completedPoints = allPoints.filter(pt => pt.period < periodStart)
+    const chartData = (completedPoints.length > 0 ? completedPoints : allPoints).map(pt => ({
+      ...pt,
+      revenueMain: pt.revenue,
+      revenuePartial: null,
+      revenueArea: pt.revenue,
+    }))
+    return {
+      chartData,
+      hasIncompleteTail: hasIncompleteTail && completedPoints.length > 0,
+      incompletePeriodStart: null,
+    }
+  }
+
+  const incompleteIdx = allPoints.findIndex(pt => pt.period >= periodStart)
+  const chartData: ChartPoint[] = allPoints.map((pt, i) => {
+    const isIncomplete = hasIncompleteTail && incompleteIdx >= 0 && i >= incompleteIdx
+    return {
+      period: pt.period,
+      revenue: pt.revenue,
+      revenueMain: isIncomplete ? null : pt.revenue,
+      revenuePartial: null,
+      revenueArea: isIncomplete ? null : pt.revenue,
+    }
+  })
+
+  if (hasIncompleteTail && incompleteIdx >= 0) {
+    chartData[incompleteIdx].revenuePartial = chartData[incompleteIdx].revenue
+    if (incompleteIdx > 0) {
+      chartData[incompleteIdx - 1].revenuePartial = chartData[incompleteIdx - 1].revenue
+    }
+  }
+
+  return {
+    chartData,
+    hasIncompleteTail,
+    incompletePeriodStart: hasIncompleteTail ? periodStart : null,
+  }
+}
+
+function xAxisInterval(granularity: string, pointCount: number): number | 'preserveStartEnd' {
+  if (granularity === 'week' && pointCount > 20) return 6
+  return 'preserveStartEnd'
+}
+
 function CustomTooltip({ active, payload, label, granularity, incompletePeriod, chart }: {
   active?: boolean
   payload?: { value: number }[]
@@ -44,14 +111,18 @@ function CustomTooltip({ active, payload, label, granularity, incompletePeriod, 
   chart: ChartTokens
 }) {
   if (!active || !payload?.length || !label) return null
-  const isIncomplete = incompletePeriod && label >= incompletePeriod
+  const isIncomplete = incompletePeriod != null && label >= incompletePeriod
+  const periodLabel = granularity === 'week'
+    ? formatWeekRange(label)
+    : formatPeriod(label, granularity)
+
   return (
     <div
       className="rounded-lg px-3.5 py-2.5 text-sm"
       style={{ backgroundColor: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}` }}
     >
       <p className="text-xs mb-0.5" style={{ color: chart.tooltipMuted }}>
-        {formatPeriod(label, granularity)}
+        {periodLabel}
         {isIncomplete && <span className="ml-1 text-amber-500 dark:text-amber-400">· Pågående</span>}
       </p>
       <p className="font-semibold" style={{ color: chart.tooltipText }}>{formatSEK(payload[0].value)}</p>
@@ -75,61 +146,71 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
   const { chart, chartAxisTick } = useChartTheme()
   const { chartPrimary } = useTenantBranding()
   const chartHeight = chartHeightProp ?? (featured ? 280 : 280)
-  const headerPad = featured ? 'px-5 pt-5 pb-3' : undefined
-  const bodyPad = featured ? 'px-5 pb-5' : undefined
 
   if (loading) return <ChartSkeleton height={chartHeight} />
 
   if (error || !data) {
     return (
-      <Card>
-        <CardHeader className={headerPad}>
-          <h2 className="text-sm font-semibold text-theme-heading">Försäljningstrend</h2>
+      <Card variant="dashboard">
+        <CardHeader>
+          <h2 className="dashboard-panel-title">Försäljningstrend</h2>
         </CardHeader>
-        <CardBody className={bodyPad}><ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} /></CardBody>
+        <CardBody><ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} /></CardBody>
       </Card>
     )
   }
 
   const gran = data.granularity
-  const periodStart = currentPeriodStart(gran)
+  const isAllTimeWeekly = gran === 'week' && periodContextLabel === 'Hela tillgängliga perioden'
+  const includeIncompleteWeek = isAllTimeWeekly
 
-  const allPoints = data.series.map(pt => ({
-    period: pt.period,
-    revenue: pt.revenue ?? 0,
-  }))
+  const { chartData, hasIncompleteTail, incompletePeriodStart } = buildChartPoints(
+    data.series,
+    gran,
+    includeIncompleteWeek,
+  )
 
-  const completedPoints = allPoints.filter(pt => pt.period < periodStart)
-  const hasIncompleteTail = allPoints.length > completedPoints.length
-  const chartData = completedPoints.length > 0 ? completedPoints : allPoints
-  const showIncompleteNote = hasIncompleteTail && completedPoints.length > 0
+  const showIncompleteNote = includeIncompleteWeek
+    ? hasIncompleteTail
+    : hasIncompleteTail && chartData.length > 0
+
   const incompleteNote = showIncompleteNote
-    ? INCOMPLETE_NOTES[gran] ?? 'Pågående period exkluderad.'
+    ? (includeIncompleteWeek
+      ? 'Pågående vecka visas med preliminära siffror.'
+      : INCOMPLETE_NOTES[gran] ?? 'Pågående period exkluderad.')
     : null
 
   const avgRevenue = chartData.length
     ? chartData.reduce((s, d) => s + d.revenue, 0) / chartData.length
     : 0
 
-  const granSubtitle = GRAN_SUBTITLES[gran] ?? 'Omsättning'
-  const dr = data.date_range
-  const periodPart =
-    periodContextLabel === 'Hela tillgängliga perioden' && dr?.start && dr?.end
-      ? `${formatShortDateSv(dr.start)} – ${formatShortDateSv(dr.end)}`
-      : periodContextLabel
-  const metadataLine = periodPart ? `${periodPart} · ${granSubtitle}` : granSubtitle
+  const metadataLine = isAllTimeWeekly
+    ? 'Omsättning per vecka · hela tillgängliga perioden'
+    : (() => {
+      const granSubtitle = GRAN_SUBTITLES[gran] ?? 'Omsättning'
+      const dr = data.date_range
+      const periodPart =
+        periodContextLabel === 'Hela tillgängliga perioden' && dr?.start && dr?.end
+          ? `${formatShortDateSv(dr.start)} – ${formatShortDateSv(dr.end)}`
+          : periodContextLabel
+      return periodPart ? `${periodPart} · ${granSubtitle}` : granSubtitle
+    })()
+
+  const strokeWidth = gran === 'week' && chartData.length > 20 ? 2 : 2.5
+  const showDots = chartData.length <= 14
+  const areaGradId = 'overview-trend-area-fill'
 
   return (
-    <Card className={featured ? 'h-full' : ''}>
-      <CardHeader className={headerPad}>
+    <Card variant="dashboard" className={featured ? 'h-full' : ''}>
+      <CardHeader>
         <div>
-          <h2 className="text-sm font-semibold text-theme-heading">Försäljningstrend</h2>
-          <p className="text-xs text-theme-muted mt-1 leading-relaxed">
+          <h2 className="dashboard-panel-title">Försäljningstrend</h2>
+          <p className="dashboard-panel-subtitle">
             {metadataLine}
           </p>
         </div>
       </CardHeader>
-      <CardBody className={bodyPad}>
+      <CardBody>
         {chartData.length === 0 ? (
           <div className="flex items-center justify-center h-40 text-sm text-theme-muted">
             Inga försäljningsdata för vald period
@@ -137,7 +218,13 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
         ) : (
           <>
           <ResponsiveContainer width="100%" height={chartHeight}>
-            <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+            <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+              <defs>
+                <linearGradient id={areaGradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={chartPrimary} stopOpacity={0.2} />
+                  <stop offset="95%" stopColor={chartPrimary} stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
               <XAxis
                 dataKey="period"
@@ -145,7 +232,7 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
                 tick={chartAxisTick}
                 tickLine={false}
                 axisLine={false}
-                interval="preserveStartEnd"
+                interval={xAxisInterval(gran, chartData.length)}
               />
               <YAxis
                 tickFormatter={v => formatSEK(v)}
@@ -157,7 +244,7 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
               <Tooltip content={
                 <CustomTooltip
                   granularity={gran}
-                  incompletePeriod={hasIncompleteTail ? periodStart : null}
+                  incompletePeriod={incompletePeriodStart}
                   chart={chart}
                 />
               } />
@@ -167,15 +254,54 @@ export function SalesTrend({ data, loading, error, onRetry, featured = false, pe
                 strokeDasharray="4 2"
                 label={{ value: 'snitt', position: 'right', fontSize: 10, fill: chart.axis }}
               />
+              <Area
+                type="monotone"
+                dataKey="revenueArea"
+                stroke="none"
+                fill={`url(#${areaGradId})`}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
               <Line
                 type="monotone"
-                dataKey="revenue"
+                dataKey="revenueMain"
                 stroke={chartPrimary}
-                strokeWidth={2.5}
-                dot={chartData.length <= 14 ? { fill: chartPrimary, r: 3, strokeWidth: 0 } : false}
+                strokeWidth={strokeWidth}
+                connectNulls={false}
+                dot={showDots ? { fill: chartPrimary, r: 3, strokeWidth: 0 } : false}
                 activeDot={{ r: 5, fill: chartPrimary, strokeWidth: 0 }}
+                isAnimationActive={false}
               />
-            </LineChart>
+              {includeIncompleteWeek && hasIncompleteTail && (
+                <Line
+                  type="monotone"
+                  dataKey="revenuePartial"
+                  stroke={chartPrimary}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray="5 4"
+                  strokeOpacity={0.55}
+                  connectNulls
+                  dot={(props) => {
+                    const { cx, cy, index } = props
+                    if (index !== chartData.length - 1 || cx == null || cy == null) {
+                      return <g />
+                    }
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={3.5}
+                        fill={chartPrimary}
+                        fillOpacity={0.45}
+                        stroke="none"
+                      />
+                    )
+                  }}
+                  activeDot={{ r: 5, fill: chartPrimary, fillOpacity: 0.55, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
           {incompleteNote && (
             <p className="mt-2 text-[11px] text-theme-faint leading-snug">

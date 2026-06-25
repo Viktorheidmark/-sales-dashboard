@@ -5,6 +5,12 @@ export function formatSEK(value: number | null | undefined): string {
   return `${value.toFixed(0)} kr`
 }
 
+/** Per-unit sale price with two decimal places, e.g. 14,90 kr */
+export function formatSEKUnitPrice(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return `${value.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr`
+}
+
 export function formatNumber(value: number | null | undefined): string {
   if (value == null) return '—'
   return value.toLocaleString('sv-SE')
@@ -19,6 +25,19 @@ export function formatPctChange(value: number | null | undefined): string {
   if (value == null) return '—'
   const sign = value > 0 ? '+' : ''
   return `${sign}${value.toFixed(1)}%`
+}
+
+export function formatWeekRange(weekStartIso: string): string {
+  const start = new Date(weekStartIso + 'T12:00:00')
+  const end = new Date(start)
+  end.setDate(end.getDate() + 6)
+
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    const monthYear = end.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' })
+    return `${start.getDate()}–${end.getDate()} ${monthYear}`
+  }
+
+  return `${formatShortDateSv(weekStartIso)} – ${formatShortDateSv(end.toISOString().slice(0, 10))}`
 }
 
 export function formatPeriod(period: string, granularity: string): string {

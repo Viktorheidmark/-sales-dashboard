@@ -870,20 +870,12 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
                 animation: 'fadeInUp 0.4s ease-out 0.12s both',
               }}
             >
-              {/* Animated blue glow behind input */}
-              <div
-                aria-hidden
-                className="gemini-glow"
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  width: 700,
-                  height: 500,
-                  pointerEvents: 'none',
-                  zIndex: 0,
-                }}
-              />
+              {/* Tenant intelligence glow behind greeting + input */}
+              <div aria-hidden className="assistant-intelligence-glow">
+                <div className="assistant-intelligence-glow__halo" />
+                <div className="assistant-intelligence-glow__mid" />
+                <div className="assistant-intelligence-glow__core" />
+              </div>
               <div style={{ position: 'relative', zIndex: 1 }}>
                 {inputBar}
               </div>

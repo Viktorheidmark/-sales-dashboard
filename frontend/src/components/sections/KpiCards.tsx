@@ -11,24 +11,17 @@ interface KpiCardsProps {
   compact?: boolean
 }
 
-interface KpiCardProps {
-  label: string
-  value: string
-  secondaryLine?: string
-}
+const KPI_ITEMS = [
+  { key: 'revenue', label: 'Omsättning' },
+  { key: 'orders', label: 'Beställningar' },
+  { key: 'units', label: 'Sålda enheter' },
+] as const
 
-function KpiCard({ label, value, secondaryLine, compact }: KpiCardProps & { compact?: boolean }) {
+function KpiCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`overview-kpi-card surface-elevated ${compact ? 'px-4 py-3.5' : 'px-5 py-5'}`}>
-      <p className="text-xs font-medium text-theme-muted leading-none">{label}</p>
-      <p className={`font-bold text-theme-heading tabular-nums leading-none ${compact ? 'mt-1.5 text-xl' : 'mt-3 text-[1.625rem]'}`}>
-        {value}
-      </p>
-      {secondaryLine && (
-        <p className={`text-xs text-theme-muted leading-snug ${compact ? 'mt-2' : 'mt-2.5'}`}>
-          {secondaryLine}
-        </p>
-      )}
+    <div className="dashboard-metric-card overview-kpi-card">
+      <p className="dashboard-metric-label">{label}</p>
+      <p className="dashboard-metric-value">{value}</p>
     </div>
   )
 }
@@ -40,32 +33,44 @@ export function KpiCards({
   onRetry,
   compact = false,
 }: KpiCardsProps) {
+  const gridClass = `overview-kpi-section grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${compact ? 'gap-3 sm:gap-4' : 'gap-4'}`
+
   if (loading) {
     return (
-      <div className={`grid grid-cols-2 lg:grid-cols-4 ${compact ? 'gap-3' : 'gap-4'}`}>
-        {[...Array(4)].map((_, i) => <CardSkeleton key={i} />)}
+      <div className={gridClass}>
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className={i === 2 ? 'md:col-span-2 lg:col-span-1' : undefined}>
+            <CardSkeleton />
+          </div>
+        ))}
       </div>
     )
   }
 
   if (error || !data) {
     return (
-      <div className="surface-card p-5">
+      <div className="dashboard-panel p-5">
         <ErrorState message={error ?? 'Kunde inte hämta data.'} onRetry={onRetry} />
       </div>
     )
   }
 
+  const values: Record<(typeof KPI_ITEMS)[number]['key'], string> = {
+    revenue: formatSEK(data.total_revenue),
+    orders: formatNumber(data.total_orders),
+    units: formatNumber(data.total_units),
+  }
+
   return (
-    <div className={`grid grid-cols-2 lg:grid-cols-4 ${compact ? 'gap-3' : 'gap-4'}`}>
-      <KpiCard compact={compact} label="Omsättning" value={formatSEK(data.total_revenue)} />
-      <KpiCard compact={compact} label="Beställningar" value={formatNumber(data.total_orders)} />
-      <KpiCard compact={compact} label="Sålda enheter" value={formatNumber(data.total_units)} />
-      <KpiCard
-        compact={compact}
-        label="Genomsnittligt ordervärde"
-        value={formatSEK(data.average_order_value)}
-      />
+    <div className={gridClass}>
+      {KPI_ITEMS.map((item, i) => (
+        <div
+          key={item.key}
+          className={i === 2 ? 'md:col-span-2 lg:col-span-1' : undefined}
+        >
+          <KpiCard label={item.label} value={values[item.key]} />
+        </div>
+      ))}
     </div>
   )
 }

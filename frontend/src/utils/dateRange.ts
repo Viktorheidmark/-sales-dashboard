@@ -20,7 +20,7 @@ export function presetToDates(preset: DatePreset): {
     case '30d':  return { startDate: daysAgo(30),  endDate: end, granularity: 'day',   days: 30 }
     case '90d':  return { startDate: daysAgo(90),  endDate: end, granularity: 'week',  days: 90 }
     case '180d': return { startDate: daysAgo(180), endDate: end, granularity: 'month', days: 180 }
-    case 'all':  return { startDate: undefined,    endDate: undefined, granularity: 'month', days: 180 }
+    case 'all':  return { startDate: undefined,    endDate: undefined, granularity: 'week',  days: 180 }
   }
 }
 

@@ -6,6 +6,7 @@ import { AppShell } from './components/layout/AppShell'
 import { LoginPage } from './components/sections/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { AssistantPage } from './pages/AssistantPage'
+import { ProductsPage } from './pages/ProductsPage'
 import { InsightsPage } from './pages/InsightsPage'
 import { ChatStateProvider } from './context/ChatStateContext'
 import { TenantBrandingProvider } from './context/TenantBrandingContext'
@@ -79,6 +80,7 @@ export default function App() {
           <Routes>
             <Route element={<AppShell supplierName={user.supplier_name} onLogout={handleLogout} />}>
               <Route path="/" element={<OverviewPage user={user} />} />
+              <Route path="/products" element={<ProductsPage user={user} />} />
               <Route path="/assistant" element={<AssistantPage user={user} />} />
               <Route path="/insights" element={<InsightsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

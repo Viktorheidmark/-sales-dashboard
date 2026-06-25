@@ -7,11 +7,13 @@ import {
 import type { CSSProperties } from 'react'
 import type { ChartPayload, ChartHighlights } from '../../api/types'
 import { useChartTheme } from '../../utils/chartTheme'
+import { useTenantBranding } from '../../context/TenantBrandingContext'
 import { formatCompactSEK } from '../../utils/compactCurrency'
 import {
   formatSharePct,
   isMarketShareChart,
 } from '../../utils/sourcePresentation'
+import { formatHighlightPeriodLabel } from '../../utils/insightPresentation'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -320,13 +322,29 @@ function HorizontalRankChart({
   )
 }
 
-function TrendHighlightsSummary({ h }: { h: ChartHighlights }) {
+function TrendHighlightsSummary({
+  h,
+  layout = 'default',
+  sanitizeLabels = false,
+}: {
+  h: ChartHighlights
+  layout?: 'default' | 'two-column'
+  sanitizeLabels?: boolean
+}) {
   const peakEqTrough = h.peak_label === h.trough_label
-  const peakName = h.peak_label_display ?? formatPeriodLabel(h.peak_label)
-  const troughName = h.trough_label_display ?? formatPeriodLabel(h.trough_label)
+  const peakName = sanitizeLabels
+    ? formatHighlightPeriodLabel(h.peak_label, h.peak_label_display)
+    : (h.peak_label_display ?? formatPeriodLabel(h.peak_label))
+  const troughName = sanitizeLabels
+    ? formatHighlightPeriodLabel(h.trough_label, h.trough_label_display)
+    : (h.trough_label_display ?? formatPeriodLabel(h.trough_label))
   const gran = h.granularity === 'week' ? 'vecka' : 'månad'
+  const gridClass = layout === 'two-column'
+    ? 'mt-4 pt-4 border-t border-workspace-border/40 grid grid-cols-2 gap-x-4 gap-y-4'
+    : 'mt-3 pt-3 border-t border-workspace-border/40 grid grid-cols-1 sm:grid-cols-3 gap-3'
+
   return (
-    <div className="mt-3 pt-3 border-t border-workspace-border/40 grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div className={gridClass}>
       {!peakEqTrough && (
         <>
           <div className="min-w-0">
@@ -334,19 +352,23 @@ function TrendHighlightsSummary({ h }: { h: ChartHighlights }) {
             <p className="text-sm font-semibold text-theme-heading tabular-nums mt-0.5">
               {formatCompactSEK(h.peak_revenue)}
             </p>
-            <p className="text-[11px] text-theme-muted leading-snug break-words mt-0.5">{peakName}</p>
+            {peakName && (
+              <p className="text-[11px] text-theme-muted leading-snug break-words mt-0.5">{peakName}</p>
+            )}
           </div>
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wide text-theme-muted">Lägsta {gran}</p>
             <p className="text-sm font-semibold text-theme-heading tabular-nums mt-0.5">
               {formatCompactSEK(h.trough_revenue)}
             </p>
-            <p className="text-[11px] text-theme-muted leading-snug break-words mt-0.5">{troughName}</p>
+            {troughName && (
+              <p className="text-[11px] text-theme-muted leading-snug break-words mt-0.5">{troughName}</p>
+            )}
           </div>
         </>
       )}
       {h.avg_revenue != null && (
-        <div className="min-w-0">
+        <div className={`min-w-0 ${layout === 'two-column' && !peakEqTrough ? 'col-span-2' : ''}`}>
           <p className="text-[10px] uppercase tracking-wide text-theme-muted">Snitt per {gran}</p>
           <p className="text-sm font-semibold text-theme-heading tabular-nums mt-0.5">
             {formatCompactSEK(h.avg_revenue)}
@@ -360,11 +382,17 @@ function TrendHighlightsSummary({ h }: { h: ChartHighlights }) {
 
 function AssistantMarketShareChart({
   chart,
+  tenantColors = false,
 }: {
   chart: ChartPayload
   supplierName?: string
+  tenantColors?: boolean
 }) {
-  const { chart: colors, chartTooltipStyle } = useChartTheme()
+  const { chart: baseColors, chartTooltipStyle } = useChartTheme()
+  const { chartPrimary, chartMuted } = useTenantBranding()
+  const colors = tenantColors
+    ? { ...baseColors, barPrimary: chartPrimary, pieMuted: chartMuted }
+    : baseColors
   const ourRow = chart.data.find(r => r.name === 'Vår andel' || r.name === 'Oss')
   const otherRow = chart.data.find(r => r.name === 'Övriga aktörer' || r.name === 'Konkurrenter')
   const ourRev = Number(ourRow?.[chart.y_key] ?? 0)
@@ -486,12 +514,32 @@ export function MiniAssistantChart({
   chart,
   supplierName,
   compact = false,
+  expanded = false,
+  tenantColors = false,
+  sanitizeHighlightLabels = false,
+  highlightsLayout = 'default',
 }: {
   chart: ChartPayload
   supplierName?: string
   compact?: boolean
+  expanded?: boolean
+  tenantColors?: boolean
+  sanitizeHighlightLabels?: boolean
+  highlightsLayout?: 'default' | 'two-column'
 }) {
-  const { chart: colors, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
+  const { chart: baseColors, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
+  const { chartPrimary, chartMuted } = useTenantBranding()
+  const comparisonMuted = '#94A3B8'
+
+  const colors = tenantColors
+    ? {
+        ...baseColors,
+        line: chartPrimary,
+        barPrimary: chartPrimary,
+        barSecondary: comparisonMuted,
+        pieColors: [chartPrimary, chartMuted, ...baseColors.pieColors.slice(2)],
+      }
+    : baseColors
 
   if (chart.chart_type === 'insight_card') return <InsightCard chart={chart} />
   if (chart.chart_type === 'empty_state') return <EmptyState chart={chart} />
@@ -504,10 +552,10 @@ export function MiniAssistantChart({
   const useRankList = isHorizontal && !isDeclineComp && !isDeclineRanking
   const barCount = chart.data.length
 
-  const trendHeight = compact ? 220 : 280
+  const trendHeight = expanded ? 320 : compact ? 220 : 280
   const chartHeight = chart.chart_type === 'line_chart'
     ? trendHeight
-    : isDeclineComp ? 200 : Math.max(120, barCount * 32)
+    : isDeclineComp ? (expanded ? 240 : 200) : Math.max(expanded ? 140 : 120, barCount * (expanded ? 36 : 32))
 
   if (chart.chart_type === 'line_chart') {
     if (isDeclineTrend) {
@@ -567,7 +615,13 @@ export function MiniAssistantChart({
           />
           </AreaChart>
         </ResponsiveContainer>
-        {chart.highlights && <TrendHighlightsSummary h={chart.highlights} />}
+        {chart.highlights && (
+          <TrendHighlightsSummary
+            h={chart.highlights}
+            layout={highlightsLayout}
+            sanitizeLabels={sanitizeHighlightLabels}
+          />
+        )}
       </div>
     )
   }
@@ -606,11 +660,11 @@ export function MiniAssistantChart({
                   />
                 )}
               />
-              <Bar dataKey={chart.y_key} radius={[4, 4, 0, 0]} barSize={72}>
+              <Bar dataKey={chart.y_key} radius={[4, 4, 0, 0]} barSize={expanded ? 84 : 72}>
                 {chart.data.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={i === 0 ? '#94A3B8' : colors.barPrimary}
+                    fill={i === 0 ? comparisonMuted : colors.barPrimary}
                   />
                 ))}
               </Bar>
@@ -678,7 +732,7 @@ export function MiniAssistantChart({
   }
 
   if (chart.chart_type === 'pie_chart' && isMarketShareChart(chart)) {
-    return <AssistantMarketShareChart chart={chart} supplierName={supplierName} />
+    return <AssistantMarketShareChart chart={chart} supplierName={supplierName} tenantColors={tenantColors} />
   }
 
   if (chart.chart_type === 'pie_chart') {

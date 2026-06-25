@@ -13,9 +13,9 @@ export function AppShell({ supplierName, onLogout }: AppShellProps) {
   const isFullBleed = location.pathname === '/assistant'
 
   return (
-    <div className="min-h-screen bg-workspace">
+    <div className="min-h-screen bg-workspace max-md:block md:grid md:grid-cols-[240px_minmax(0,1fr)]">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:w-60 z-30">
+      <aside className="hidden md:block sticky top-0 h-screen z-30">
         <Sidebar supplierName={supplierName} onLogout={onLogout} />
       </aside>
 
@@ -53,13 +53,28 @@ export function AppShell({ supplierName, onLogout }: AppShellProps) {
       )}
 
       {/* Content */}
-      <main className="md:pl-60" style={isFullBleed ? { display: 'flex', flexDirection: 'column', minHeight: '100vh' } : undefined}>
+      <main
+        className="min-w-0 w-full"
+        style={isFullBleed ? { display: 'flex', flexDirection: 'column', minHeight: '100vh' } : undefined}
+      >
         {isFullBleed ? (
           <Outlet />
         ) : (
-          <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <Outlet />
-          </div>
+          <>
+            {/* Premium tenant ambient canvas — edge fades + header glow */}
+            <div className="workspace-ambient-canvas" aria-hidden>
+              <div className="workspace-ambient-edge workspace-ambient-edge-left" />
+              <div className="workspace-ambient-edge workspace-ambient-edge-right" />
+              <div className="workspace-ambient-header-glow" />
+              <div className="workspace-ambient-center-veil" />
+              <div className="workspace-ambient-grid" />
+            </div>
+
+            {/* Content on top of ambient */}
+            <div className="dashboard-content-shell">
+              <Outlet />
+            </div>
+          </>
         )}
       </main>
     </div>

@@ -30,12 +30,12 @@ export function TopProducts({
   const maxRevenue = products[0]?.revenue ?? 1
 
   return (
-    <Card>
+    <Card variant="dashboard">
       <CardHeader>
         <div>
-          <h2 className="text-sm font-semibold text-theme-heading">Topprodukter</h2>
+          <h2 className="dashboard-panel-title">Topprodukter</h2>
           {periodContextLabel && (
-            <p className="text-xs text-theme-muted mt-0.5">{periodContextLabel}</p>
+            <p className="dashboard-panel-subtitle">{periodContextLabel}</p>
           )}
         </div>
       </CardHeader>
@@ -56,18 +56,19 @@ export function TopProducts({
               return (
                 <div
                   key={p.sku}
-                  className={`flex items-center gap-3 border-b border-workspace-border/50 last:border-0 ${
+                  className={`dashboard-list-row flex items-center gap-3 ${
                     compact ? 'py-2' : 'py-2.5'
                   }`}
                 >
                   <span
-                    className="text-xs font-semibold tabular-nums w-4 shrink-0"
-                    style={{ color: isTop ? 'var(--tenant-primary)' : 'var(--color-muted)' }}
+                    className={`dashboard-rank text-xs tabular-nums w-4 shrink-0 ${isTop ? 'dashboard-rank-top' : ''}`}
                   >
                     {p.rank}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-theme-strong truncate leading-snug">{p.product_name}</p>
+                    <p className={`text-sm truncate leading-snug ${isTop ? 'dashboard-rank-name-top' : 'font-medium text-theme-strong'}`}>
+                      {p.product_name}
+                    </p>
                     <div className="mt-1 h-1 bg-workspace-border/50 rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full"
@@ -91,13 +92,15 @@ export function TopProducts({
           </div>
         )}
         {showAssistantLink && !loading && !error && (
-          <Link
-            to="/assistant"
-            className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
-          >
-            Öppna analysassistenten
-            <span aria-hidden>→</span>
-          </Link>
+          <div className="dashboard-card-footer-link">
+            <Link
+              to="/assistant"
+              className="dashboard-inline-link inline-flex items-center gap-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
+            >
+              Öppna analysassistenten
+              <span aria-hidden>→</span>
+            </Link>
+          </div>
         )}
       </CardBody>
     </Card>

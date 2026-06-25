@@ -304,6 +304,68 @@ def query_top_products(
     }
 
 
+def query_supplier_product_assortment(
+    db: Session,
+    supplier_id: str,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> dict:
+    """
+    Return all products in the supplier's assortment with sales aggregates.
+
+    Average sale price per unit is derived from realized revenue / units sold.
+    List price, cost, margin, and inventory are not exposed.
+    """
+    sd, ed = _date_range(start_date, end_date, db=db, supplier_id=supplier_id)
+
+    rows = db.execute(
+        text("""
+            SELECT
+                p.id::text                       AS product_id,
+                p.name                           AS product_name,
+                p.sku                            AS sku,
+                COALESCE(SUM(oi.revenue), 0)     AS revenue,
+                COALESCE(SUM(oi.quantity), 0)    AS units
+            FROM products p
+            JOIN brands b ON b.id = p.brand_id
+            LEFT JOIN order_items oi ON oi.product_id = p.id
+            LEFT JOIN orders o ON o.id = oi.order_id
+                AND o.order_date >= :start_date
+                AND o.order_date < :end_date + INTERVAL '1 day'
+            WHERE b.supplier_id = CAST(:supplier_id AS uuid)
+            GROUP BY p.id, p.name, p.sku
+            ORDER BY revenue DESC, p.name ASC
+        """),
+        {"supplier_id": supplier_id, "start_date": sd, "end_date": ed},
+    ).fetchall()
+
+    products = []
+    for r in rows:
+        rev = _float(r.revenue) or 0.0
+        units = int(r.units)
+        avg_price = round(rev / units, 2) if units > 0 else None
+        products.append({
+            "product_id": r.product_id,
+            "product_name": r.product_name,
+            "sku": r.sku,
+            "revenue": rev,
+            "units": units,
+            "average_sale_price_per_unit": avg_price,
+        })
+
+    return {
+        "supplier_id": supplier_id,
+        "products": products,
+        "date_range": {"start": _to_iso(sd), "end": _to_iso(ed)},
+        "source": "dashboard:product_assortment",
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "row_count": len(products),
+        "limitations": [
+            "Genomsnittligt försäljningspris baseras på tillgänglig försäljningsdata och är inte listpris eller kostpris.",
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # 4. Sales by region
 # ---------------------------------------------------------------------------
@@ -368,6 +430,16 @@ def query_sales_by_region(
 # 5. Market share
 # ---------------------------------------------------------------------------
 
+def _prior_period_bounds(start: date, end: date) -> tuple[date, date]:
+    """Mirror KPI prior-period logic for market-share comparison."""
+    if is_year_to_date_range(start, end):
+        return prior_year_same_period(start, end)
+    period_days = (end - start).days + 1
+    prev_end = start - timedelta(days=1)
+    prev_start = start - timedelta(days=period_days)
+    return prev_start, prev_end
+
+
 def query_market_share(
     db: Session,
     supplier_id: str,
@@ -410,6 +482,62 @@ def query_market_share(
     sup_rev = _float(row.supplier_revenue) or 0.0
     share_pct = round(100.0 * sup_rev / cat_rev, 2) if cat_rev > 0 else 0.0
 
+    rank_row = db.execute(
+        text("""
+            WITH supplier_revenues AS (
+                SELECT
+                    b.supplier_id,
+                    COALESCE(SUM(oi.revenue), 0) AS rev
+                FROM order_items oi
+                JOIN orders    o   ON o.id   = oi.order_id
+                JOIN products  p   ON p.id   = oi.product_id
+                JOIN categories c  ON c.id   = p.category_id
+                JOIN brands    b   ON b.id   = p.brand_id
+                WHERE c.name = :category_name
+                  AND o.order_date >= :start_date
+                  AND o.order_date <  :end_date + INTERVAL '1 day'
+                GROUP BY b.supplier_id
+                HAVING COALESCE(SUM(oi.revenue), 0) > 0
+            ),
+            ranked AS (
+                SELECT
+                    supplier_id,
+                    RANK() OVER (ORDER BY rev DESC) AS supplier_rank,
+                    COUNT(*) OVER ()                AS total_suppliers
+                FROM supplier_revenues
+            )
+            SELECT supplier_rank, total_suppliers
+            FROM ranked
+            WHERE supplier_id = CAST(:supplier_id AS uuid)
+        """),
+        params,
+    ).fetchone()
+
+    prev_sd, prev_ed = _prior_period_bounds(sd, ed)
+    prev_row = db.execute(
+        text("""
+            SELECT
+                COALESCE(SUM(CASE WHEN b.supplier_id = CAST(:supplier_id AS uuid)
+                                  THEN oi.revenue ELSE 0 END), 0)  AS supplier_revenue,
+                COALESCE(SUM(oi.revenue), 0)                        AS category_revenue
+            FROM order_items oi
+            JOIN orders    o   ON o.id   = oi.order_id
+            JOIN products  p   ON p.id   = oi.product_id
+            JOIN categories c  ON c.id   = p.category_id
+            JOIN brands    b   ON b.id   = p.brand_id
+            WHERE c.name = :category_name
+              AND o.order_date >= :prev_start
+              AND o.order_date <  :prev_end + INTERVAL '1 day'
+        """),
+        {**params, "prev_start": prev_sd, "prev_end": prev_ed},
+    ).fetchone()
+
+    prev_cat_rev = _float(prev_row.category_revenue) or 0.0
+    prev_sup_rev = _float(prev_row.supplier_revenue) or 0.0
+    prev_share_pct = (
+        round(100.0 * prev_sup_rev / prev_cat_rev, 2) if prev_cat_rev > 0 else None
+    )
+
     return {
         "supplier_id": supplier_id,
         "category_name": category_name,
@@ -418,6 +546,10 @@ def query_market_share(
         "market_share_pct": share_pct,
         "competitor_aggregate_revenue": _float(row.competitor_revenue),
         "competitor_count": int(row.competitor_count),
+        "supplier_rank": int(rank_row.supplier_rank) if rank_row and rank_row.supplier_rank else None,
+        "total_suppliers": int(rank_row.total_suppliers) if rank_row and rank_row.total_suppliers else None,
+        "prev_market_share_pct": prev_share_pct,
+        "prev_date_range": {"start": _to_iso(prev_sd), "end": _to_iso(prev_ed)},
         "date_range": {"start": _to_iso(sd), "end": _to_iso(ed)},
         "source": "MCP:get_market_share",
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
