@@ -24,12 +24,14 @@ def decline_comparison_period_label(result: dict) -> str:
     """User-facing label for both decline comparison windows."""
     prior = result.get("prior_period") or {}
     latest = result.get("latest_period") or {}
+    days = int(result.get("comparison_days") or 30)
     ps, pe = prior.get("start"), prior.get("end")
     ls, le = latest.get("start"), latest.get("end")
     if ps and pe and ls and le:
-        return f"Jämförelse: {format_date_range_sv(ps, pe)} mot {format_date_range_sv(ls, le)}"
-    days = int(result.get("comparison_days") or 30)
-    return f"Jämförelse: senaste {days} dagarna mot föregående {days} dagarna"
+        current_phrase = f"Senaste {days} dagarna ({format_date_range_sv(ls, le)})"
+        prior_phrase = f"föregående {days} dagar ({format_date_range_sv(ps, pe)})"
+        return f"{current_phrase} jämfört med {prior_phrase}"
+    return f"Senaste {days} dagarna jämfört med föregående {days} dagar"
 
 
 def enrich_declining_products_metadata(result: dict) -> dict:

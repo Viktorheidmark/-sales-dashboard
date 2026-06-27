@@ -32,6 +32,12 @@ from app.services.period_utils import (
     resolve_period_range,
 )
 
+_COMPARISON_KEYWORDS_RE = re.compile(
+    r"jämfört|föregående\s+period|tidigare\s+period|förra\s+månaden|förra\s+veckan"
+    r"|\bvs\b|\bmot\s+föregående|\bskillnad\b|ökat\s+sedan|minskat\s+sedan",
+    re.IGNORECASE,
+)
+
 ALLOWED_TOOLS = frozenset({
     "get_supplier_kpis",
     "get_sales_over_time",
@@ -365,6 +371,15 @@ def normalize_plan(
             plan = plan.model_copy(update=update)
             intent = "product_ranking"
             notes.append("inferred product_ranking from YTD product phrasing")
+        elif re.search(r"hur\s+går\s+försäljningen|hur\s+ser\s+försäljningen\s+ut", message, re.I):
+            from app.schemas.analysis_plan import TimePeriod
+            plan = plan.model_copy(update={
+                "intent": "sales_overview",
+                "confidence": 0.85,
+                "time_period": TimePeriod(kind="full_history"),
+            })
+            intent = "sales_overview"
+            notes.append("inferred sales_overview from vague sales status phrasing")
         elif plan.confidence < CONFIDENCE_THRESHOLD:
             return NormalizedPlan(use_fallback=True, raw_plan=plan.model_dump())
 
@@ -387,6 +402,16 @@ def normalize_plan(
 
     granularity = _granularity_for(plan, start_date, end_date, period_kind)
     chart_intent = _chart_intent_for(plan)
+
+    # Vague sales questions must never trigger period_comparison unless the user
+    # explicitly asked to compare periods.
+    if (
+        intent in ("sales_trend", "sales_overview")
+        and chart_intent == "period_comparison"
+        and not _COMPARISON_KEYWORDS_RE.search(message)
+    ):
+        chart_intent = "time_series"
+        notes.append("forced time_series — no comparison keywords in message")
 
     if intent == "product_decline" and not message_specifies_period(message):
         return NormalizedPlan(clarification_answer=DECLINE_PERIOD_CLARIFICATION)

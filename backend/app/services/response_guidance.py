@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import re
 
-from app.services.intent_router import is_diagram_followup_request
+from app.services.intent_router import is_diagram_followup_request, is_sales_status_question
+from app.services.comparison_labels import question_requests_comparison
 
 _FORBIDDEN_PHRASES = (
     "utvecklats enligt följande",
@@ -95,6 +96,12 @@ _DOUBLE_PERIOD_RE = re.compile(
     re.IGNORECASE,
 )
 
+_UNREQUESTED_COMPARE_SENTENCE_RE = re.compile(
+    r"(jämfört\s+med\s+(föregående|tidigare)|mot\s+(föregående|tidigare)\s+period|"
+    r"föregående\s+\d+\s+dag|ökat\s+markant\s+från|minskat\s+markant)",
+    re.IGNORECASE,
+)
+
 
 def _soft_trend_phrase(series: list[dict]) -> str:
     revs = [float(p.get("revenue") or 0) for p in series if p.get("revenue") is not None]
@@ -164,6 +171,9 @@ SKRIVSTANDARD (obligatorisk):
 - Nämn aldrig MCP, verktygsanrop, JSON, planner, databas eller implementation.
 - Avsluta INTE med generiska råd ("för att fortsätta...", "kan det vara fördelaktigt att analysera...").
 - Vid periodjämförelse: använd exakt jämförelsebas från JÄMFÖRELSE- OCH PERIODKRAV när den finns.
+- Berätta ALDRIG för användaren att jämförelsedata saknas, att en föregående period inte existerar,
+  eller att procentuell förändring inte kan beräknas. Om ingen jämförelse är möjlig: utelämna
+  jämförelsen helt och beskriv enbart vad tillgänglig data visar — trend, total och nyckelobservationer.
 - Förbjudna fraser och liknande: {forbidden}.
 
 EXEMPEL PÅ BRA TON:
@@ -189,14 +199,38 @@ FRÅGETYP: Marknadsandel
 - Max 2–3 korta stycken. Ingen rekommendation eller strategiråd.
 """
 
+    if (
+        "get_sales_over_time" in tools
+        and "get_supplier_kpis" in tools
+        and (is_sales_status_question(q) or not question_requests_comparison(q))
+    ):
+        return """
+FRÅGETYP: Försäljningsöversikt (utan jämförelse)
+- Styck 1: Direkt slutsats om omsättning för perioden (period_label_answer), med belopp.
+- Styck 2: Ordrar och enheter om relevant.
+- Nämn INTE procentuell förändring, jämförelse mot föregående period eller tidigare omsättning.
+- Beskriv gärna övergripande trend om series-data finns — utan att jämföra mot en annan period.
+- Max 2–3 korta stycken. Ingen rekommendation.
+"""
+
+    if "get_supplier_kpis" in tools and question_requests_comparison(q):
+        return """
+FRÅGETYP: Översikt (KPI) med jämförelse
+- Styck 1: Direkt slutsats om omsättning för perioden (period_label_answer), med belopp.
+- Styck 2: Ordrar och enheter om relevant.
+- Styck 3: Procentuell förändring mot jämförelsebas — använd OBLIGATORISK JÄMFÖRELSETEXT ordagrant när den finns.
+  Om ingen tillförlitlig jämförelsebas finns: säg det tydligt utan att hitta på siffror.
+- Använd "ni/er" — inte fullt leverantörsnamn i inledningen.
+- Max 3 korta stycken. Ingen rekommendation.
+"""
+
     if "get_supplier_kpis" in tools:
         return """
 FRÅGETYP: Översikt (KPI)
 - Styck 1: Direkt slutsats om omsättning för perioden (period_label_answer), med belopp.
 - Styck 2: Ordrar och enheter om relevant.
-- Styck 3: Procentuell förändring mot jämförelsebas — använd OBLIGATORISK JÄMFÖRELSETEXT ordagrant när den finns.
-- Använd "ni/er" — inte fullt leverantörsnamn i inledningen.
-- Max 3 korta stycken. Ingen rekommendation.
+- Nämn INTE jämförelse mot föregående period om användaren inte bad om det.
+- Max 2–3 korta stycken. Ingen rekommendation.
 """
 
     if "get_top_products" in tools or (_TOP_PRODUCTS_RE.search(q) and "nedgång" not in q.lower()):
@@ -303,12 +337,13 @@ def has_generic_recommendation(answer: str) -> bool:
 def sanitize_vague_comparisons(
     answer: str,
     raw_tool_results: list[tuple[str, dict]] | None = None,
+    question: str = "",
 ) -> str:
     if not answer or not raw_tool_results:
         return answer
     from app.services.comparison_labels import comparison_metadata
 
-    meta = comparison_metadata(raw_tool_results)
+    meta = comparison_metadata(raw_tool_results, question=question)
     explicit = meta.get("kpi_comparison_label") or ""
     if not explicit:
         for name, result in raw_tool_results:
@@ -329,6 +364,17 @@ def sanitize_vague_comparisons(
         flags=re.IGNORECASE,
     )
     return out
+
+
+def strip_unrequested_comparison(answer: str, question: str) -> str:
+    """Remove comparison sentences when the user did not ask to compare periods."""
+    if not answer or question_requests_comparison(question):
+        return answer
+    parts = re.split(r"(?<=[.!?])\s+", answer.strip())
+    kept = [p for p in parts if p and not _UNREQUESTED_COMPARE_SENTENCE_RE.search(p)]
+    if not kept:
+        return answer
+    return " ".join(kept)
 
 
 def sanitize_generic_recommendations(answer: str) -> str:

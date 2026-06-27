@@ -299,9 +299,11 @@ def build_period_comparison_chart(
     prior = result.get("prior_period") or {}
     curr_rev = float(current.get("total_revenue") or 0)
     prior_rev = float(prior.get("total_revenue") or 0)
-    if prior_rev <= 0 and curr_rev <= 0:
+    # Bug 2: never render a comparison chart when the baseline is empty/zero —
+    # it produces a broken single-bar chart. Caller should fall back to time series.
+    if prior_rev <= 0:
         return None
-    rev_pct = round(100.0 * (curr_rev - prior_rev) / prior_rev, 1) if prior_rev > 0 else 0.0
+    rev_pct = round(100.0 * (curr_rev - prior_rev) / prior_rev, 1)
     sign = "+" if rev_pct >= 0 else ""
     comp_label = revenue_drivers_comparison_label(result)
     title = "Periodjämförelse" if not compact else comp_label.capitalize()
@@ -445,10 +447,14 @@ def _build_sales_over_time(result: dict) -> Optional[dict]:
 
 def _build_supplier_kpis(result: dict) -> Optional[dict]:
     curr_rev = float(result.get("total_revenue") or 0)
-    prior_rev = float(result.get("prev_total_revenue") or 0)
-    if prior_rev <= 0 and curr_rev <= 0:
+    prior_rev_raw = result.get("prev_total_revenue")
+    if prior_rev_raw is None:
         return None
-    rev_pct = round(100.0 * (curr_rev - prior_rev) / prior_rev, 1) if prior_rev > 0 else 0.0
+    prior_rev = float(prior_rev_raw)
+    # Empty prior window (COALESCE → 0) produces a broken single-bar chart — skip it.
+    if prior_rev <= 0:
+        return None
+    rev_pct = round(100.0 * (curr_rev - prior_rev) / prior_rev, 1)
     sign = "+" if rev_pct >= 0 else ""
     comp_label = kpi_comparison_label(result)
     payload = {

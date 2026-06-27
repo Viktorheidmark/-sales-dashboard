@@ -193,6 +193,43 @@ class ChartPolicyTests(unittest.TestCase):
         bar_charts = [c for c in charts if c.get("chart_type") == BAR_CHART]
         self.assertEqual(bar_charts, [])
 
+    def test_sales_status_empty_kpi_baseline_falls_back_to_line_chart(self):
+        q = "hur går försäljningen?"
+        sales = {
+            "granularity": "month",
+            "series": [
+                {"period": "2024-07-01", "revenue": 800000.0},
+                {"period": "2024-08-01", "revenue": 820000.0},
+                {"period": "2024-09-01", "revenue": 790000.0},
+            ],
+            "date_range": {"start": "2024-06-23", "end": "2026-06-22"},
+            "limitations": [],
+        }
+        kpis = {
+            "total_revenue": 19_100_000.0,
+            "prev_total_revenue": 0.0,
+            "prev_total_orders": 0,
+            "comparison_kind": "prior_equal_length",
+            "date_range": {"start": "2024-06-23", "end": "2026-06-22"},
+            "prev_date_range": {"start": "2022-06-24", "end": "2024-06-22"},
+        }
+        raw = [("get_supplier_kpis", kpis), ("get_sales_over_time", sales)]
+        self.assertEqual(resolve_chart_intent(q, raw), ChartIntent.TIME_SERIES)
+        charts = select_charts(q, raw)
+        self.assertEqual(len(charts), 1)
+        self.assertEqual(charts[0]["chart_type"], LINE_CHART)
+        self.assertEqual(charts[0]["title"], "Försäljningsutveckling")
+
+    def test_kpi_only_sales_status_prefers_time_series_intent(self):
+        q = "hur går försäljningen?"
+        kpis = {
+            "total_revenue": 1_000_000.0,
+            "prev_total_revenue": 900_000.0,
+            "date_range": {"start": "2026-01-01", "end": "2026-06-21"},
+        }
+        raw = [("get_supplier_kpis", kpis)]
+        self.assertEqual(resolve_chart_intent(q, raw), ChartIntent.TIME_SERIES)
+
 
 if __name__ == "__main__":
     unittest.main()

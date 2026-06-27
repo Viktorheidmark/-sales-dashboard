@@ -211,6 +211,11 @@ _YTD_OVERVIEW_RE = re.compile(
     re.IGNORECASE,
 )
 
+_SALES_STATUS_RE = re.compile(
+    r"(hur\s+går\s+försäljningen|hur\s+ser\s+försäljningen\s+ut|hur\s+går\s+det)",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class ToolPlan:
@@ -252,6 +257,41 @@ def extract_region(message: str) -> Optional[str]:
         if region.lower() in message.lower():
             return region
     return None
+
+
+def is_sales_status_question(message: str) -> bool:
+    """Vague sales health questions without explicit comparison or weekly scope."""
+    msg = message.strip()
+    if not msg or _WEEKLY_SALES_RE.search(msg):
+        return False
+    if _MARKET_SHARE_RE.search(msg) or (_TOP_PRODUCTS_RE.search(msg) and not _ALL_PRODUCTS_COMPARE_RE.search(msg)):
+        return False
+    if _DECLINING_RE.search(msg) and re.search(r"tappat|minskat|nedgång|fallit|sjunk", msg, re.I):
+        return False
+    return bool(_SALES_STATUS_RE.search(msg))
+
+
+def _plan_sales_status_tools(
+    message: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> list[ToolPlan]:
+    args = _period_args_from_message(message, start_date, end_date)
+    granularity = _granularity_from_date_range(
+        args.get("start_date"),
+        args.get("end_date"),
+        message,
+    )
+    trend_args = {
+        **args,
+        "granularity": granularity,
+        "_chart_intent": "time_series",
+        "_force_time_series": True,
+    }
+    return [
+        ToolPlan("get_supplier_kpis", dict(args), reason="sales status KPIs"),
+        ToolPlan("get_sales_over_time", trend_args, reason="sales status trend"),
+    ]
 
 
 def is_diagram_followup_request(message: str) -> bool:
@@ -687,6 +727,76 @@ def plan_followup_tools(
     )]
 
 
+def is_comparison_followup_request(message: str, prior: Optional[PriorTurnContext] = None) -> bool:
+    """Comparison follow-up without a newly stated analyzed period."""
+    from app.services.comparison_labels import (
+        message_specifies_analyzed_period,
+        prior_has_reusable_period,
+        question_requests_comparison,
+    )
+
+    msg = (message or "").strip()
+    if not question_requests_comparison(msg):
+        return False
+    if message_specifies_analyzed_period(msg):
+        return False
+    return prior_has_reusable_period(prior)
+
+
+def plan_comparison_followup_tools(
+    message: str,
+    prior: PriorTurnContext,
+    supplier_name: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> list[ToolPlan]:
+    """Reuse the prior turn's analyzed period for a period comparison."""
+    if not is_comparison_followup_request(message, prior):
+        return []
+    if not prior.tool_calls:
+        return []
+
+    from app.services.follow_up_context import analysis_context_from_prior_data
+
+    ctx = analysis_context_from_prior_data(
+        prior.question,
+        list(prior.tool_calls),
+        list(prior.sources),
+        prior.analysis_context,
+    )
+    if not ctx or not ctx.start_date or not ctx.end_date:
+        return []
+
+    period_kind = ctx.period_kind
+    if (
+        period_kind in ("year_to_date", "current_year")
+        or is_current_year_phrase(prior.question or "")
+    ):
+        return [ToolPlan(
+            tool_name="get_supplier_kpis",
+            args={
+                "start_date": ctx.start_date,
+                "end_date": ctx.end_date,
+                "_period_kind": "year_to_date",
+                "_chart_intent": "period_comparison",
+            },
+            reason="comparison follow-up (YTD vs prior year)",
+        )]
+
+    try:
+        span = (
+            date.fromisoformat(ctx.end_date) - date.fromisoformat(ctx.start_date)
+        ).days + 1
+    except ValueError:
+        span = 30
+    days = min(max(span, 7), 365)
+    return [ToolPlan(
+        tool_name="get_revenue_drivers",
+        args={"days": days, "limit": 5, "_chart_intent": "period_comparison"},
+        reason=f"comparison follow-up ({days}d vs prior {days}d)",
+    )]
+
+
 def plan_long_term_trend_tools(
     message: str,
     prior: PriorTurnContext,
@@ -803,6 +913,11 @@ def plan_forced_tools(
     plans: list[ToolPlan] = []
 
     if prior_context:
+        comparison_followup = plan_comparison_followup_tools(
+            msg, prior_context, supplier_name, start_date, end_date,
+        )
+        if comparison_followup:
+            return comparison_followup
         deep_followup = plan_deep_dive_followup_tools(
             msg, prior_context, supplier_name, start_date, end_date,
         )
@@ -824,6 +939,9 @@ def plan_forced_tools(
 
     if is_diagram_followup_request(msg):
         return []
+
+    if is_sales_status_question(msg):
+        return _plan_sales_status_tools(msg, start_date, end_date)
 
     if _FOCUS_RE.search(msg):
         args = _date_args(start_date, end_date)
@@ -870,12 +988,33 @@ def plan_forced_tools(
         return plans
 
     if _KPI_COMPARISON_RE.search(msg) and not _TIME_SERIES_INTENT_RE.search(msg):
-        period_args = extract_period_args(msg) or {"days": 30}
+        from app.services.comparison_labels import (
+            message_has_explicit_comparison_pair,
+            message_specifies_analyzed_period,
+        )
+
+        if not message_has_explicit_comparison_pair(msg):
+            return []
+        period_args = extract_period_args(msg)
+        if is_current_year_phrase(msg) and re.search(r"förra\s+året", msg, re.I):
+            ytd_args = _period_args_from_message(msg, start_date, end_date)
+            plans.append(ToolPlan(
+                tool_name="get_supplier_kpis",
+                args={
+                    **ytd_args,
+                    "_period_kind": "year_to_date",
+                    "_chart_intent": "period_comparison",
+                },
+                reason="explicit YTD vs prior year comparison",
+            ))
+            return plans
+        if not message_specifies_analyzed_period(msg) and not period_args.get("days"):
+            return []
         days = period_args.get("days", 30)
         plans.append(ToolPlan(
             tool_name="get_revenue_drivers",
             args={"days": days, "limit": 5, "_chart_intent": "period_comparison"},
-            reason="explicit period comparison",
+            reason="explicit rolling period comparison",
         ))
         return plans
 
@@ -949,18 +1088,32 @@ def plan_forced_tools(
         return plans
 
     if _DECLINING_RE.search(msg) and re.search(r"tappat|minskat|nedgång|fallit|sjunk", msg, re.I):
-        from app.services.decline_period import decline_question_needs_period, build_decline_tool_plan
+        from app.services.comparison_labels import has_ambiguous_comparison_intent
+        from app.services.decline_period import (
+            decline_question_needs_period,
+            build_decline_tool_plan,
+            is_decline_ranking_question,
+        )
+        if has_ambiguous_comparison_intent(msg) and not is_decline_ranking_question(msg):
+            return []
         if decline_question_needs_period(msg):
             return []
         plans.append(build_decline_tool_plan(msg, reason="declining products"))
         return plans
 
     if _KPI_COMPARISON_RE.search(msg):
+        from app.services.comparison_labels import message_has_explicit_comparison_pair
+
+        if not message_has_explicit_comparison_pair(msg):
+            return []
         args = _period_args_from_message(msg, start_date, end_date)
+        args["_chart_intent"] = "period_comparison"
+        if is_current_year_phrase(msg):
+            args["_period_kind"] = "year_to_date"
         plans.append(ToolPlan(
             tool_name="get_supplier_kpis",
             args=args,
-            reason="period comparison",
+            reason="explicit period comparison (KPI)",
         ))
         return plans
 

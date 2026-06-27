@@ -32,7 +32,11 @@ from app.services.chart_builder import pick_charts
 from app.services.deep_dive_builder import build_deep_dive
 from app.services.follow_up_builder import build_contextual_follow_ups
 from app.services.follow_up_context import extract_analysis_context
-from app.services.comparison_labels import build_comparison_context_block
+from app.services.comparison_labels import (
+    build_comparison_context_block,
+    comparison_needs_period_clarification,
+    COMPARISON_PERIOD_CLARIFICATION,
+)
 from app.services.tool_planner import resolve_tool_plans
 from app.services.intent_router import (
     default_category_for_supplier,
@@ -53,6 +57,7 @@ from app.services.response_guidance import (
     sanitize_generic_recommendations,
     sanitize_trend_wording,
     sanitize_vague_comparisons,
+    strip_unrequested_comparison,
     synthesis_suffix,
 )
 
@@ -303,6 +308,22 @@ def _ensure_period_labels(
     return out
 
 
+def _comparison_clarification_response(supplier_id: str) -> dict:
+    return {
+        "answer": COMPARISON_PERIOD_CLARIFICATION,
+        "tool_calls": [],
+        "sources": [],
+        "chart": None,
+        "charts": [],
+        "deep_dive": None,
+        "follow_up_actions": [],
+        "limitations": [],
+        "response_kind": "conversational",
+        "supplier_id": supplier_id,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
 def _decline_period_clarification_response(supplier_id: str) -> dict:
     from app.services.decline_period import DECLINE_PERIOD_CLARIFICATION
     return {
@@ -460,7 +481,8 @@ def _final_payload(
 ) -> dict:
     raw_tool_results = _ensure_period_labels(raw_tool_results, question)
     cleaned_answer = sanitize_answer_currency(answer, raw_tool_results)
-    cleaned_answer = sanitize_vague_comparisons(cleaned_answer, raw_tool_results)
+    cleaned_answer = strip_unrequested_comparison(cleaned_answer, question)
+    cleaned_answer = sanitize_vague_comparisons(cleaned_answer, raw_tool_results, question)
     cleaned_answer = sanitize_generic_recommendations(cleaned_answer)
     cleaned_answer = sanitize_trend_wording(cleaned_answer, raw_tool_results)
     all_charts = pick_charts(raw_tool_results, question)
@@ -590,6 +612,9 @@ async def run_chat(
         return _guardrail_response(guard, supplier_id)
 
     prior = prior_context_from_dict(prior_context)
+    if comparison_needs_period_clarification(message, prior):
+        return _comparison_clarification_response(supplier_id)
+
     if is_diagram_followup_request(message) and not prior:
         return _diagram_clarification_response(supplier_id)
     if prior and is_diagram_followup_request(message) and prior.has_chart:
@@ -628,6 +653,8 @@ async def run_chat(
             )
             analysis_meta = resolution.analysis_meta
             if resolution.clarification_answer:
+                if resolution.analysis_meta.get("intent") == "period_comparison":
+                    return _comparison_clarification_response(supplier_id)
                 return _decline_period_clarification_response(supplier_id)
             forced = resolution.plans
             if forced:
@@ -687,6 +714,10 @@ async def stream_chat(
         return
 
     prior = prior_context_from_dict(prior_context)
+    if comparison_needs_period_clarification(message, prior):
+        yield sse("complete", _comparison_clarification_response(supplier_id))
+        return
+
     if is_diagram_followup_request(message) and not prior:
         yield sse("complete", _diagram_clarification_response(supplier_id))
         return
@@ -732,7 +763,10 @@ async def stream_chat(
                 )
                 analysis_meta = resolution.analysis_meta
                 if resolution.clarification_answer:
-                    yield sse("complete", _decline_period_clarification_response(supplier_id))
+                    if resolution.analysis_meta.get("intent") == "period_comparison":
+                        yield sse("complete", _comparison_clarification_response(supplier_id))
+                    else:
+                        yield sse("complete", _decline_period_clarification_response(supplier_id))
                     return
                 forced = resolution.plans
                 if forced:

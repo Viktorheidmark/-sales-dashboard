@@ -258,6 +258,20 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(plans[0].args.get("end_date"), latest_completed_date().isoformat())
         self.assertNotEqual(plans[0].args.get("start_date"), self.UI_START)
 
+    def test_sales_status_question_routes_both_tools(self):
+        plans = plan_forced_tools(
+            "hur går försäljningen?",
+            "Coca-Cola Europacific Partners Sverige",
+            self.UI_START,
+            self.UI_END,
+        )
+        tools = [p.tool_name for p in plans]
+        self.assertIn("get_supplier_kpis", tools)
+        self.assertIn("get_sales_over_time", tools)
+        sales = next(p for p in plans if p.tool_name == "get_sales_over_time")
+        self.assertTrue(sales.args.get("_force_time_series"))
+        self.assertEqual(sales.args.get("_chart_intent"), "time_series")
+
     def test_period_followup_sales_trend(self):
         prior = PriorTurnContext(
             question="Hur såg försäljningen ut senaste veckan?",

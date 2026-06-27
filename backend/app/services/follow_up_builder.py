@@ -129,8 +129,8 @@ def build_contextual_follow_ups(
                 "message": f"Vilka produkter säljer bäst inom {category} {span_phrase}?",
             },
             {
-                "label": "Visa marknadsandel över tid",
-                "message": f"Hur har marknadsandelen inom {category} utvecklats {span_phrase}?",
+                "label": "Visa marknadsandel",
+                "message": f"Visa marknadsandel inom {category} {span_phrase}",
             },
             make_follow_up_action(
                 "Visa försäljning per region",
@@ -156,21 +156,7 @@ def build_contextual_follow_ups(
         region_suffix = f" i {region}" if region else ""
         chips: list[dict[str, str]] = []
         if products:
-            top = products[0].get("product_name")
-            if top:
-                chips.append(make_follow_up_action(
-                    "Visa produktens utveckling över tid",
-                    f"Hur har {top} utvecklats {period}?",
-                    "product_trend",
-                    ctx,
-                ))
-            if len(products) >= 2:
-                a, b = products[0].get("product_name"), products[1].get("product_name")
-                if a and b:
-                    chips.append({
-                        "label": "Jämför de två största produkterna",
-                        "message": f"Jämför {a} och {b} {period}",
-                    })
+            pass  # product-specific trend and comparison chips removed (no single-product tool)
         chips.append(make_follow_up_action(
             "Visa försäljning per region",
             f"Vilken region genererar mest intäkter{region_suffix} {period}?",

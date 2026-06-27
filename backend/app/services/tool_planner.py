@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Optional, Optional
+from typing import Any, Optional
 
 from app.schemas.analysis_plan import AnalysisPlan, NormalizedPlanMeta
 from app.services.intent_router import (
@@ -18,6 +18,7 @@ from app.services.intent_router import (
     is_diagram_followup_request,
     plan_forced_tools,
     plan_deep_dive_followup_tools,
+    plan_comparison_followup_tools,
     plan_period_followup_tools,
     plan_long_term_trend_tools,
     plan_followup_tools,
@@ -99,6 +100,7 @@ def plan_deterministic_tools(
 
     if prior_context:
         for planner_fn in (
+            plan_comparison_followup_tools,
             plan_deep_dive_followup_tools,
             plan_period_followup_tools,
             plan_long_term_trend_tools,
@@ -137,6 +139,18 @@ def resolve_tool_plans(
     if det:
         meta.update({"source": "deterministic", "tools": [p.tool_name for p in det]})
         return ToolResolution(plans=det, source="deterministic", analysis_meta=meta)
+
+    from app.services.comparison_labels import (
+        COMPARISON_PERIOD_CLARIFICATION,
+        comparison_needs_period_clarification,
+    )
+    if comparison_needs_period_clarification(message, prior_context):
+        meta.update({"source": "clarification", "intent": "period_comparison"})
+        return ToolResolution(
+            clarification_answer=COMPARISON_PERIOD_CLARIFICATION,
+            source="clarification",
+            analysis_meta=meta,
+        )
 
     from app.services.decline_period import (
         DECLINE_PERIOD_CLARIFICATION,

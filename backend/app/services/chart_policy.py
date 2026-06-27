@@ -56,6 +56,42 @@ _WEEKLY_FACTUAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+_SALES_STATUS_RE = re.compile(
+    r"(hur\s+går\s+försäljningen|hur\s+ser\s+försäljningen\s+ut|hur\s+går\s+det|överlag)",
+    re.IGNORECASE,
+)
+
+
+def _explicit_period_comparison(question: str, tools: dict[str, dict]) -> bool:
+    """True only when the user (or tool args) explicitly asked for period comparison."""
+    from app.services.comparison_labels import message_has_explicit_comparison_pair
+
+    if message_has_explicit_comparison_pair((question or "").strip()):
+        return True
+    kpi = tools.get("get_supplier_kpis") or {}
+    if kpi.get("_chart_intent") == "period_comparison":
+        return True
+    drivers = tools.get("get_revenue_drivers") or {}
+    if drivers.get("_chart_intent") == "period_comparison":
+        return True
+    return False
+
+
+def _time_series_fallback_chart(
+    tools: dict[str, dict],
+    *,
+    no_comparison_baseline: bool = False,
+) -> Optional[dict]:
+    sales = tools.get("get_sales_over_time")
+    if not sales or sales.get("suppress_chart"):
+        return None
+    trend = build_time_series_chart(sales, force=True)
+    if not trend:
+        return None
+    if no_comparison_baseline:
+        trend = {**trend, "no_comparison_baseline": True}
+    return {**trend, "chart_role": "primary"}
+
 
 def _tool_map(tool_results: list[tuple[str, dict]]) -> dict[str, dict]:
     out: dict[str, dict] = {}
@@ -123,14 +159,17 @@ def resolve_chart_intent(
         return ChartIntent.REGION_RANKING
 
     if "get_supplier_kpis" in tools and "get_sales_over_time" in tools:
-        sales = tools["get_sales_over_time"]
-        if sales.get("_force_time_series") or sales.get("_chart_intent") == "time_series":
-            if _WEEKLY_FACTUAL_RE.search(q):
-                return ChartIntent.WEEKLY_KPI
-            return ChartIntent.TIME_SERIES
-        return ChartIntent.PERIOD_COMPARISON
+        if _WEEKLY_FACTUAL_RE.search(q):
+            return ChartIntent.WEEKLY_KPI
+        if _explicit_period_comparison(q, tools):
+            return ChartIntent.PERIOD_COMPARISON
+        return ChartIntent.TIME_SERIES
 
     if "get_supplier_kpis" in tools:
+        if _explicit_period_comparison(q, tools):
+            return ChartIntent.PERIOD_COMPARISON
+        if _SALES_STATUS_RE.search(q) or "get_sales_over_time" in tools:
+            return ChartIntent.TIME_SERIES
         return ChartIntent.PERIOD_COMPARISON
 
     if "get_sales_over_time" in tools:
@@ -168,11 +207,19 @@ def select_charts(
             chart = build_period_comparison_chart(tools["get_revenue_drivers"])
             if chart:
                 charts.append({**chart, "chart_role": "primary"})
+            else:
+                fallback = _time_series_fallback_chart(tools, no_comparison_baseline=True)
+                if fallback:
+                    charts.append(fallback)
             return charts
         if "get_supplier_kpis" in tools:
             chart = build_chart("get_supplier_kpis", tools["get_supplier_kpis"])
             if chart:
                 charts.append({**chart, "chart_role": "primary"})
+            else:
+                fallback = _time_series_fallback_chart(tools, no_comparison_baseline=True)
+                if fallback:
+                    charts.append(fallback)
             return charts
 
     if intent == ChartIntent.WEEKLY_KPI:

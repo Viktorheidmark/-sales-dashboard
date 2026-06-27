@@ -256,7 +256,7 @@ function ChartBlock({
   const selfContained = chart.chart_type === 'insight_card' || chart.chart_type === 'empty_state'
   const isSecondary = chart.chart_role === 'secondary' || chart.compact
   if (selfContained) {
-    return <MiniAssistantChart chart={chart} supplierName={supplierName} />
+    return <MiniAssistantChart chart={chart} supplierName={supplierName} tenantColors />
   }
   return (
     <div className={`assistant-chart-card ${isSecondary ? 'assistant-chart-card-secondary' : ''}`}>
@@ -270,7 +270,7 @@ function ChartBlock({
           {chart.description}
         </p>
       )}
-      <MiniAssistantChart chart={chart} supplierName={supplierName} compact={isSecondary} />
+      <MiniAssistantChart chart={chart} supplierName={supplierName} compact={isSecondary} tenantColors />
       {chart.stability_note && (
         <p className="mt-2 text-[11px] text-theme-muted leading-snug italic">{chart.stability_note}</p>
       )}
