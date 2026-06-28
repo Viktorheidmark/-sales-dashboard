@@ -483,27 +483,39 @@ def _build_top_products(result: dict) -> Optional[dict]:
         products = products[: int(requested)]
     if len(products) < 2:
         return None
+
+    ascending = (result.get("sort_order") or "desc").strip().lower() == "asc"
+    products = sorted(
+        [p for p in products if p.get("revenue") is not None],
+        key=lambda p: float(p.get("revenue") or 0),
+        reverse=not ascending,
+    )
+    if len(products) < 2:
+        return None
+
     data = []
     for p in products:
-        if p.get("revenue") is None:
-            continue
         name = p["product_name"]
         data.append({
             "product_name": name,
             "display_label": _truncate_label(name),
             "revenue": p["revenue"],
         })
-    if len(data) < 2:
-        return None
 
     region = result.get("region_filter")
-    base = f"Omsättning per produkt · {region}" if region else "Omsättning per produkt"
+    if ascending:
+        from app.services.ranking_limits import ASCENDING_PRODUCT_RANKING_TITLE
+        title = ASCENDING_PRODUCT_RANKING_TITLE
+        base = f"Omsättning per produkt · {region}" if region else "Omsättning per produkt"
+    else:
+        title = "Topprodukter"
+        base = f"Omsättning per produkt · {region}" if region else "Omsättning per produkt"
     subtitle = append_chart_period(base, result)
 
     return {
         "chart_type": BAR_CHART,
         "layout": "horizontal",
-        "title": "Topprodukter",
+        "title": title,
         "description": subtitle,
         "x_key": "display_label",
         "y_key": "revenue",
@@ -512,6 +524,7 @@ def _build_top_products(result: dict) -> Optional[dict]:
         "source_tool": "get_top_products",
         "generated_from_row_count": len(data),
         "emphasis_index": 0,
+        "ranking_direction": "ascending" if ascending else "descending",
     }
 
 

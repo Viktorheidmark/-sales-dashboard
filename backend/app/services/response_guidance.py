@@ -10,6 +10,7 @@ import re
 
 from app.services.intent_router import is_diagram_followup_request, is_sales_status_question
 from app.services.comparison_labels import question_requests_comparison
+from app.services.ranking_limits import is_ascending_product_ranking_question
 
 _FORBIDDEN_PHRASES = (
     "utvecklats enligt följande",
@@ -231,6 +232,18 @@ FRÅGETYP: Översikt (KPI)
 - Styck 2: Ordrar och enheter om relevant.
 - Nämn INTE jämförelse mot föregående period om användaren inte bad om det.
 - Max 2–3 korta stycken. Ingen rekommendation.
+"""
+
+    if "get_top_products" in tools and is_ascending_product_ranking_question(q):
+        return """
+FRÅGETYP: Produkter med lägst omsättning
+- Styck 1: Namnge produkten med lägst omsättning direkt med exakt product_name och belopp.
+  Väv in period_label_answer naturligt (t.ex. "under hela tillgängliga perioden").
+- Styck 2: Lista övriga produkter i rankingordning (lägst → högst) enligt requested_limit.
+- Avsluta med neutral, datastödd formulering: produkten har lägst omsättning under perioden
+  och kan vara relevant att följa upp utifrån distribution, volym och utveckling över tid.
+- Undvik starka slutsatser som "presterar inte lika starkt", "sämst presterande" eller att produkten bör tas bort.
+- Nämn ENDAST produkter i verktygsresultat. Lista inte fler än requested_limit.
 """
 
     if "get_top_products" in tools or (_TOP_PRODUCTS_RE.search(q) and "nedgång" not in q.lower()):

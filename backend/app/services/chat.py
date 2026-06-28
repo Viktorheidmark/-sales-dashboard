@@ -37,6 +37,7 @@ from app.services.comparison_labels import (
     comparison_needs_period_clarification,
     COMPARISON_PERIOD_CLARIFICATION,
 )
+from app.services.decline_period import DECLINE_PERIOD_ACTION, prior_awaiting_decline_period
 from app.analytics.flags import (
     ai_orchestrated_analytics_enabled,
     analytics_debug_trace_enabled,
@@ -314,7 +315,7 @@ def _ensure_period_labels(
 
 
 def _comparison_clarification_response(supplier_id: str) -> dict:
-    return {
+    return _prepare_client_response({
         "answer": COMPARISON_PERIOD_CLARIFICATION,
         "tool_calls": [],
         "sources": [],
@@ -326,12 +327,12 @@ def _comparison_clarification_response(supplier_id: str) -> dict:
         "response_kind": "conversational",
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
+    })
 
 
 def _comparison_composer_response(supplier_id: str) -> dict:
     """Tell the frontend to show the period-picker composer card."""
-    return {
+    return _prepare_client_response({
         "answer": "",
         "tool_calls": [],
         "sources": [],
@@ -343,13 +344,12 @@ def _comparison_composer_response(supplier_id: str) -> dict:
         "response_kind": "comparison_composer",
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
+    })
 
 
 def _decline_period_clarification_response(supplier_id: str) -> dict:
-    from app.services.decline_period import DECLINE_PERIOD_CLARIFICATION
-    return {
-        "answer": DECLINE_PERIOD_CLARIFICATION,
+    return _prepare_client_response({
+        "answer": "",
         "tool_calls": [],
         "sources": [],
         "chart": None,
@@ -357,18 +357,20 @@ def _decline_period_clarification_response(supplier_id: str) -> dict:
         "deep_dive": None,
         "follow_up_actions": [],
         "limitations": [],
-        "response_kind": "conversational",
+        "response_kind": "decline_period_composer",
         "supplier_id": supplier_id,
         "analysis_context": {
             "awaiting_decline_period": True,
+            "awaiting_clarification": "decline_period",
+            "pending_intent": "product_decline",
             "prior_intent": "product_decline",
         },
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
+    })
 
 
 def _diagram_clarification_response(supplier_id: str) -> dict:
-    return {
+    return _prepare_client_response({
         "answer": (
             "Vad vill du se i diagrammet? Till exempel marknadsandel, topprodukter i en region, "
             "produkter i nedgång eller försäljningstrend — så kan jag visa rätt visualisering."
@@ -383,11 +385,11 @@ def _diagram_clarification_response(supplier_id: str) -> dict:
         "response_kind": "conversational",
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
+    })
 
 
 def _diagram_already_shown_response(supplier_id: str) -> dict:
-    return {
+    return _prepare_client_response({
         "answer": "Diagrammet visas redan ovan.",
         "tool_calls": [],
         "sources": [],
@@ -399,7 +401,7 @@ def _diagram_already_shown_response(supplier_id: str) -> dict:
         "response_kind": "conversational",
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
+    })
 
 
 def _tool_context_message(
@@ -475,8 +477,56 @@ def _response_kind(classification: str) -> str:
     return "unsupported"
 
 
+def _customer_source_entry(source: dict) -> dict:
+    """Customer-safe source metadata — date range and comparison labels only."""
+    if not isinstance(source, dict):
+        return {}
+    out: dict = {}
+    date_range = source.get("date_range")
+    if isinstance(date_range, dict) and date_range.get("start") and date_range.get("end"):
+        out["date_range"] = {
+            "start": str(date_range["start"])[:10],
+            "end": str(date_range["end"])[:10],
+        }
+    label = source.get("comparison_period_label")
+    if label:
+        out["comparison_period_label"] = str(label)
+    return out
+
+
+def _prepare_client_response(payload: dict) -> dict:
+    """
+    Strip internal execution metadata from chat responses for business users.
+
+    When ANALYTICS_DEBUG_TRACE is enabled, attach a developer-only diagnostics block
+    while keeping customer-facing ``sources`` minimal.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    out = dict(payload)
+    full_sources = list(out.get("sources") or [])
+
+    if analytics_debug_trace_enabled():
+        diagnostics: dict = {
+            "tool_calls": list(out.get("tool_calls") or []),
+            "sources": full_sources,
+        }
+        meta = out.get("analysis_meta")
+        if isinstance(meta, dict) and meta:
+            diagnostics["analysis_meta"] = meta
+        out["debug_diagnostics"] = diagnostics
+    else:
+        out.pop("debug_diagnostics", None)
+        out.pop("analysis_meta", None)
+
+    out["sources"] = [
+        entry for entry in (_customer_source_entry(s) for s in full_sources) if entry
+    ]
+    return out
+
+
 def _guardrail_response(guard, supplier_id: str) -> dict:
-    return {
+    return _prepare_client_response({
         "answer": guard.answer,
         "tool_calls": [],
         "sources": [],
@@ -488,7 +538,7 @@ def _guardrail_response(guard, supplier_id: str) -> dict:
         "response_kind": _response_kind(guard.classification),
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
+    })
 
 
 def _final_payload(
@@ -530,7 +580,7 @@ def _final_payload(
             payload["response_kind"] = "conversational"
     if analysis_meta and os.environ.get("CHAT_INCLUDE_ANALYSIS_META", "").lower() in ("1", "true", "yes"):
         payload["analysis_meta"] = analysis_meta
-    return payload
+    return _prepare_client_response(payload)
 
 
 async def _llm_tool_round(
@@ -659,8 +709,9 @@ def _apply_debug_trace(payload: dict, trace: dict) -> dict:
     if analytics_debug_trace_enabled() and isinstance(payload, dict):
         meta = dict(payload.get("analysis_meta") or {})
         meta["orchestration_trace"] = trace
+        payload = dict(payload)
         payload["analysis_meta"] = meta
-    return payload
+    return _prepare_client_response(payload)
 
 
 async def _handle_explicit_period_comparison(
@@ -684,13 +735,13 @@ async def _handle_explicit_period_comparison(
                 raise ValueError("missing")
             _date.fromisoformat(d)
     except ValueError:
-        return {
+        return _prepare_client_response({
             "answer": "Ogiltiga datumvärden. Välj giltiga datum och försök igen.",
             "tool_calls": [], "sources": [], "chart": None, "charts": [],
             "deep_dive": None, "follow_up_actions": [], "limitations": [],
             "response_kind": "conversational", "supplier_id": supplier_id,
             "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-        }
+        })
 
     tools_used: list[str] = []
     sources: list[dict] = []
@@ -785,19 +836,27 @@ async def run_chat(
     if not guard.should_call_llm:
         return _guardrail_response(guard, supplier_id)
 
-    orchestrated = await _try_orchestrated_comparison(
-        message, supplier_id, supplier_name, follow_up_action
+    prior = prior_context_from_dict(prior_context)
+    skip_orchestrator = (
+        prior is not None and prior_awaiting_decline_period(prior)
+    ) or (
+        follow_up_action is not None
+        and str(follow_up_action.get("action") or "") == DECLINE_PERIOD_ACTION
     )
-    if orchestrated is not None and orchestrated.kind == "answer":
-        return _apply_debug_trace(orchestrated.payload, orchestrated.trace)
-    if orchestrated is not None and orchestrated.kind == "clarify_composer":
-        return _apply_debug_trace(_comparison_composer_response(supplier_id), orchestrated.trace)
-    # kind == "defer" (or flag off) → fall through to the legacy pipeline.
+
+    if not skip_orchestrator:
+        orchestrated = await _try_orchestrated_comparison(
+            message, supplier_id, supplier_name, follow_up_action
+        )
+        if orchestrated is not None and orchestrated.kind == "answer":
+            return _apply_debug_trace(orchestrated.payload, orchestrated.trace)
+        if orchestrated is not None and orchestrated.kind == "clarify_composer":
+            return _apply_debug_trace(_comparison_composer_response(supplier_id), orchestrated.trace)
+        # kind == "defer" (or flag off) → fall through to the legacy pipeline.
 
     if follow_up_action and str(follow_up_action.get("action") or "") == "compare_periods":
         return await _handle_explicit_period_comparison(follow_up_action, supplier_id, supplier_name)
 
-    prior = prior_context_from_dict(prior_context)
     if comparison_needs_period_clarification(message, prior):
         return _comparison_composer_response(supplier_id)
 
@@ -899,7 +958,15 @@ async def stream_chat(
         yield sse("complete", _guardrail_response(guard, supplier_id))
         return
 
-    if ai_orchestrated_analytics_enabled():
+    prior = prior_context_from_dict(prior_context)
+    skip_orchestrator = (
+        prior is not None and prior_awaiting_decline_period(prior)
+    ) or (
+        follow_up_action is not None
+        and str(follow_up_action.get("action") or "") == DECLINE_PERIOD_ACTION
+    )
+
+    if ai_orchestrated_analytics_enabled() and not skip_orchestrator:
         yield sse("status", {"text": "Analyserar perioderna…"})
         orchestrated = await _try_orchestrated_comparison(
             message, supplier_id, supplier_name, follow_up_action
@@ -918,7 +985,6 @@ async def stream_chat(
         yield sse("complete", result)
         return
 
-    prior = prior_context_from_dict(prior_context)
     if comparison_needs_period_clarification(message, prior):
         yield sse("complete", _comparison_composer_response(supplier_id))
         return

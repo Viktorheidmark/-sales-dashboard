@@ -20,7 +20,10 @@ from app.services.period_utils import (
     is_current_year_phrase,
     resolve_period_range,
 )
-from app.services.ranking_limits import resolve_product_ranking_limit
+from app.services.ranking_limits import (
+    is_ascending_product_ranking_question,
+    resolve_product_ranking_limit,
+)
 from app.services.period_labels import infer_period_kind
 
 CATEGORIES = ("Läsk", "Chips & snacks")
@@ -649,6 +652,8 @@ def _reconstruct_tool_args(
             period_message,
             is_ytd=is_current_year_phrase(period_message),
         )
+        if is_ascending_product_ranking_question(period_message):
+            args["sort_order"] = "asc"
     elif tool_name == "get_declining_products":
         args["days"] = period_args.get("days", 30)
         args["limit"] = 5
@@ -946,6 +951,20 @@ def plan_forced_tools(
 
     if is_sales_status_question(msg):
         return _plan_sales_status_tools(msg, start_date, end_date)
+
+    if is_ascending_product_ranking_question(msg):
+        region = extract_region(msg)
+        args = _period_args_from_message(msg, start_date, end_date)
+        if region:
+            args["region"] = region
+        args["limit"] = resolve_product_ranking_limit(msg)
+        args["sort_order"] = "asc"
+        plans.append(ToolPlan(
+            tool_name="get_top_products",
+            args=args,
+            reason="ascending product ranking (lowest revenue)",
+        ))
+        return plans
 
     if _FOCUS_RE.search(msg):
         args = _date_args(start_date, end_date)

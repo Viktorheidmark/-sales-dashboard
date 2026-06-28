@@ -32,7 +32,7 @@ export function isMarketShareChart(chart: ChartPayload): boolean {
 }
 
 export function resolveDeclineComparisonLabel(sources: SourceMeta[]): string | null {
-  const declining = sources.find(s => s.tool === 'get_declining_products')
+  const declining = sources.find(s => s.comparison_period_label)
   return declining?.comparison_period_label ?? null
 }
 
@@ -159,6 +159,9 @@ export function isPlainConversationalResponse(
   if (response.chart || response.deep_dive) return false
   if (response.response_kind === 'conversational') return true
   if (response.response_kind === 'insufficient_data' || response.response_kind === 'unsupported') return false
+  if (response.response_kind === 'decline_period_composer' || response.response_kind === 'comparison_composer') {
+    return false
+  }
   if (response.analysis_context?.awaiting_decline_period) return true
   if (question && CONVERSATIONAL_QUESTION_RE.test(question.trim())) return true
   return false

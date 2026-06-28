@@ -34,10 +34,15 @@ from reportlab.platypus import (
 )
 from reportlab.lib.colors import HexColor
 
+from app.services.tenant_theme import (
+    pdf_header_accent_color,
+    resolve_bar_fill_colors,
+    theme_from_payload_or_supplier,
+)
+
 # ---------------------------------------------------------------------------
 # Brand palette (mirrors Solvigo Tailwind config)
 # ---------------------------------------------------------------------------
-BRAND_BLUE = HexColor("#4169e1")
 SLATE_900  = HexColor("#0f172a")
 SLATE_700  = HexColor("#334155")
 ZINC_800   = HexColor("#27272a")
@@ -47,7 +52,7 @@ ZINC_50    = HexColor("#fafafa")
 AMBER_600  = HexColor("#d97706")
 WHITE      = colors.white
 
-CHART_COLORS = ["#4169e1", "#a5b4fc", "#c7d2fe", "#e0e7ff"]
+CHART_COLORS = ["#4169e1", "#a5b4fc", "#c7d2fe", "#e0e7ff"]  # fallback for extra pie slices
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,7 +86,13 @@ def _wrap_text(text: str, width: int = 90) -> str:
 # Chart → PNG bytes via matplotlib
 # ---------------------------------------------------------------------------
 
-def _render_chart_png(chart_payload: dict, width_px: int = 900, height_px: int = 360) -> bytes:
+def _render_chart_png(
+    chart_payload: dict,
+    width_px: int = 900,
+    height_px: int = 360,
+    *,
+    supplier_name: str = "",
+) -> bytes:
     chart_type = chart_payload.get("chart_type", "")
     data = chart_payload.get("data") or []
     x_key = chart_payload.get("x_key", "")
@@ -99,10 +110,12 @@ def _render_chart_png(chart_payload: dict, width_px: int = 900, height_px: int =
 
     x_vals = [str(row.get(x_key, "")) for row in data]
     y_vals = [float(row.get(y_key, 0) or 0) for row in data]
+    theme = theme_from_payload_or_supplier(chart_payload, supplier_name)
+    line_color = theme.chart_primary
 
     if chart_type == "line_chart":
-        ax.plot(x_vals, y_vals, color=CHART_COLORS[0], linewidth=2.5, zorder=3)
-        ax.fill_between(range(len(x_vals)), y_vals, alpha=0.12, color=CHART_COLORS[0])
+        ax.plot(x_vals, y_vals, color=line_color, linewidth=2.5, zorder=3)
+        ax.fill_between(range(len(x_vals)), y_vals, alpha=0.12, color=line_color)
         ax.set_xticks(range(len(x_vals)))
         ax.set_xticklabels(x_vals, rotation=40, ha="right", fontsize=7.5, color="#71717a")
         ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:,.0f}"))
@@ -113,10 +126,8 @@ def _render_chart_png(chart_payload: dict, width_px: int = 900, height_px: int =
         ax.set_axisbelow(True)
 
     elif chart_type == "bar_chart":
-        bar_colors = [CHART_COLORS[0]] * len(x_vals)
-        # Negative values (e.g. declining pct) get a muted red
-        bar_colors = ["#ef4444" if v < 0 else CHART_COLORS[0] for v in y_vals]
-        bars = ax.bar(range(len(x_vals)), y_vals, color=bar_colors, zorder=3, width=0.65)
+        bar_colors = resolve_bar_fill_colors(chart_payload, y_vals, supplier_name=supplier_name)
+        ax.bar(range(len(x_vals)), y_vals, color=bar_colors, zorder=3, width=0.65)
         ax.set_xticks(range(len(x_vals)))
         ax.set_xticklabels(x_vals, rotation=40, ha="right", fontsize=7.5, color="#71717a")
         ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:,.0f}"))
@@ -131,7 +142,12 @@ def _render_chart_png(chart_payload: dict, width_px: int = 900, height_px: int =
         plt.close(fig)
         fig, ax = plt.subplots(figsize=(fig_w, fig_h_pie))
         fig.patch.set_facecolor("white")
-        wedge_colors = [CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(x_vals))]
+        wedge_colors = [theme.chart_primary, theme.chart_muted]
+        if len(x_vals) > 2:
+            wedge_colors = [theme.chart_primary, theme.chart_muted] + [
+                CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(x_vals) - 2)
+            ]
+        wedge_colors = [wedge_colors[i % len(wedge_colors)] for i in range(len(x_vals))]
         wedges, texts, autotexts = ax.pie(
             y_vals,
             labels=x_vals,
@@ -158,6 +174,56 @@ def _render_chart_png(chart_payload: dict, width_px: int = 900, height_px: int =
 # ---------------------------------------------------------------------------
 # PDF document builder
 # ---------------------------------------------------------------------------
+
+def _draw_pdf_header(
+    canvas,
+    *,
+    page_w: float,
+    page_h: float,
+    margin_l: float,
+    margin_r: float,
+    supplier_name: str,
+) -> None:
+    """Dark navy header band with tenant-accented Solvigo wordmark."""
+    band_h = 1.8 * cm
+    accent = HexColor(pdf_header_accent_color(supplier_name))
+    brand_y = page_h - band_h + 0.65 * cm
+    font_name = "Helvetica-Bold"
+    font_size = 11
+
+    canvas.saveState()
+    canvas.setFillColor(SLATE_900)
+    canvas.rect(0, page_h - band_h, page_w, band_h, fill=1, stroke=0)
+
+    # Subtle tenant accent line along the bottom edge of the header band.
+    canvas.setStrokeColor(accent)
+    canvas.setLineWidth(1.5)
+    canvas.line(margin_l, page_h - band_h, page_w - margin_r, page_h - band_h)
+
+    canvas.setFont(font_name, font_size)
+    x = margin_l
+
+    canvas.setFillColor(accent)
+    canvas.drawString(x, brand_y, "◈")
+    x += canvas.stringWidth("◈", font_name, font_size)
+
+    canvas.setFillColor(WHITE)
+    canvas.drawString(x, brand_y, " Solvigo ")
+    x += canvas.stringWidth(" Solvigo ", font_name, font_size)
+
+    canvas.setFillColor(accent)
+    canvas.drawString(x, brand_y, "Sales Intelligence")
+
+    if supplier_name:
+        canvas.setFillColor(WHITE)
+        canvas.setFont("Helvetica", 8.5)
+        canvas.drawRightString(page_w - margin_r, brand_y, supplier_name)
+
+    canvas.setFillColor(HexColor("#64748b"))
+    canvas.setFont("Helvetica", 7.5)
+    canvas.drawString(margin_l, page_h - band_h + 0.25 * cm, "Analysrapport")
+    canvas.restoreState()
+
 
 def build_insight_pdf(
     question: str,
@@ -248,25 +314,14 @@ def build_insight_pdf(
     now_ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     def _draw_header(canvas, doc):
-        canvas.saveState()
-        # Header band background
-        band_h = 1.8 * cm
-        canvas.setFillColor(SLATE_900)
-        canvas.rect(0, PAGE_H - band_h, PAGE_W, band_h, fill=1, stroke=0)
-        # Brand mark
-        canvas.setFillColor(BRAND_BLUE)
-        canvas.setFont("Helvetica-Bold", 11)
-        canvas.drawString(MARGIN_L, PAGE_H - band_h + 0.65 * cm, "◈ Solvigo Sales Intelligence")
-        # Supplier name (right-aligned)
-        if supplier_name:
-            canvas.setFillColor(WHITE)
-            canvas.setFont("Helvetica", 8.5)
-            canvas.drawRightString(PAGE_W - MARGIN_R, PAGE_H - band_h + 0.65 * cm, supplier_name)
-        # Sub-label row
-        canvas.setFillColor(HexColor("#64748b"))
-        canvas.setFont("Helvetica", 7.5)
-        canvas.drawString(MARGIN_L, PAGE_H - band_h + 0.25 * cm, "Analysrapport")
-        canvas.restoreState()
+        _draw_pdf_header(
+            canvas,
+            page_w=PAGE_W,
+            page_h=PAGE_H,
+            margin_l=MARGIN_L,
+            margin_r=MARGIN_R,
+            supplier_name=supplier_name,
+        )
 
     def _draw_footer(canvas, doc):
         canvas.saveState()
@@ -348,7 +403,7 @@ def build_insight_pdf(
         chart_title = chart_payload.get("title", "")
         chart_desc  = chart_payload.get("description", "")
         try:
-            png_bytes = _render_chart_png(chart_payload)
+            png_bytes = _render_chart_png(chart_payload, supplier_name=supplier_name)
             chart_w = content_w
             # Pie charts are rendered slightly squarish; others 16:6.4 ratio
             if chart_payload.get("chart_type") == "pie_chart":

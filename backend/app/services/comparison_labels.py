@@ -178,7 +178,13 @@ def comparison_needs_period_clarification(
     prior: Optional["PriorTurnContext"] = None,
 ) -> bool:
     """Ambiguous comparison intent without enough period detail — ask before fetching data."""
-    from app.services.decline_period import is_decline_ranking_question
+    from app.services.decline_period import (
+        is_decline_ranking_question,
+        prior_awaiting_decline_period,
+    )
+
+    if prior_awaiting_decline_period(prior):
+        return False
 
     msg = (message or "").strip()
     if not msg or _MARKET_SHARE_COMPARE_RE.search(msg):

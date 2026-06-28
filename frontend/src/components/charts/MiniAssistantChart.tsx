@@ -4,6 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts'
+import { useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
 import type { ChartPayload, ChartHighlights } from '../../api/types'
 import { useChartTheme } from '../../utils/chartTheme'
@@ -14,6 +15,24 @@ import {
   isMarketShareChart,
 } from '../../utils/sourcePresentation'
 import { formatHighlightPeriodLabel } from '../../utils/insightPresentation'
+
+// ---------------------------------------------------------------------------
+// Responsive sizing — comparison bar charts enlarge on desktop only
+// ---------------------------------------------------------------------------
+
+function subscribeDesktopMq(onChange: () => void) {
+  const mq = window.matchMedia('(min-width: 768px)')
+  mq.addEventListener('change', onChange)
+  return () => mq.removeEventListener('change', onChange)
+}
+
+function getDesktopMqSnapshot() {
+  return window.matchMedia('(min-width: 768px)').matches
+}
+
+function useDesktopLayout() {
+  return useSyncExternalStore(subscribeDesktopMq, getDesktopMqSnapshot, () => false)
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,6 +77,106 @@ function rowLabel(chart: ChartPayload, row: Record<string, unknown>): string {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function PeriodComparisonBarChart({
+  chart,
+  colors,
+  chartAxisTick,
+  chartAxisTickSm,
+  chartTooltipStyle,
+  desktopLayout,
+  comparisonMuted,
+}: {
+  chart: ChartPayload
+  colors: ReturnType<typeof useChartTheme>['chart'] & { barPrimary: string }
+  chartAxisTick: { fontSize: number; fill: string }
+  chartAxisTickSm: { fontSize: number; fill: string }
+  chartTooltipStyle: CSSProperties
+  desktopLayout: boolean
+  comparisonMuted: string
+}) {
+  const yKey = chart.y_key
+  const prior = Number(chart.data[0]?.[yKey] ?? 0)
+  const current = Number(chart.data[1]?.[yKey] ?? 0)
+  const change = current - prior
+  const changePct = prior > 0 ? ((current - prior) / prior) * 100 : 0
+  const isDecline = change < 0
+  const chartHeight = desktopLayout ? 248 : 200
+  const barSize = desktopLayout ? 86 : 72
+  const xTick = desktopLayout ? chartAxisTick : chartAxisTickSm
+
+  return (
+    <div>
+      <div className="w-full" style={{ height: chartHeight }}>
+        <ResponsiveContainer width="100%" height={chartHeight}>
+          <BarChart
+            data={chart.data}
+            margin={{
+              top: desktopLayout ? 12 : 8,
+              right: desktopLayout ? 20 : 16,
+              left: 0,
+              bottom: desktopLayout ? 12 : 4,
+            }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
+            <XAxis
+              dataKey={chart.x_key}
+              tick={xTick}
+              tickLine={false}
+              axisLine={false}
+              interval={0}
+              dy={desktopLayout ? 6 : 4}
+            />
+            <YAxis
+              tick={xTick}
+              tickLine={false}
+              axisLine={false}
+              width={desktopLayout ? 52 : 44}
+              tickFormatter={formatRevenueTick}
+              domain={revenueYAxisDomain}
+            />
+            <Tooltip
+              content={(
+                <ChartTooltip
+                  tooltipKey={chart.tooltip_key}
+                  tooltipStyle={chartTooltipStyle}
+                  yKey={yKey}
+                />
+              )}
+            />
+            <Bar dataKey={yKey} radius={[4, 4, 0, 0]} barSize={barSize}>
+              {chart.data.map((_, i) => (
+                <Cell
+                  key={i}
+                  fill={i === 0 ? comparisonMuted : colors.barPrimary}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div
+        className={[
+          'border-t border-workspace-border/40 grid grid-cols-2 gap-3',
+          desktopLayout ? 'mt-5 pt-4 text-xs' : 'mt-3 pt-3 text-[11px]',
+        ].join(' ')}
+      >
+        <div>
+          <p className="text-theme-muted">Absolut förändring</p>
+          <p className={`font-semibold tabular-nums mt-0.5 ${isDecline ? 'text-red-600 dark:text-red-400' : 'text-theme-heading'}`}>
+            {formatCompactSEK(change)}
+          </p>
+        </div>
+        <div>
+          <p className="text-theme-muted">Förändring %</p>
+          <p className={`font-semibold tabular-nums mt-0.5 ${isDecline ? 'text-red-600 dark:text-red-400' : 'text-theme-heading'}`}>
+            {changePct > 0 ? '+' : ''}{changePct.toLocaleString('sv-SE', { maximumFractionDigits: 1 })} %
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function ChartTooltip({
   active,
@@ -527,9 +646,10 @@ export function MiniAssistantChart({
   sanitizeHighlightLabels?: boolean
   highlightsLayout?: 'default' | 'two-column'
 }) {
-  const { chart: baseColors, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
+  const { chart: baseColors, chartAxisTick, chartAxisTickSm, chartTooltipStyle } = useChartTheme()
   const { chartPrimary, chartMuted } = useTenantBranding()
   const comparisonMuted = '#94A3B8'
+  const desktopLayout = useDesktopLayout()
 
   const colors = tenantColors
     ? {
@@ -545,17 +665,17 @@ export function MiniAssistantChart({
   if (chart.chart_type === 'empty_state') return <EmptyState chart={chart} />
 
   const isHorizontal = chart.layout === 'horizontal'
-  const isDeclineComp = chart.chart_variant === 'decline_comparison'
+  const isPeriodComparisonBar = chart.chart_variant === 'decline_comparison' || chart.chart_variant === 'period_comparison'
   const isDeclineTrend = chart.chart_variant === 'decline_trend'
   const isDeclineRanking = chart.chart_variant === 'decline_ranking'
   const emphasisIndex = chart.emphasis_index ?? 0
-  const useRankList = isHorizontal && !isDeclineComp && !isDeclineRanking
+  const useRankList = isHorizontal && !isPeriodComparisonBar && !isDeclineRanking
   const barCount = chart.data.length
 
   const trendHeight = expanded ? 320 : compact ? 220 : 280
   const chartHeight = chart.chart_type === 'line_chart'
     ? trendHeight
-    : isDeclineComp ? (expanded ? 240 : 200) : Math.max(expanded ? 140 : 120, barCount * (expanded ? 36 : 32))
+    : Math.max(expanded ? 140 : 120, barCount * (expanded ? 36 : 32))
 
   if (chart.chart_type === 'line_chart') {
     if (isDeclineTrend) {
@@ -627,65 +747,17 @@ export function MiniAssistantChart({
   }
 
   if (chart.chart_type === 'bar_chart') {
-    if (isDeclineComp) {
-      const prior = Number(chart.data[0]?.[chart.y_key] ?? 0)
-      const current = Number(chart.data[1]?.[chart.y_key] ?? 0)
-      const change = current - prior
-      const changePct = prior > 0 ? ((current - prior) / prior) * 100 : 0
-      const isDecline = change < 0
-
+    if (isPeriodComparisonBar) {
       return (
-        <div>
-          <div className="w-full" style={{ height: chartHeight }}>
-          <ResponsiveContainer width="100%" height={chartHeight}>
-            <BarChart
-              data={chart.data}
-              margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
-              <XAxis dataKey={chart.x_key} tick={chartAxisTickSm} tickLine={false} axisLine={false} />
-              <YAxis
-                tick={chartAxisTickSm}
-                tickLine={false}
-                axisLine={false}
-                width={44}
-                tickFormatter={formatRevenueTick}
-                domain={revenueYAxisDomain}
-              />
-              <Tooltip
-                content={(
-                  <ChartTooltip
-                    tooltipStyle={chartTooltipStyle as CSSProperties}
-                    yKey={chart.y_key}
-                  />
-                )}
-              />
-              <Bar dataKey={chart.y_key} radius={[4, 4, 0, 0]} barSize={expanded ? 84 : 72}>
-                {chart.data.map((_, i) => (
-                  <Cell
-                    key={i}
-                    fill={i === 0 ? comparisonMuted : colors.barPrimary}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-          <div className="mt-3 pt-3 border-t border-workspace-border/40 grid grid-cols-2 gap-3 text-[11px]">
-            <div>
-              <p className="text-theme-muted">Absolut förändring</p>
-              <p className={`font-semibold tabular-nums mt-0.5 ${isDecline ? 'text-red-600 dark:text-red-400' : 'text-theme-heading'}`}>
-                {formatCompactSEK(change)}
-              </p>
-            </div>
-            <div>
-              <p className="text-theme-muted">Förändring %</p>
-              <p className={`font-semibold tabular-nums mt-0.5 ${isDecline ? 'text-red-600 dark:text-red-400' : 'text-theme-heading'}`}>
-                {changePct > 0 ? '+' : ''}{changePct.toLocaleString('sv-SE', { maximumFractionDigits: 1 })} %
-              </p>
-            </div>
-          </div>
-        </div>
+        <PeriodComparisonBarChart
+          chart={chart}
+          colors={colors}
+          chartAxisTick={chartAxisTick}
+          chartAxisTickSm={chartAxisTickSm}
+          chartTooltipStyle={chartTooltipStyle as CSSProperties}
+          desktopLayout={desktopLayout}
+          comparisonMuted={comparisonMuted}
+        />
       )
     }
 

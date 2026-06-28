@@ -22,7 +22,7 @@ from app.services.intent_router import (
     plan_forced_tools,
 )
 from app.services.intent_router import PriorTurnContext as RouterPriorContext
-from app.services.ranking_limits import extract_ranking_limit, resolve_product_ranking_limit
+from app.services.ranking_limits import extract_ranking_limit, resolve_product_ranking_limit, is_ascending_product_ranking_question
 from app.services.decline_period import DECLINE_PERIOD_CLARIFICATION
 from app.services.period_labels import message_specifies_period
 from app.services.period_utils import (
@@ -284,6 +284,8 @@ def _build_tool_plans(
         args = {**base, "limit": limit}
         if region:
             args["region"] = region
+        if is_ascending_product_ranking_question(message):
+            args["sort_order"] = "asc"
         plans.append(ToolPlan("get_top_products", args, reason="planner: product ranking"))
         return plans
 

@@ -4,12 +4,15 @@ import unittest
 
 from app.services.chart_builder import build_decline_ranking_chart, build_decline_trend_chart
 from app.services.chart_policy import select_charts
+from app.services.chat import _decline_period_clarification_response
+from app.services.comparison_labels import COMPARISON_PERIOD_CLARIFICATION
 from app.services.decline_period import (
     DECLINE_PERIOD_CLARIFICATION,
     decline_question_needs_period,
     plan_awaiting_decline_period,
+    plan_decline_period_from_action,
 )
-from app.services.intent_router import plan_forced_tools
+from app.services.intent_router import plan_forced_tools, prior_context_from_dict
 from app.services.plan_normalizer import normalize_plan
 from app.services.tool_planner import resolve_tool_plans
 from app.schemas.analysis_plan import AnalysisPlan, TimePeriod
@@ -36,6 +39,15 @@ class DeclinePeriodTests(unittest.TestCase):
         )
         self.assertEqual(resolution.clarification_answer, DECLINE_PERIOD_CLARIFICATION)
         self.assertEqual(resolution.plans, [])
+        self.assertNotEqual(resolution.clarification_answer, COMPARISON_PERIOD_CLARIFICATION)
+
+    def test_decline_clarification_response_is_structured_card(self):
+        payload = _decline_period_clarification_response("supplier-1")
+        self.assertEqual(payload["response_kind"], "decline_period_composer")
+        self.assertEqual(payload["answer"], "")
+        self.assertTrue(payload["analysis_context"]["awaiting_decline_period"])
+        self.assertEqual(payload["analysis_context"]["awaiting_clarification"], "decline_period")
+        self.assertEqual(payload["analysis_context"]["pending_intent"], "product_decline")
 
     def test_legacy_forced_tools_skip_ambiguous_decline(self):
         plans = plan_forced_tools("Vilken produkt har tappat mest?", "Coca-Cola Sverige")
@@ -165,14 +177,25 @@ class DeclinePeriodContextFlowTests(unittest.TestCase):
         """The prior_context dict the frontend sends after the clarification response."""
         return {
             "question": "Vilken produkt har tappat mest?",
-            "answer": DECLINE_PERIOD_CLARIFICATION,
+            "answer": "",
             "tool_calls": [],
             "sources": [],
             "has_chart": False,
             "analysis_context": {
                 "awaiting_decline_period": True,
+                "awaiting_clarification": "decline_period",
+                "pending_intent": "product_decline",
                 "prior_intent": "product_decline",
             },
+        }
+
+    def _decline_action(self, period_kind: str, **extra) -> dict:
+        ctx = {"period_kind": period_kind, **extra}
+        return {
+            "action": "analyze_decline",
+            "label": "Analysera nedgång",
+            "message": "Analysera produktnedgång",
+            "context": ctx,
         }
 
     def _resolve(self, message: str, prior_context: dict | None = None) -> "ToolResolution":
@@ -200,10 +223,54 @@ class DeclinePeriodContextFlowTests(unittest.TestCase):
 
     # --- Step 3: "i år" with awaiting context → product_decline for current year ---
     def test_step3_current_year_reply_resolves_to_decline(self):
-        prior = self._make_prior_context_with_awaiting()
-        resolution = self._resolve("i år", prior)
+        resolution = self._resolve("i år", self._make_prior_context_with_awaiting())
         self.assertEqual(len(resolution.plans), 1)
         self.assertEqual(resolution.plans[0].tool_name, "get_declining_products")
+        self.assertNotIn("get_supplier_kpis", [p.tool_name for p in resolution.plans])
+
+    def test_step3_structured_year_to_date_from_card(self):
+        prior = prior_context_from_dict(self._make_prior_context_with_awaiting())
+        resolution = resolve_tool_plans(
+            "Analysera produktnedgång",
+            "Coca-Cola Europacific Partners Sverige",
+            prior_context=prior,
+            follow_up_action=self._decline_action("year_to_date"),
+        )
+        self.assertEqual(len(resolution.plans), 1)
+        self.assertEqual(resolution.plans[0].tool_name, "get_declining_products")
+        self.assertNotIn("get_supplier_kpis", [p.tool_name for p in resolution.plans])
+
+    def test_step3c_sedan_start_reply_resolves_to_decline(self):
+        prior = self._make_prior_context_with_awaiting()
+        resolution = self._resolve("sedan start", prior)
+        self.assertEqual(len(resolution.plans), 1)
+        self.assertEqual(resolution.plans[0].tool_name, "get_declining_products")
+        self.assertEqual(resolution.plans[0].args.get("_period_kind"), "full_history")
+
+    def test_step3d_structured_full_history_from_card(self):
+        prior = prior_context_from_dict(self._make_prior_context_with_awaiting())
+        resolution = resolve_tool_plans(
+            "Analysera produktnedgång",
+            "Coca-Cola Europacific Partners Sverige",
+            prior_context=prior,
+            follow_up_action=self._decline_action("full_history"),
+        )
+        self.assertEqual(len(resolution.plans), 1)
+        self.assertEqual(resolution.plans[0].tool_name, "get_declining_products")
+        self.assertEqual(resolution.plans[0].args.get("_period_kind"), "full_history")
+
+    def test_step3e_structured_rolling_30_from_card(self):
+        prior = prior_context_from_dict(self._make_prior_context_with_awaiting())
+        resolution = resolve_tool_plans(
+            "Analysera produktnedgång",
+            "Coca-Cola Europacific Partners Sverige",
+            prior_context=prior,
+            follow_up_action=self._decline_action("rolling_30"),
+        )
+        self.assertEqual(len(resolution.plans), 1)
+        self.assertEqual(resolution.plans[0].tool_name, "get_declining_products")
+        self.assertEqual(resolution.plans[0].args.get("days"), 30)
+        self.assertEqual(resolution.plans[0].args.get("_period_kind"), "rolling_30")
 
     # --- Step 3b: "senaste 12 månaderna" with awaiting context ---
     def test_step3b_12months_reply_resolves_to_decline(self):
@@ -213,12 +280,18 @@ class DeclinePeriodContextFlowTests(unittest.TestCase):
         self.assertEqual(resolution.plans[0].tool_name, "get_declining_products")
         self.assertGreaterEqual(resolution.plans[0].args.get("days", 0), 360)
 
-    # --- Step 4: No awaiting context → "senaste 30 dagarna" does NOT trigger decline ---
+    # --- Step 4: No awaiting context → bare period phrases must not force decline ---
     def test_step4_no_prior_context_period_is_not_decline(self):
         resolution = self._resolve("senaste 30 dagarna")
-        # Must NOT be a product_decline — will be a sales trend or overview
         tools = [p.tool_name for p in resolution.plans]
         self.assertNotIn("get_declining_products", tools)
+
+    def test_step4b_bare_current_year_without_decline_context(self):
+        resolution = self._resolve("i år")
+        tools = [p.tool_name for p in resolution.plans]
+        self.assertNotIn("get_declining_products", tools)
+        forced = plan_forced_tools("i år", "Coca-Cola Sverige")
+        self.assertNotIn("get_declining_products", [p.tool_name for p in forced])
 
     # --- Step 5: Full sentence decline question with period stays normal ---
     def test_step5_full_sentence_with_period_is_not_decline_clarification(self):
@@ -229,6 +302,19 @@ class DeclinePeriodContextFlowTests(unittest.TestCase):
         self.assertNotIn("get_declining_products", tools)
 
     # --- Ensure "30 dagar" and bare variants also work ---
+    def test_plan_decline_period_from_action_custom(self):
+        plans = plan_decline_period_from_action({
+            "action": "analyze_decline",
+            "context": {
+                "period_kind": "custom",
+                "start_date": "2026-05-01",
+                "end_date": "2026-05-31",
+            },
+        })
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0].tool_name, "get_declining_products")
+        self.assertEqual(plans[0].args.get("days"), 31)
+
     def test_bare_days_reply_resolves_to_decline(self):
         prior = self._make_prior_context_with_awaiting()
         for phrase in ["30 dagar", "förra året", "senaste 12 månaderna", "12 månader"]:

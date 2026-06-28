@@ -48,3 +48,8 @@ export function dedupeCharts(charts: (ChartPayload | null | undefined)[]): Chart
   }
   return out
 }
+
+/** Two-bar period comparison result (legacy decline_comparison + orchestrated period_comparison). */
+export function isPeriodComparisonChart(chart: ChartPayload | null | undefined): boolean {
+  return chart?.chart_variant === 'period_comparison' || chart?.chart_variant === 'decline_comparison'
+}

@@ -246,7 +246,7 @@ def analysis_context_from_prior_data(
     analysis_context: Optional[dict] = None,
 ) -> Optional[AnalysisContext]:
     if analysis_context:
-        if analysis_context.get("awaiting_decline_period"):
+        if analysis_context.get("awaiting_decline_period") or analysis_context.get("awaiting_clarification") == "decline_period":
             return AnalysisContext(
                 prior_intent="product_decline",
                 start_date="",

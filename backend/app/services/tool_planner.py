@@ -49,10 +49,23 @@ def plan_deterministic_tools(
 ) -> list[ToolPlan]:
     """Secure follow-ups and UI actions — always bypass the AI planner."""
     msg = message.strip()
+
+    if follow_up_action:
+        from app.services.decline_period import (
+            DECLINE_PERIOD_ACTION,
+            plan_decline_period_from_action,
+        )
+        if str(follow_up_action.get("action") or "").strip() == DECLINE_PERIOD_ACTION:
+            structured_decline = plan_decline_period_from_action(follow_up_action)
+            if structured_decline:
+                return structured_decline
+
     if prior_context:
-        from app.services.decline_period import plan_awaiting_decline_period
-        ac = prior_context.analysis_context or {}
-        if ac.get("awaiting_decline_period"):
+        from app.services.decline_period import (
+            plan_awaiting_decline_period,
+            prior_awaiting_decline_period,
+        )
+        if prior_awaiting_decline_period(prior_context):
             awaiting = plan_awaiting_decline_period(msg)
             if awaiting:
                 return awaiting
@@ -144,13 +157,15 @@ def resolve_tool_plans(
         COMPARISON_PERIOD_CLARIFICATION,
         comparison_needs_period_clarification,
     )
-    if comparison_needs_period_clarification(message, prior_context):
-        meta.update({"source": "clarification", "intent": "period_comparison"})
-        return ToolResolution(
-            clarification_answer=COMPARISON_PERIOD_CLARIFICATION,
-            source="clarification",
-            analysis_meta=meta,
-        )
+    from app.services.decline_period import prior_awaiting_decline_period
+    if not prior_awaiting_decline_period(prior_context):
+        if comparison_needs_period_clarification(message, prior_context):
+            meta.update({"source": "clarification", "intent": "period_comparison"})
+            return ToolResolution(
+                clarification_answer=COMPARISON_PERIOD_CLARIFICATION,
+                source="clarification",
+                analysis_meta=meta,
+            )
 
     from app.services.decline_period import (
         DECLINE_PERIOD_CLARIFICATION,

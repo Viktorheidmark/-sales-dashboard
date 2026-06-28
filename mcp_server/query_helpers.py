@@ -237,12 +237,17 @@ def query_top_products(
     end_date: Optional[date] = None,
     limit: int = 5,
     region: Optional[str] = None,
+    sort_order: str = "desc",
 ) -> dict:
     """
-    Return top products by revenue for a supplier, optionally filtered by region.
+    Return top (or bottom) products by revenue for a supplier, optionally filtered by region.
+
+    sort_order: ``desc`` (default, highest first) or ``asc`` (lowest first).
     """
     limit = max(1, min(limit, 50))
     sd, ed = _date_range(start_date, end_date, db=db, supplier_id=supplier_id)
+    ascending = (sort_order or "desc").strip().lower() == "asc"
+    sql_order = "ASC" if ascending else "DESC"
 
     region_join = ""
     region_filter = ""
@@ -263,7 +268,7 @@ def query_top_products(
                 p.sku                           AS sku,
                 COALESCE(SUM(oi.revenue), 0)    AS revenue,
                 COALESCE(SUM(oi.quantity), 0)   AS units,
-                RANK() OVER (ORDER BY SUM(oi.revenue) DESC) AS rank
+                RANK() OVER (ORDER BY SUM(oi.revenue) {sql_order}) AS rank
             FROM order_items oi
             JOIN orders   o ON o.id  = oi.order_id
             JOIN products p ON p.id  = oi.product_id
@@ -274,7 +279,7 @@ def query_top_products(
               AND o.order_date <  :end_date + INTERVAL '1 day'
               {region_filter}
             GROUP BY p.id, p.name, p.sku
-            ORDER BY revenue DESC
+            ORDER BY revenue {sql_order}
             LIMIT :limit
         """),
         params,
@@ -296,6 +301,7 @@ def query_top_products(
         "region_filter": region,
         "products": products,
         "requested_limit": limit,
+        "sort_order": "asc" if ascending else "desc",
         "date_range": {"start": _to_iso(sd), "end": _to_iso(ed)},
         "source": "MCP:get_top_products",
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),

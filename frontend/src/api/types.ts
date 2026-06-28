@@ -14,14 +14,20 @@ export interface AuthUser {
 // --- /api/chat ---
 
 export interface SourceMeta {
-  tool: string
-  source: string
-  supplier_id: string
-  generated_at: string
+  tool?: string
+  source?: string
+  supplier_id?: string
+  generated_at?: string
   row_count?: number
   date_range?: DateRange
   comparison_period_label?: string
   limitations?: string[]
+}
+
+export interface DebugDiagnostics {
+  tool_calls: string[]
+  sources: SourceMeta[]
+  analysis_meta?: Record<string, unknown>
 }
 
 export interface ChartHighlights {
@@ -132,7 +138,7 @@ export interface FollowUpAction {
   context?: {
     start_date?: string
     end_date?: string
-    period_kind?: string
+    period_kind?: string | 'rolling_30' | 'rolling_90' | 'year_to_date' | 'full_history' | 'custom'
     granularity?: string
     region?: string
     category?: string
@@ -156,6 +162,8 @@ export interface AnalysisContext {
   limit?: number
   prior_tool_calls?: string[]
   awaiting_decline_period?: boolean
+  awaiting_clarification?: 'decline_period' | string
+  pending_intent?: string
 }
 
 export interface PriorTurnContext {
@@ -223,7 +231,8 @@ export interface ChatResponse {
   limitations: string[]
   supplier_id: string
   generated_at: string
-  response_kind?: 'conversational' | 'insufficient_data' | 'unsupported' | 'comparison_composer'
+  response_kind?: 'conversational' | 'insufficient_data' | 'unsupported' | 'comparison_composer' | 'decline_period_composer'
+  debug_diagnostics?: DebugDiagnostics | null
 }
 
 // --- /api/chat/stream SSE events ---

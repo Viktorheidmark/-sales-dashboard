@@ -10,12 +10,12 @@ import {
   isPlainConversationalResponse,
   resolveResponseDateRange,
   resolveSourceSummaryLine,
-  toolLabelSv,
   visibleResponseLimitations,
 } from '../../utils/sourcePresentation'
 import { useChatState } from '../../context/ChatStateContext'
-import { chartIdentity, dedupeCharts } from '../../utils/chartIdentity'
+import { chartIdentity, dedupeCharts, isPeriodComparisonChart } from '../../utils/chartIdentity'
 import PeriodComparisonComposer from './PeriodComparisonComposer'
+import DeclinePeriodComposer, { type DeclinePeriodKind } from './DeclinePeriodComposer'
 
 
 const LOADING_STATUSES = [
@@ -45,6 +45,9 @@ interface Message {
   question?: string
   composerState?: 'open' | 'submitted'
   composerDates?: { periodA: { start: string; end: string }; periodB: { start: string; end: string } }
+  declineComposerState?: 'open' | 'submitted'
+  declineComposerKind?: DeclinePeriodKind
+  declineComposerRange?: { start: string; end: string }
 }
 
 interface ChatPanelProps {
@@ -86,7 +89,10 @@ function buildPriorContext(messages: Message[]): PriorTurnContext | undefined {
     if (msg.role !== 'assistant' || !msg.response) continue
     const hasTools = msg.response.tool_calls.length > 0
     // Also include clarification responses (e.g. awaiting_decline_period) even if no tool was called
-    const isAwaitingDecline = msg.response.analysis_context?.awaiting_decline_period === true
+    const isAwaitingDecline =
+      msg.response.analysis_context?.awaiting_decline_period === true
+      || msg.response.analysis_context?.awaiting_clarification === 'decline_period'
+      || msg.response.response_kind === 'decline_period_composer'
     if (!hasTools && !isAwaitingDecline) {
       continue
     }
@@ -126,39 +132,44 @@ function SourceSummary({
 }
 
 // ---------------------------------------------------------------------------
-// TechnicalSourceDetails — tool metadata only (dates live in SourceSummary)
+// Developer diagnostics — only when backend sends debug_diagnostics (dev flag)
 // ---------------------------------------------------------------------------
 
-function TechnicalSourceDetails({
-  sources,
+function DeveloperDiagnosticsPanel({
+  diagnostics,
 }: {
-  sources: SourceMeta[]
+  diagnostics: NonNullable<ChatResponse['debug_diagnostics']>
 }) {
-  if (sources.length === 0) return null
+  const trace = diagnostics.analysis_meta?.orchestration_trace
 
   return (
-    <details className="group/tech mt-1">
-      <summary className="text-[10px] text-theme-faint cursor-pointer select-none hover:text-theme-muted list-none flex items-center gap-1 w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded">
-        <span className="transition-transform group-open/tech:rotate-90 text-theme-faint">›</span>
-        Visa tekniska detaljer
+    <details className="group/dev mt-2 rounded-lg border border-dashed border-workspace-border/60 bg-workspace-surface/40">
+      <summary className="cursor-pointer select-none list-none px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-theme-faint hover:text-theme-muted">
+        <span className="transition-transform group-open/dev:rotate-90 inline-block mr-1">›</span>
+        Utvecklingsdiagnostik
       </summary>
-      <div className="mt-2 pl-2 border-l border-workspace-border/40">
-        <div className="space-y-3">
-          {sources.map((s, i) => (
-            <div
-              key={i}
-              className={`space-y-1 text-[10px] text-theme-faint leading-relaxed ${
-                i > 0 ? 'pt-3 border-t border-workspace-border/40' : ''
-              }`}
-            >
-              <p>{toolLabelSv(s.tool)}</p>
-              {s.source && <p className="font-mono text-[9px] opacity-80">{s.source}</p>}
-              {s.row_count != null && (
-                <p>{s.row_count.toLocaleString('sv-SE')} rader</p>
-              )}
-            </div>
-          ))}
-        </div>
+      <div className="px-3 pb-3 space-y-3 text-[10px] text-theme-faint leading-relaxed font-mono">
+        {diagnostics.tool_calls.length > 0 && (
+          <div>
+            <p className="text-[9px] uppercase tracking-wide text-theme-faint mb-1">Verktyg</p>
+            <p>{diagnostics.tool_calls.join(', ')}</p>
+          </div>
+        )}
+        {diagnostics.sources.map((s, i) => (
+          <div key={i} className={i > 0 ? 'pt-2 border-t border-workspace-border/30' : ''}>
+            {s.tool && <p>{s.tool}</p>}
+            {s.source && <p className="opacity-80">{s.source}</p>}
+            {s.row_count != null && <p>{s.row_count.toLocaleString('sv-SE')} rader</p>}
+          </div>
+        ))}
+        {trace != null && (
+          <div className="pt-2 border-t border-workspace-border/30">
+            <p className="text-[9px] uppercase tracking-wide text-theme-faint mb-1">Orchestration trace</p>
+            <pre className="whitespace-pre-wrap break-all text-[9px] opacity-90">
+              {JSON.stringify(trace, null, 2)}
+            </pre>
+          </div>
+        )}
       </div>
     </details>
   )
@@ -259,18 +270,27 @@ function ChartBlock({
 }) {
   const selfContained = chart.chart_type === 'insight_card' || chart.chart_type === 'empty_state'
   const isSecondary = chart.chart_role === 'secondary' || chart.compact
+  const isComparison = isPeriodComparisonChart(chart) && !isSecondary
   if (selfContained) {
     return <MiniAssistantChart chart={chart} supplierName={supplierName} tenantColors />
   }
   return (
-    <div className={`assistant-chart-card ${isSecondary ? 'assistant-chart-card-secondary' : ''}`}>
+    <div className={`assistant-chart-card ${isSecondary ? 'assistant-chart-card-secondary' : ''} ${isComparison ? 'assistant-chart-card-comparison' : ''}`}>
       {chart.title && (
-        <h3 className={`font-semibold text-theme-heading leading-snug ${isSecondary ? 'text-xs' : 'text-sm'}`}>
+        <h3 className={`font-semibold text-theme-heading leading-snug ${
+          isComparison
+            ? 'assistant-chart-card-comparison-title text-sm md:text-[0.9375rem]'
+            : isSecondary ? 'text-xs' : 'text-sm'
+        }`}>
           {chart.title}
         </h3>
       )}
       {chart.description && (
-        <p className={`text-theme-muted mt-0.5 mb-3 leading-relaxed ${isSecondary ? 'text-[11px]' : 'text-xs'}`}>
+        <p className={`text-theme-muted leading-relaxed ${
+          isComparison
+            ? 'assistant-chart-card-comparison-description text-xs md:text-[0.8125rem] mt-1 mb-4'
+            : `mt-0.5 mb-3 ${isSecondary ? 'text-[11px]' : 'text-xs'}`
+        }`}>
           {chart.description}
         </p>
       )}
@@ -279,7 +299,9 @@ function ChartBlock({
         <p className="mt-2 text-[11px] text-theme-muted leading-snug italic">{chart.stability_note}</p>
       )}
       {chart.period_note && (
-        <p className="mt-2 text-[11px] text-theme-muted leading-snug">{chart.period_note}</p>
+        <p className={`text-theme-muted leading-snug ${isComparison ? 'mt-3 text-xs' : 'mt-2 text-[11px]'}`}>
+          {chart.period_note}
+        </p>
       )}
     </div>
   )
@@ -357,12 +379,14 @@ function AssistantBubble({
   fallbackDateRange,
   onSendMessage,
   onComposerSubmit,
+  onDeclineComposerSubmit,
 }: {
   msg: Message
   supplierName?: string
   fallbackDateRange?: DateRange
   onSendMessage: (text: string) => void
   onComposerSubmit?: (msgId: string, periodA: { start: string; end: string }, periodB: { start: string; end: string }, mode: 'preset' | 'custom') => void
+  onDeclineComposerSubmit?: (msgId: string, periodKind: DeclinePeriodKind, customRange?: { start: string; end: string }) => void
 }) {
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
@@ -430,6 +454,19 @@ function AssistantBubble({
     )
   }
 
+  if (msg.response?.response_kind === 'decline_period_composer' || msg.declineComposerState) {
+    return (
+      <article className="self-start w-full py-1" style={{ maxWidth: '85%', animation: 'messageIn 0.3s ease-out both' }}>
+        <DeclinePeriodComposer
+          locked={msg.declineComposerState === 'submitted'}
+          lockedKind={msg.declineComposerKind}
+          lockedRange={msg.declineComposerRange}
+          onSubmit={(periodKind, customRange) => onDeclineComposerSubmit?.(msg.id, periodKind, customRange)}
+        />
+      </article>
+    )
+  }
+
   if (msg.response?.response_kind === 'comparison_composer' || msg.composerState) {
     return (
       <article className="self-start w-full py-1" style={{ maxWidth: '85%', animation: 'messageIn 0.3s ease-out both' }}>
@@ -454,10 +491,11 @@ function AssistantBubble({
   const dedupedCharts = dedupeCharts([r.chart, ...(r.charts ?? [])])
   const primaryChart = dedupedCharts[0]
   const extraCharts = dedupedCharts.slice(1)
+  const isComparisonResult = isPeriodComparisonChart(primaryChart)
 
   return (
     <article
-      className="self-start w-full space-y-3"
+      className={`self-start w-full ${isComparisonResult ? 'assistant-message-comparison space-y-3 md:space-y-5' : 'space-y-3'}`}
       style={{ padding: '4px 0', maxWidth: '75%', animation: 'messageIn 0.3s ease-out both' }}
     >
       {isMissingDataCard ? (
@@ -488,7 +526,7 @@ function AssistantBubble({
       )}
 
       {primaryChart && (
-        <div className="pt-1">
+        <div className={isComparisonResult ? 'pt-2 md:pt-3' : 'pt-1'}>
           <ChartBlock chart={primaryChart} supplierName={supplierName} />
           {isMarketShareResponse(r) && (
             <p className="mt-1.5 text-[11px] text-theme-muted leading-snug">
@@ -527,7 +565,9 @@ function AssistantBubble({
       {showSourceFooter && (
         <div className="space-y-1 pt-2 border-t border-workspace-border/30">
           <SourceSummary sources={r.sources} fallbackDateRange={fallbackDateRange} />
-          <TechnicalSourceDetails sources={r.sources} />
+          {r.debug_diagnostics && (
+            <DeveloperDiagnosticsPanel diagnostics={r.debug_diagnostics} />
+          )}
         </div>
       )}
     </article>
@@ -787,6 +827,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             supplier_id: event.supplier_id,
             generated_at: event.generated_at,
             response_kind: event.response_kind,
+            debug_diagnostics: event.debug_diagnostics,
           }
           update({
             loading: false,
@@ -795,6 +836,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             statusText: undefined,
             response,
             composerState: event.response_kind === 'comparison_composer' ? 'open' : undefined,
+            declineComposerState: event.response_kind === 'decline_period_composer' ? 'open' : undefined,
           })
         } else if (event.type === 'error') {
           update({
@@ -905,6 +947,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             supplier_id: event.supplier_id,
             generated_at: event.generated_at,
             response_kind: event.response_kind,
+            debug_diagnostics: event.debug_diagnostics,
           }
           update({ loading: false, content: event.answer, streamingContent: undefined, statusText: undefined, response })
         } else if (event.type === 'error') {
@@ -922,6 +965,125 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
       }
     }
   }, [loading, startDate, endDate])
+
+  const submitDecline = useCallback(async (
+    composerMsgId: string,
+    periodKind: DeclinePeriodKind,
+    customRange?: { start: string; end: string },
+  ) => {
+    if (loading) return
+
+    setMessages(prev => prev.map(m =>
+      m.id === composerMsgId
+        ? {
+            ...m,
+            declineComposerState: 'submitted' as const,
+            declineComposerKind: periodKind,
+            declineComposerRange: periodKind === 'custom' ? customRange : undefined,
+          }
+        : m
+    ))
+
+    abortRef.current?.abort()
+    const abort = new AbortController()
+    abortRef.current = abort
+
+    const assistantId = crypto.randomUUID()
+    const loadingMsg: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      loading: true,
+      statusText: 'Analyserar produktnedgång…',
+      question: 'Analysera produktnedgång',
+    }
+
+    setMessages(prev => [...prev, loadingMsg])
+    setLoading(true)
+
+    const update = (patch: Partial<Message>) => {
+      if (!mountedRef.current) return
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, ...patch } : m))
+    }
+
+    const priorContext = buildPriorContext(
+      // Include the locked decline composer turn in prior context.
+      messages.map(m =>
+        m.id === composerMsgId
+          ? {
+              ...m,
+              declineComposerState: 'submitted' as const,
+              declineComposerKind: periodKind,
+              declineComposerRange: periodKind === 'custom' ? customRange : undefined,
+            }
+          : m
+      ),
+    )
+
+    try {
+      const sessionAtSend = chatSessionRef.current
+      const stream = api.chatStream(
+        {
+          message: 'Analysera produktnedgång',
+          prior_context: priorContext,
+          follow_up_action: {
+            action: 'analyze_decline',
+            label: 'Analysera nedgång',
+            message: 'Analysera produktnedgång',
+            context: {
+              period_kind: periodKind,
+              ...(periodKind === 'custom' && customRange
+                ? { start_date: customRange.start, end_date: customRange.end }
+                : {}),
+            },
+          },
+        },
+        abort.signal,
+      )
+
+      for await (const event of stream) {
+        if (!mountedRef.current || abort.signal.aborted || chatSessionRef.current !== sessionAtSend) break
+
+        if (event.type === 'status') {
+          update({ statusText: event.text || 'Analyserar produktnedgång…' })
+        } else if (event.type === 'delta') {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId
+              ? { ...m, streamingContent: (m.streamingContent ?? '') + event.text }
+              : m
+          ))
+        } else if (event.type === 'complete') {
+          const response: ChatResponse = {
+            answer: event.answer,
+            tool_calls: event.tool_calls,
+            sources: event.sources,
+            chart: event.chart,
+            charts: event.charts,
+            deep_dive: event.deep_dive,
+            follow_up_actions: event.follow_up_actions,
+            analysis_context: event.analysis_context,
+            limitations: event.limitations,
+            supplier_id: event.supplier_id,
+            generated_at: event.generated_at,
+            response_kind: event.response_kind,
+            debug_diagnostics: event.debug_diagnostics,
+          }
+          update({ loading: false, content: event.answer, streamingContent: undefined, statusText: undefined, response })
+        } else if (event.type === 'error') {
+          update({ loading: false, streamingContent: undefined, statusText: undefined, error: userFacingError(event.message) })
+        }
+      }
+    } catch (err) {
+      if (!mountedRef.current) return
+      if (err instanceof Error && err.name === 'AbortError') return
+      update({ loading: false, streamingContent: undefined, statusText: undefined, error: userFacingError() })
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false)
+        inputRef.current?.focus()
+      }
+    }
+  }, [loading, messages])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1086,6 +1248,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
                       }
                       onSendMessage={sendMessage}
                       onComposerSubmit={(id, a, b, m) => submitComparison(id, a, b, m)}
+                      onDeclineComposerSubmit={(id, kind, range) => submitDecline(id, kind, range)}
                     />
                   )
                 )}

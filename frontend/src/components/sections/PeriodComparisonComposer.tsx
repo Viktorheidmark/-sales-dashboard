@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useTenantBranding } from '../../context/TenantBrandingContext'
 import { api } from '../../api/client'
 
@@ -7,7 +7,7 @@ interface PeriodRange {
   end: string
 }
 
-type ComparisonMode = 'preset' | 'custom'
+type ComparisonMode = 'custom'
 
 interface Props {
   locked?: boolean
@@ -23,34 +23,6 @@ function svDate(iso: string): string {
     })
   } catch {
     return iso
-  }
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function daysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
-
-type GlobalPreset = 'last30v30' | 'last90v90' | 'ytd_vs_prev'
-
-function applyGlobalPreset(kind: GlobalPreset, dataMax?: string): { a: PeriodRange; b: PeriodRange } {
-  const t = dataMax || todayIso()
-  const year = new Date().getFullYear()
-  if (kind === 'last30v30') {
-    return { a: { start: daysAgo(60), end: daysAgo(31) }, b: { start: daysAgo(30), end: t } }
-  }
-  if (kind === 'last90v90') {
-    return { a: { start: daysAgo(180), end: daysAgo(91) }, b: { start: daysAgo(90), end: t } }
-  }
-  // ytd_vs_prev
-  return {
-    a: { start: `${year - 1}-01-01`, end: `${year - 1}-12-31` },
-    b: { start: `${year}-01-01`, end: t },
   }
 }
 
@@ -84,7 +56,6 @@ export default function PeriodComparisonComposer({ locked, lockedDates, onSubmit
   const [dataMin, setDataMin] = useState('')
   const [dataMax, setDataMax] = useState('')
   const [touched, setTouched] = useState(false)
-  const [activePreset, setActivePreset] = useState<GlobalPreset | null>(null)
 
   useEffect(() => {
     api.getDataStatus().then(s => {
@@ -96,19 +67,10 @@ export default function PeriodComparisonComposer({ locked, lockedDates, onSubmit
   const error = touched ? validate(periodA, periodB, dataMin, dataMax) : null
   const isValid = validate(periodA, periodB, dataMin, dataMax) === null
 
-  const handleGlobalPreset = useCallback((kind: GlobalPreset) => {
-    const { a, b } = applyGlobalPreset(kind, dataMax || undefined)
-    setPeriodA(a)
-    setPeriodB(b)
-    setActivePreset(kind)
-    setTouched(false)
-  }, [dataMax])
-
   const handleSubmit = () => {
     setTouched(true)
     if (!isValid) return
-    const mode: ComparisonMode = activePreset ? 'preset' : 'custom'
-    onSubmit(periodA, periodB, mode)
+    onSubmit(periodA, periodB, 'custom')
   }
 
   const handleDateChange = (
@@ -116,17 +78,10 @@ export default function PeriodComparisonComposer({ locked, lockedDates, onSubmit
     field: 'start' | 'end',
     value: string,
   ) => {
-    setActivePreset(null)
     setTouched(false)
     if (panel === 'a') setPeriodA(prev => ({ ...prev, [field]: value }))
     else setPeriodB(prev => ({ ...prev, [field]: value }))
   }
-
-  const globalPresets: { kind: GlobalPreset; label: string }[] = [
-    { kind: 'last30v30', label: 'Senaste 30 vs föregående 30' },
-    { kind: 'last90v90', label: 'Senaste 90 vs föregående 90' },
-    { kind: 'ytd_vs_prev', label: 'I år vs förra året' },
-  ]
 
   if (locked && lockedDates) {
     return (
@@ -156,40 +111,8 @@ export default function PeriodComparisonComposer({ locked, lockedDates, onSubmit
         </p>
       </div>
 
-      {/* Global presets */}
-      <div className="px-5 pt-3 pb-2 flex flex-wrap gap-2">
-        {globalPresets.map(({ kind, label }) => (
-          <button
-            key={kind}
-            onClick={() => handleGlobalPreset(kind)}
-            disabled={!!locked}
-            className={[
-              'px-3 py-1 rounded-full text-xs font-medium border transition-colors',
-              activePreset === kind
-                ? 'text-white border-transparent'
-                : 'border-workspace-border bg-workspace-surface text-workspace-text-muted hover:text-workspace-text hover:border-workspace-text-muted',
-            ].join(' ')}
-            style={activePreset === kind ? { background: chartPrimary, borderColor: chartPrimary } : {}}
-          >
-            {label}
-          </button>
-        ))}
-        <button
-          onClick={() => {
-            setPeriodA({ start: '', end: '' })
-            setPeriodB({ start: '', end: '' })
-            setActivePreset(null)
-            setTouched(false)
-          }}
-          disabled={!!locked}
-          className="px-3 py-1 rounded-full text-xs font-medium border border-workspace-border bg-workspace-surface text-workspace-text-muted hover:text-workspace-text hover:border-workspace-text-muted transition-colors"
-        >
-          Rensa
-        </button>
-      </div>
-
       {/* Panels */}
-      <div className="px-5 pb-4 pt-2 flex flex-col md:flex-row gap-3 items-stretch">
+      <div className="px-5 pb-4 pt-4 flex flex-col md:flex-row gap-3 items-stretch">
         {/* Jämförelseperiod (baseline, neutral) */}
         <DatePanel
           label="Jämförelseperiod"

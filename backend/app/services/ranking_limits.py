@@ -91,6 +91,27 @@ def extract_ranking_limit(message: str) -> Optional[int]:
     return None
 
 
+_LOW_REVENUE_RANKING_RE = re.compile(
+    r"("
+    r"(lägst|minst).{0,40}(omsättning|försäljning|intäkt)|"
+    r"(omsättning|försäljning|intäkt).{0,40}(lägst|minst)|"
+    r"sämst.{0,30}(omsättning|försäljning|säljer|sålt)|"
+    r"produkter?.{0,40}sämst"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
+ASCENDING_PRODUCT_RANKING_TITLE = "Produkter med lägst omsättning"
+
+
+def is_ascending_product_ranking_question(message: str) -> bool:
+    """True for low-revenue / ascending product ranking (not product decline)."""
+    msg = (message or "").strip()
+    if not msg:
+        return False
+    return bool(_LOW_REVENUE_RANKING_RE.search(msg))
+
+
 def resolve_product_ranking_limit(
     message: str,
     *,

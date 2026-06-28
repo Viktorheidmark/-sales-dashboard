@@ -122,12 +122,14 @@ def get_top_products(
     end_date: Optional[str] = None,
     limit: int = 5,
     region: Optional[str] = None,
+    sort_order: str = "desc",
 ) -> dict:
     """
     Return the top-selling products by revenue for a supplier.
 
     Optionally filter by region name (e.g. 'Stockholm').
     limit defaults to 5, max 50.
+    sort_order: ``desc`` (highest revenue first, default) or ``asc`` (lowest first).
     Returns rank, product_name, sku, revenue, units, and metadata.
     """
     sid = _validate_supplier_id(supplier_id)
@@ -135,10 +137,13 @@ def get_top_products(
     ed = _parse_date(end_date, "end_date")
     if not (1 <= limit <= 50):
         raise ValueError("limit must be between 1 and 50.")
+    order = (sort_order or "desc").strip().lower()
+    if order not in ("asc", "desc"):
+        raise ValueError("sort_order must be 'asc' or 'desc'.")
 
     db = get_session()
     try:
-        return query_top_products(db, sid, sd, ed, limit, region)
+        return query_top_products(db, sid, sd, ed, limit, region, sort_order=order)
     finally:
         db.close()
 

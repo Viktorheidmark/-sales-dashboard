@@ -1885,6 +1885,26 @@
     box-sizing: border-box;
   }
 
+  @media (min-width: 768px) {
+    .assistant-message-comparison {
+      max-width: 680px;
+    }
+
+    .assistant-chart-card-comparison {
+      margin-top: 20px;
+      margin-bottom: 20px;
+      padding: 24px 28px;
+    }
+
+    .assistant-chart-card-comparison-title {
+      line-height: 1.35;
+    }
+
+    .assistant-chart-card-comparison-description {
+      line-height: 1.5;
+    }
+  }
+
   .assistant-chart-card-secondary {
     padding: 16px 20px;
     opacity: 0.95;
