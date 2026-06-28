@@ -28,12 +28,3 @@ def analytics_debug_trace_enabled() -> bool:
     approval to the response ``analysis_meta`` block.
     """
     return settings.analytics_debug_trace
-
-
-def analytics_shadow_eval_enabled() -> bool:
-    """Run the new planner alongside the legacy path for comparison/logging only.
-
-    Shadow mode never changes the user-facing response; it only logs plan
-    differences for evaluation during development.
-    """
-    return settings.analytics_shadow_eval
