@@ -37,6 +37,11 @@ from app.services.comparison_labels import (
     comparison_needs_period_clarification,
     COMPARISON_PERIOD_CLARIFICATION,
 )
+from app.analytics.flags import (
+    ai_orchestrated_analytics_enabled,
+    analytics_debug_trace_enabled,
+)
+from app.analytics.orchestrator import comparison_precheck, orchestrate_comparison
 from app.services.tool_planner import resolve_tool_plans
 from app.services.intent_router import (
     default_category_for_supplier,
@@ -324,6 +329,23 @@ def _comparison_clarification_response(supplier_id: str) -> dict:
     }
 
 
+def _comparison_composer_response(supplier_id: str) -> dict:
+    """Tell the frontend to show the period-picker composer card."""
+    return {
+        "answer": "",
+        "tool_calls": [],
+        "sources": [],
+        "chart": None,
+        "charts": [],
+        "deep_dive": None,
+        "follow_up_actions": [],
+        "limitations": [],
+        "response_kind": "comparison_composer",
+        "supplier_id": supplier_id,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
 def _decline_period_clarification_response(supplier_id: str) -> dict:
     from app.services.decline_period import DECLINE_PERIOD_CLARIFICATION
     return {
@@ -588,6 +610,158 @@ async def _llm_tool_round(
         messages.extend(tool_results_messages)
 
 
+async def _try_orchestrated_comparison(
+    message: str,
+    supplier_id: str,
+    supplier_name: str,
+    follow_up_action: Optional[dict],
+):
+    """Run the canonical comparison pipeline when the feature flag is enabled.
+
+    Returns the orchestrator outcome, or ``None`` when the new pipeline should
+    not handle this turn (flag off or not a comparison request).
+    """
+    if not ai_orchestrated_analytics_enabled():
+        return None
+
+    # Plan + validate first (no MCP). Non-comparison messages defer immediately,
+    # and vague comparisons open the composer — neither spawns a subprocess.
+    pre, _plan = comparison_precheck(
+        message, follow_up_action=follow_up_action, tenant_id=supplier_id
+    )
+    if pre.kind != "execute":
+        return pre
+
+    # Executable comparison → run the full pipeline against a live MCP session.
+    params = _server_params()
+    async with stdio_client(params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            async def runner(tool_name: str, args: dict) -> dict:
+                return await _invoke_mcp_tool(
+                    session, tool_name, args, supplier_id, None, None
+                )
+
+            outcome = await orchestrate_comparison(
+                message,
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
+                tool_runner=runner,
+                follow_up_action=follow_up_action,
+                tenant_theme={"supplier_name": supplier_name},
+            )
+    return outcome
+
+
+def _apply_debug_trace(payload: dict, trace: dict) -> dict:
+    """Attach safe operational trace metadata when ANALYTICS_DEBUG_TRACE is on."""
+    if analytics_debug_trace_enabled() and isinstance(payload, dict):
+        meta = dict(payload.get("analysis_meta") or {})
+        meta["orchestration_trace"] = trace
+        payload["analysis_meta"] = meta
+    return payload
+
+
+async def _handle_explicit_period_comparison(
+    follow_up_action: dict,
+    supplier_id: str,
+    supplier_name: str,
+) -> dict:
+    """Handle compare_periods action: calls KPI tool for each period and merges into a single comparison result."""
+    from datetime import date as _date
+
+    ctx = follow_up_action.get("context") or {}
+    a_start = str(ctx.get("period_a_start") or "").strip()
+    a_end = str(ctx.get("period_a_end") or "").strip()
+    b_start = str(ctx.get("period_b_start") or "").strip()
+    b_end = str(ctx.get("period_b_end") or "").strip()
+    comparison_mode = str(ctx.get("comparison_mode") or "custom")  # "preset" | "custom"
+
+    try:
+        for d in (a_start, a_end, b_start, b_end):
+            if not d:
+                raise ValueError("missing")
+            _date.fromisoformat(d)
+    except ValueError:
+        return {
+            "answer": "Ogiltiga datumvärden. Välj giltiga datum och försök igen.",
+            "tool_calls": [], "sources": [], "chart": None, "charts": [],
+            "deep_dive": None, "follow_up_actions": [], "limitations": [],
+            "response_kind": "conversational", "supplier_id": supplier_id,
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        }
+
+    tools_used: list[str] = []
+    sources: list[dict] = []
+    limitations: list[str] = []
+    raw_tool_results: list[tuple[str, dict]] = []
+
+    comparison_question = (
+        f"Jämför period A ({a_start} till {a_end}) med period B ({b_start} till {b_end}). "
+        "Beskriv skillnader i omsättning, ordrar och enheter."
+    )
+
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+    current_date = datetime.now(tz=timezone.utc).date().isoformat()
+
+    params = _server_params()
+    async with stdio_client(params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            # Period B = the "current" / highlighted period
+            b_kpi = await _invoke_mcp_tool(
+                session, "get_supplier_kpis",
+                {"start_date": b_start, "end_date": b_end},
+                supplier_id, None, None,
+            )
+
+            # Period A = baseline
+            a_kpi = await _invoke_mcp_tool(
+                session, "get_supplier_kpis",
+                {"start_date": a_start, "end_date": a_end},
+                supplier_id, None, None,
+            )
+
+            # Merge: treat B as current period, A as prior
+            merged_kpi = {
+                **b_kpi,
+                "prev_total_revenue": a_kpi.get("total_revenue"),
+                "prev_total_orders": a_kpi.get("total_orders"),
+                "prev_total_units": a_kpi.get("total_units"),
+                "prev_average_order_value": a_kpi.get("average_order_value"),
+                "prev_date_range": {"start": a_start, "end": a_end},
+                "_chart_intent": "period_comparison",
+                "comparison_kind": "explicit_period_comparison",
+                "comparison_mode": comparison_mode,
+            }
+            merged_kpi = _enrich_planned_tool_result(
+                "get_supplier_kpis", merged_kpi,
+                {"_chart_intent": "period_comparison"},
+                comparison_question,
+            )
+            _record_tool_result(
+                "get_supplier_kpis", merged_kpi, supplier_id,
+                tools_used, sources, limitations, raw_tool_results,
+            )
+
+            messages: list[dict] = [
+                {"role": "system", "content": _build_system_prompt(current_date, supplier_name)},
+                {"role": "user", "content": comparison_question},
+                _tool_context_message(comparison_question, raw_tool_results, supplier_name, tools_used),
+            ]
+
+            answer = await _finalize_answer(
+                client, model, messages,
+                supplier_name=supplier_name, question=comparison_question,
+                tools_used=tools_used, raw_tool_results=raw_tool_results,
+            )
+
+    return _final_payload(answer, tools_used, sources, raw_tool_results, limitations, supplier_id, comparison_question)
+
+
 async def _synthesize_sync(client: OpenAI, model: str, messages: list[dict]) -> str:
     response = client.chat.completions.create(
         model=model,
@@ -611,9 +785,21 @@ async def run_chat(
     if not guard.should_call_llm:
         return _guardrail_response(guard, supplier_id)
 
+    orchestrated = await _try_orchestrated_comparison(
+        message, supplier_id, supplier_name, follow_up_action
+    )
+    if orchestrated is not None and orchestrated.kind == "answer":
+        return _apply_debug_trace(orchestrated.payload, orchestrated.trace)
+    if orchestrated is not None and orchestrated.kind == "clarify_composer":
+        return _apply_debug_trace(_comparison_composer_response(supplier_id), orchestrated.trace)
+    # kind == "defer" (or flag off) → fall through to the legacy pipeline.
+
+    if follow_up_action and str(follow_up_action.get("action") or "") == "compare_periods":
+        return await _handle_explicit_period_comparison(follow_up_action, supplier_id, supplier_name)
+
     prior = prior_context_from_dict(prior_context)
     if comparison_needs_period_clarification(message, prior):
-        return _comparison_clarification_response(supplier_id)
+        return _comparison_composer_response(supplier_id)
 
     if is_diagram_followup_request(message) and not prior:
         return _diagram_clarification_response(supplier_id)
@@ -654,7 +840,7 @@ async def run_chat(
             analysis_meta = resolution.analysis_meta
             if resolution.clarification_answer:
                 if resolution.analysis_meta.get("intent") == "period_comparison":
-                    return _comparison_clarification_response(supplier_id)
+                    return _comparison_composer_response(supplier_id)
                 return _decline_period_clarification_response(supplier_id)
             forced = resolution.plans
             if forced:
@@ -713,9 +899,28 @@ async def stream_chat(
         yield sse("complete", _guardrail_response(guard, supplier_id))
         return
 
+    if ai_orchestrated_analytics_enabled():
+        yield sse("status", {"text": "Analyserar perioderna…"})
+        orchestrated = await _try_orchestrated_comparison(
+            message, supplier_id, supplier_name, follow_up_action
+        )
+        if orchestrated is not None and orchestrated.kind == "answer":
+            yield sse("complete", _apply_debug_trace(orchestrated.payload, orchestrated.trace))
+            return
+        if orchestrated is not None and orchestrated.kind == "clarify_composer":
+            yield sse("complete", _apply_debug_trace(_comparison_composer_response(supplier_id), orchestrated.trace))
+            return
+        # kind == "defer" → fall through to the legacy pipeline.
+
+    if follow_up_action and str(follow_up_action.get("action") or "") == "compare_periods":
+        yield sse("status", {"text": "Analyserar båda perioderna…"})
+        result = await _handle_explicit_period_comparison(follow_up_action, supplier_id, supplier_name)
+        yield sse("complete", result)
+        return
+
     prior = prior_context_from_dict(prior_context)
     if comparison_needs_period_clarification(message, prior):
-        yield sse("complete", _comparison_clarification_response(supplier_id))
+        yield sse("complete", _comparison_composer_response(supplier_id))
         return
 
     if is_diagram_followup_request(message) and not prior:
@@ -764,7 +969,7 @@ async def stream_chat(
                 analysis_meta = resolution.analysis_meta
                 if resolution.clarification_answer:
                     if resolution.analysis_meta.get("intent") == "period_comparison":
-                        yield sse("complete", _comparison_clarification_response(supplier_id))
+                        yield sse("complete", _comparison_composer_response(supplier_id))
                     else:
                         yield sse("complete", _decline_period_clarification_response(supplier_id))
                     return

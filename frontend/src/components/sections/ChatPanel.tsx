@@ -14,6 +14,8 @@ import {
   visibleResponseLimitations,
 } from '../../utils/sourcePresentation'
 import { useChatState } from '../../context/ChatStateContext'
+import { chartIdentity, dedupeCharts } from '../../utils/chartIdentity'
+import PeriodComparisonComposer from './PeriodComparisonComposer'
 
 
 const LOADING_STATUSES = [
@@ -41,6 +43,8 @@ interface Message {
   error?: string
   loading?: boolean
   question?: string
+  composerState?: 'open' | 'submitted'
+  composerDates?: { periodA: { start: string; end: string }; periodB: { start: string; end: string } }
 }
 
 interface ChatPanelProps {
@@ -352,11 +356,13 @@ function AssistantBubble({
   supplierName,
   fallbackDateRange,
   onSendMessage,
+  onComposerSubmit,
 }: {
   msg: Message
   supplierName?: string
   fallbackDateRange?: DateRange
   onSendMessage: (text: string) => void
+  onComposerSubmit?: (msgId: string, periodA: { start: string; end: string }, periodB: { start: string; end: string }, mode: 'preset' | 'custom') => void
 }) {
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
@@ -424,6 +430,18 @@ function AssistantBubble({
     )
   }
 
+  if (msg.response?.response_kind === 'comparison_composer' || msg.composerState) {
+    return (
+      <article className="self-start w-full py-1" style={{ maxWidth: '85%', animation: 'messageIn 0.3s ease-out both' }}>
+        <PeriodComparisonComposer
+          locked={msg.composerState === 'submitted'}
+          lockedDates={msg.composerDates}
+          onSubmit={(periodA, periodB, mode) => onComposerSubmit?.(msg.id, periodA, periodB, mode)}
+        />
+      </article>
+    )
+  }
+
   const r = msg.response!
   const isGrounded = r.tool_calls.length > 0
   const isPlainConversational = !isGrounded && isPlainConversationalResponse(r, msg.question)
@@ -431,6 +449,11 @@ function AssistantBubble({
   const displayLimitations = visibleResponseLimitations(r.limitations, r)
   const sourcePeriod = resolveResponseDateRange(r.sources, fallbackDateRange)
   const showSourceFooter = isGrounded && (sourcePeriod != null || r.sources.length > 0)
+  // Safety net: collapse duplicate chart identities so one analysis result never
+  // renders the same chart twice (e.g. if it appears in both `chart` and `charts`).
+  const dedupedCharts = dedupeCharts([r.chart, ...(r.charts ?? [])])
+  const primaryChart = dedupedCharts[0]
+  const extraCharts = dedupedCharts.slice(1)
 
   return (
     <article
@@ -464,9 +487,9 @@ function AssistantBubble({
         </div>
       )}
 
-      {r.chart && (
+      {primaryChart && (
         <div className="pt-1">
-          <ChartBlock chart={r.chart} supplierName={supplierName} />
+          <ChartBlock chart={primaryChart} supplierName={supplierName} />
           {isMarketShareResponse(r) && (
             <p className="mt-1.5 text-[11px] text-theme-muted leading-snug">
               Konkurrentdata visas endast på aggregerad nivå.
@@ -475,8 +498,8 @@ function AssistantBubble({
         </div>
       )}
 
-      {(r.charts ?? []).map((extraChart, i) => (
-        <div key={`chart-${i}`} className="pt-1">
+      {extraCharts.map((extraChart, i) => (
+        <div key={`chart-${chartIdentity(extraChart)}-${i}`} className="pt-1">
           <ChartBlock chart={extraChart} supplierName={supplierName} />
         </div>
       ))}
@@ -763,6 +786,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             limitations: event.limitations,
             supplier_id: event.supplier_id,
             generated_at: event.generated_at,
+            response_kind: event.response_kind,
           }
           update({
             loading: false,
@@ -770,6 +794,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
             streamingContent: undefined,
             statusText: undefined,
             response,
+            composerState: event.response_kind === 'comparison_composer' ? 'open' : undefined,
           })
         } else if (event.type === 'error') {
           update({
@@ -796,6 +821,107 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
       }
     }
   }
+
+  const submitComparison = useCallback(async (
+    composerMsgId: string,
+    periodA: { start: string; end: string },
+    periodB: { start: string; end: string },
+    mode: 'preset' | 'custom' = 'custom',
+  ) => {
+    if (loading) return
+
+    // Lock the composer
+    setMessages(prev => prev.map(m =>
+      m.id === composerMsgId
+        ? { ...m, composerState: 'submitted' as const, composerDates: { periodA, periodB } }
+        : m
+    ))
+
+    abortRef.current?.abort()
+    const abort = new AbortController()
+    abortRef.current = abort
+
+    const assistantId = crypto.randomUUID()
+    const loadingMsg: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      loading: true,
+      statusText: 'Analyserar båda perioderna…',
+      question: 'Jämför perioder',
+    }
+
+    setMessages(prev => [...prev, loadingMsg])
+    setLoading(true)
+
+    const update = (patch: Partial<Message>) => {
+      if (!mountedRef.current) return
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, ...patch } : m))
+    }
+
+    try {
+      const sessionAtSend = chatSessionRef.current
+      const stream = api.chatStream(
+        {
+          message: 'Jämför perioder',
+          follow_up_action: {
+            action: 'compare_periods',
+            label: 'Jämför perioder',
+            message: 'Jämför perioder',
+            context: {
+              period_a_start: periodA.start,
+              period_a_end: periodA.end,
+              period_b_start: periodB.start,
+              period_b_end: periodB.end,
+              comparison_mode: mode,
+            },
+          },
+        },
+        abort.signal,
+      )
+
+      for await (const event of stream) {
+        if (!mountedRef.current || abort.signal.aborted || chatSessionRef.current !== sessionAtSend) break
+
+        if (event.type === 'status') {
+          update({ statusText: event.text || 'Analyserar båda perioderna…' })
+        } else if (event.type === 'delta') {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId
+              ? { ...m, streamingContent: (m.streamingContent ?? '') + event.text }
+              : m
+          ))
+        } else if (event.type === 'complete') {
+          const response: ChatResponse = {
+            answer: event.answer,
+            tool_calls: event.tool_calls,
+            sources: event.sources,
+            chart: event.chart,
+            charts: event.charts,
+            deep_dive: event.deep_dive,
+            follow_up_actions: event.follow_up_actions,
+            analysis_context: event.analysis_context,
+            limitations: event.limitations,
+            supplier_id: event.supplier_id,
+            generated_at: event.generated_at,
+            response_kind: event.response_kind,
+          }
+          update({ loading: false, content: event.answer, streamingContent: undefined, statusText: undefined, response })
+        } else if (event.type === 'error') {
+          update({ loading: false, streamingContent: undefined, statusText: undefined, error: userFacingError(event.message) })
+        }
+      }
+    } catch (err) {
+      if (!mountedRef.current) return
+      if (err instanceof Error && err.name === 'AbortError') return
+      update({ loading: false, streamingContent: undefined, statusText: undefined, error: userFacingError() })
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false)
+        inputRef.current?.focus()
+      }
+    }
+  }, [loading, startDate, endDate])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -959,6 +1085,7 @@ export function ChatPanel({ startDate, endDate, supplierName, initialPrompt }: C
                         startDate && endDate ? { start: startDate, end: endDate } : undefined
                       }
                       onSendMessage={sendMessage}
+                      onComposerSubmit={(id, a, b, m) => submitComparison(id, a, b, m)}
                     />
                   )
                 )}

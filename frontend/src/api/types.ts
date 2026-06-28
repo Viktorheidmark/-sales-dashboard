@@ -55,7 +55,7 @@ export interface ChartPayload {
   show_markers?: boolean
   y_axis_from_zero?: boolean
   trend_granularity?: string
-  chart_variant?: 'decline_comparison' | 'decline_trend' | 'decline_ranking'
+  chart_variant?: 'decline_comparison' | 'decline_trend' | 'decline_ranking' | 'period_comparison'
   chart_role?: 'primary' | 'secondary'
   compact?: boolean
   stability_note?: string
@@ -69,6 +69,16 @@ export interface ChartPayload {
     revenue_change?: number
     revenue_change_pct?: number | null
   }
+  // Canonical analytics-orchestration identity (period_comparison). Used for
+  // defensive client-side chart deduplication; raw ISO stays in period_a/period_b.
+  analysis_plan_id?: string
+  intent?: string
+  metric?: string
+  period_a?: { start: string; end: string; label?: string }
+  period_b?: { start: string; end: string; label?: string }
+  period_a_label?: string
+  period_b_label?: string
+  comparison_type?: string
 }
 
 export interface DeepDivePeriodTotals {
@@ -126,6 +136,11 @@ export interface FollowUpAction {
     granularity?: string
     region?: string
     category?: string
+    period_a_start?: string
+    period_a_end?: string
+    period_b_start?: string
+    period_b_end?: string
+    comparison_mode?: 'preset' | 'custom'
   }
 }
 
@@ -208,7 +223,7 @@ export interface ChatResponse {
   limitations: string[]
   supplier_id: string
   generated_at: string
-  response_kind?: 'conversational' | 'insufficient_data' | 'unsupported'
+  response_kind?: 'conversational' | 'insufficient_data' | 'unsupported' | 'comparison_composer'
 }
 
 // --- /api/chat/stream SSE events ---

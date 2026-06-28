@@ -290,6 +290,12 @@ def kpi_comparison_label(result: dict) -> str:
     curr_start, curr_end = curr.get("start"), curr.get("end")
     kind = result.get("comparison_kind")
 
+    if kind == "explicit_period_comparison" and result.get("comparison_mode", "custom") == "custom":
+        # Custom date range — always use exact dates, no rolling terminology
+        curr_label = format_date_range_sv(curr_start, curr_end) if curr_start and curr_end else "analyserad period"
+        prev_label = format_date_range_sv(prev_start, prev_end)
+        return f"{curr_label} jämfört med {prev_label}"
+
     if kind == "year_over_year" or _is_yoy_kpi_comparison(result):
         curr_part = (
             f"Hittills i år ({format_date_range_sv(curr_start, curr_end)})"

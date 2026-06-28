@@ -35,10 +35,10 @@ class YtdKpiComparisonTests(unittest.TestCase):
             "prev_date_range": {"start": "2025-01-01", "end": "2025-06-23"},
         }
         label = kpi_comparison_label(kpi)
-        self.assertEqual(
-            label,
-            "jämfört med samma period föregående år, 1 januari–23 juni 2025",
-        )
+        # Both windows are now explicit (Phase 6: exact ranges, no bare baseline).
+        self.assertIn("Hittills i år (1 januari–23 juni 2026)", label)
+        self.assertIn("jämfört med samma period föregående år", label)
+        self.assertIn("1 januari–23 juni 2025", label)
 
     def test_rolling_30_day_keeps_equal_length_label(self):
         kpi = {
@@ -47,7 +47,8 @@ class YtdKpiComparisonTests(unittest.TestCase):
             "prev_date_range": {"start": "2026-04-25", "end": "2026-05-24"},
         }
         label = kpi_comparison_label(kpi)
-        self.assertIn("jämfört med föregående 30 dagarna", label)
+        self.assertIn("Senaste 30 dagarna", label)
+        self.assertIn("jämfört med föregående 30 dagar", label)
         self.assertNotIn("samma period föregående år", label)
 
 

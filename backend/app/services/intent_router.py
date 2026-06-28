@@ -212,7 +212,11 @@ _YTD_OVERVIEW_RE = re.compile(
 )
 
 _SALES_STATUS_RE = re.compile(
-    r"(hur\s+går\s+försäljningen|hur\s+ser\s+försäljningen\s+ut|hur\s+går\s+det)",
+    r"(hur\s+går\s+försäljningen|"
+    r"hur\s+ser\s+försäljningen\s+ut|"
+    r"hur\s+går\s+det|"
+    r"hur\s+har\s+försäljningen\s+(?:gått|varit|sett\s+ut)|"
+    r"hur\s+har\s+det\s+gått\s+för\s+försäljningen)",
     re.IGNORECASE,
 )
 

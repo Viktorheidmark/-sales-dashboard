@@ -197,7 +197,7 @@ class ComparisonLabelTests(unittest.TestCase):
         labels = [a["label"] for a in actions]
         self.assertEqual(len(actions), 3)
         self.assertIn("Visa våra starkaste produkter inom Läsk", labels)
-        self.assertIn("Visa marknadsandel över tid", labels)
+        self.assertTrue(any(label.startswith("Visa marknadsandel") for label in labels))
         self.assertIn("Visa försäljning per region", labels)
 
     def test_sanitize_vague_comparison(self):

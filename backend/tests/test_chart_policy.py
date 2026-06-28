@@ -230,6 +230,62 @@ class ChartPolicyTests(unittest.TestCase):
         raw = [("get_supplier_kpis", kpis)]
         self.assertEqual(resolve_chart_intent(q, raw), ChartIntent.TIME_SERIES)
 
+    def test_broad_overview_past_tense_keeps_full_history_line_chart(self):
+        """Regression: 'Hur har försäljningen gått?' (orchestration enabled) must
+        defer to legacy and still render exactly one full-history line chart —
+        no comparison, no composer, no duplicate."""
+        from app.services.intent_router import is_sales_status_question, plan_forced_tools
+        from app.services.comparison_labels import comparison_needs_period_clarification
+        from app.analytics import planner as analytics_planner
+
+        q = "Hur har försäljningen gått?"
+
+        # 1. Orchestrator defers (not a comparison) and no composer is opened.
+        self.assertIsNone(analytics_planner.plan_comparison(q))
+        self.assertFalse(comparison_needs_period_clarification(q, None))
+
+        # 2. Legacy deterministically routes to KPIs + full-history time series.
+        self.assertTrue(is_sales_status_question(q))
+        plans = plan_forced_tools(q, "Coca-Cola Europacific Partners Sverige", None, None)
+        tools = [p.tool_name for p in plans]
+        self.assertIn("get_supplier_kpis", tools)
+        self.assertIn("get_sales_over_time", tools)
+        trend = next(p for p in plans if p.tool_name == "get_sales_over_time")
+        self.assertEqual(trend.args.get("_chart_intent"), "time_series")
+        # Full available history (≈2-year dataset window), not a 30-day rolling slice.
+        span_days = (
+            date.fromisoformat(trend.args["end_date"])
+            - date.fromisoformat(trend.args["start_date"])
+        ).days
+        self.assertGreater(span_days, 365)
+
+        # 3. Chart policy yields exactly one line chart, no comparison bar.
+        sales = {
+            "granularity": "month",
+            "_force_time_series": True,
+            "_chart_intent": "time_series",
+            "series": [
+                {"period": "2024-07-01", "revenue": 800000.0},
+                {"period": "2024-08-01", "revenue": 820000.0},
+                {"period": "2024-09-01", "revenue": 790000.0},
+            ],
+            "date_range": {"start": trend.args["start_date"], "end": trend.args["end_date"]},
+            "limitations": [],
+        }
+        kpis = {
+            "total_revenue": 1_000_000.0,
+            "prev_total_revenue": 0.0,
+            "date_range": {"start": trend.args["start_date"], "end": trend.args["end_date"]},
+        }
+        raw = [("get_supplier_kpis", kpis), ("get_sales_over_time", sales)]
+        self.assertEqual(resolve_chart_intent(q, raw), ChartIntent.TIME_SERIES)
+        charts = select_charts(q, raw)
+        self.assertEqual(len(charts), 1)
+        self.assertEqual(charts[0]["chart_type"], LINE_CHART)
+        self.assertEqual(charts[0]["chart_role"], "primary")
+        self.assertNotEqual(charts[0].get("chart_variant"), "decline_comparison")
+        self.assertEqual([c for c in charts if c.get("chart_type") == BAR_CHART], [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -204,7 +204,13 @@ class FollowUpContextTests(unittest.TestCase):
             prior,
             "Coca-Cola Europacific Partners Sverige",
         )
-        self.assertEqual(plans[0].args["start_date"][:10], "2026-05-25")
+        # Date-relative expectation: a 30-day window ends on the latest completed
+        # date and is weekly-aligned forward to the first complete ISO week.
+        from datetime import timedelta
+        from app.services.period_utils import first_complete_week_monday
+        raw_start = latest_completed_date() - timedelta(days=29)
+        expected_start = first_complete_week_monday(raw_start)
+        self.assertEqual(plans[0].args["start_date"][:10], expected_start.isoformat())
 
 
 class NLContextFollowUpTests(unittest.TestCase):

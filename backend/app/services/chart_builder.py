@@ -313,7 +313,7 @@ def build_period_comparison_chart(
         "title": title,
         "description": f"{sign}{rev_pct:.1f} % omsättningsförändring · {comp_label}",
         "data": [
-            {"period": "Jämförelsebas", "revenue": round(prior_rev, 2)},
+            {"period": "Jämförelseperiod", "revenue": round(prior_rev, 2)},
             {"period": "Analyserad period", "revenue": round(curr_rev, 2)},
         ],
         "x_key": "period",
@@ -463,7 +463,7 @@ def _build_supplier_kpis(result: dict) -> Optional[dict]:
         "title": "Periodjämförelse",
         "description": f"{sign}{rev_pct:.1f} % omsättningsförändring · {comp_label}",
         "data": [
-            {"period": "Jämförelsebas", "revenue": round(prior_rev, 2)},
+            {"period": "Jämförelseperiod", "revenue": round(prior_rev, 2)},
             {"period": "Analyserad period", "revenue": round(curr_rev, 2)},
         ],
         "x_key": "period",

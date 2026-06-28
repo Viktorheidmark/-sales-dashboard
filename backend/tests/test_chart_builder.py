@@ -108,8 +108,9 @@ class ChartBuilderTests(unittest.TestCase):
         self.assertEqual(chart["generated_from_row_count"], 1)
         self.assertEqual(chart["title"], "Produkter i nedgång")
         self.assertIn("OLW Jordnötsringar", chart["description"])
+        self.assertIn("jämfört med föregående 30 dagar", chart["description"])
         self.assertIn("42", chart["description"])
-        self.assertIn("Jämförelse:", chart["description"])
+        self.assertIn("Senaste 30 dagarna", chart["description"])
 
     def test_declining_two_plus_products_returns_ranked_bar_chart(self):
         chart = build_chart("get_declining_products", {
@@ -177,8 +178,8 @@ class ChartBuilderTests(unittest.TestCase):
             "products": [{"product_name": "A", "revenue_change_pct": -10.0}],
         })
         label = decline_comparison_period_label(payload)
-        self.assertIn("Jämförelse:", label)
-        self.assertIn("mot", label)
+        self.assertIn("Senaste 365 dagarna", label)
+        self.assertIn("jämfört med föregående 365 dagar", label)
         labeled = apply_period_labels(payload, tool_name="get_declining_products")
         self.assertTrue(labeled.get("has_declining_products"))
         self.assertIn("comparison_period_label", labeled)
