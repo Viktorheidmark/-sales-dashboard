@@ -22,4 +22,4 @@ dist/
 .idea/
 *.swp
 *.swo
-.claude/worktrees/
+.claude/
