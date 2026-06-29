@@ -55,6 +55,28 @@ Dashboard endpoints (non-chat) call the same `query_helpers` functions directly 
 
 ---
 
+## AI-native analytics architecture
+
+Analytics requests flow through a canonical orchestration pipeline:
+
+```
+Question
+→ structured plan
+→ validation
+→ tenant-safe data execution
+→ result verification
+→ grounded response and chart
+```
+
+- **Explicit period comparison** (e.g. *"jämför de senaste 30 dagarna med föregående 30"*) is migrated to this orchestrated pipeline in `backend/app/analytics/`, gated behind the `AI_ORCHESTRATED_ANALYTICS_ENABLED` flag.
+- **All other intents** retain the stable legacy chat path (`backend/app/services/chat.py`) while the migration continues — nothing else is forced through the new pipeline yet.
+- **Tenant scope is derived server-side** from the authenticated session at every stage; the planner and executor never trust a client-supplied `supplier_id`.
+- **No silent guessing:** when a comparison request has missing or ambiguous dates, validation returns a structured clarification (an in-chat period picker) instead of inventing a date range.
+
+The pipeline is intentionally incremental: each stage is independently testable, and the feature flag allows instant rollback to the legacy path.
+
+---
+
 ## Saved insights and PDF reports
 
 Authenticated supplier users can save any grounded chat answer (one backed by MCP tool data) and later retrieve or export it as a polished PDF report.
@@ -93,14 +115,15 @@ Smoke test: `python -m scripts.pdf_smoke_test` (8 cases, requires running backen
 
 Each grounded chat answer can include a deterministic chart payload rendered directly in the chat UI.
 
-| MCP tool | Chart type | x-axis | y-axis |
-|---|---|---|---|
-| `get_sales_over_time` | line | period (YYYY-MM or date) | revenue |
-| `get_top_products` | bar | product name | revenue |
-| `get_sales_by_region` | bar | region | revenue |
-| `get_market_share` | pie | "Oss" / "Konkurrenter" | revenue |
-| `get_declining_products` | bar | product name | % change |
-| `get_supplier_kpis` | — | no chart | — |
+| Tool / intent | Chart type | Notes |
+|---|---|---|
+| `get_sales_over_time` | line chart | revenue over the period (day / week / month) |
+| `get_top_products` | horizontal bar chart | product ranking by revenue |
+| `get_sales_by_region` | horizontal bar chart | revenue by region |
+| `get_market_share` | donut (pie) chart | "Oss" vs aggregate "Konkurrenter" |
+| `get_declining_products` | bar chart | % change vs prior period (negative bars styled red) |
+| `get_supplier_kpis` | KPI totals — or comparison bars when a period comparison is requested | revenue, orders, units, AOV |
+| Explicit period comparison | comparison bar chart | analyzed period vs baseline, tenant-coloured |
 
 **Key properties:**
 - Charts are built by `backend/app/services/chart_builder.py` from raw MCP output — the LLM response text is never parsed for numbers.
@@ -202,7 +225,7 @@ Customer ← Region   OrderItem
 Supplier → SavedInsight
 ```
 
-UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and pre-computed `revenue`. `SavedInsight` is scaffolded but not used in the MVP UI.
+UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and pre-computed `revenue`. `SavedInsight` backs the saved-insights and PDF-export features (see "Saved insights and PDF reports" above).
 
 ---
 
@@ -210,14 +233,16 @@ UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and p
 
 > **Synthetic demo data.** Företags- och produktnamn används endast i syntetisk demodata. Försäljningsdata, marknadsandelar och kunddata är inte verkliga.
 
-| Supplier | Login | Category | Brands | Key pattern |
-|---|---|---|---|---|
-| **Arla Sverige** (primary demo) | `arla@demo.solvigo` | Mejeri | Arla, KESO | Strongest in Stockholm; upward trend last 90 days; *Arla Iced Coffee Latte* declining; *Arla Mellanmjölk 1,5 l* / *KESO Cottage Cheese* are top products |
-| **Coca-Cola Europacific Partners Sverige** | `cocacola@demo.solvigo` | Dryck | Coca-Cola, Fanta, Sprite | Own dashboard; leads the Dryck category |
-| **Orkla Sverige** | `orkla@demo.solvigo` | Mat och snacks | Felix, Kalles, OLW | Own dashboard; relatively stronger in Malmö |
-| **Skånemejerier** | `skanemejerier@demo.solvigo` | Mejeri | Skånemejerier | Aggregate competitor to Arla — appears only as aggregate competitor revenue in Arla's Mejeri market-share view |
+The seed script creates four supplier tenants across two categories (Läsk and Chips & snacks), each competing head-to-head with one rival. Every demo account is scoped to a single supplier.
 
-All demo accounts use the password `demo1234`.
+| Supplier | Login | Category | Brands | Key seeded pattern |
+|---|---|---|---|---|
+| **Coca-Cola Europacific Partners Sverige** (primary demo) | `cocacola@demo.solvigo` | Läsk | Coca-Cola, Fanta, Sprite | Top product *Coca-Cola Zero Sugar 33 cl*; *Coca-Cola Zero Sugar Lemon* declining over the last 30 days; ≈55 % share of Läsk vs PepsiCo |
+| **PepsiCo Northern Europe** | `pepsico@demo.solvigo` | Läsk | Pepsi, 7UP, Mountain Dew | Top product *Pepsi Max 33 cl*; *Pepsi Max Lime* ramping +50 % over the final 90 days; ≈45 % share of Läsk |
+| **Orkla Snacks Sverige (OLW)** | `olw@demo.solvigo` | Chips & snacks | OLW | ≈52 % share of Chips & snacks vs Estrella |
+| **Estrella AB** | `estrella@demo.solvigo` | Chips & snacks | Estrella | Top product *Estrella Grillchips 275 g*; *Estrella Cheddar 180 g* dips over the last 30 days; *Estrella Linschips* growing +50 % |
+
+All demo accounts use the password `demo1234`. Competitors appear only as aggregate revenue in each other's market-share view — never product- or order-level detail. Regions seeded: Stockholm, Göteborg, Malmö.
 
 ---
 
@@ -295,7 +320,7 @@ fastmcp dev mcp_server/server.py   # browser inspector (requires fastmcp CLI)
 
 A suggested walkthrough for a live evaluator demo. Takes approximately 5 minutes.
 
-1. **Log in as Arla Sverige** — open `http://localhost:5173`, click the "Arla Sverige" demo account card, then click "Logga in". The dashboard loads with KPIs, trend, top products, regions, market share, and declining products for the last 90 days.
+1. **Log in as Coca-Cola Europacific Partners Sverige** — open `http://localhost:5173`, click the "Coca-Cola Europacific Partners Sverige" demo account card (password is pre-filled), then click "Logga in". The dashboard loads with KPIs, trend, top products, regions, market share, and declining products for the last 90 days.
 
 2. **Inspect the dashboard** — note that "Omsättning" (revenue), region rankings, and "Marknadsandel" (market share) panels all update from MCP-queried synthetic demo data. Change the date range to "30 dagar" and observe all panels refresh.
 
@@ -311,7 +336,7 @@ A suggested walkthrough for a live evaluator demo. Takes approximately 5 minutes
 
 6. **Export a PDF report** — open the saved insight and click "↓ Exportera rapport som PDF". A polished A4 PDF downloads with the branded header, answer text, embedded chart, and data sources. The PDF is generated server-side from the saved chart payload — not from AI text.
 
-7. **Demonstrate tenant isolation** — click "Logga ut", then log in as "Orkla Sverige". Confirm that the dashboard shows different KPIs and that the "☆ Insikter" drawer is empty (Arla's insights are not visible).
+7. **Demonstrate tenant isolation** — click "Logga ut", then log in as "Estrella AB" (`estrella@demo.solvigo`, a Chips & snacks supplier). Confirm that the dashboard shows different KPIs in a different category and that the "☆ Insikter" drawer is empty (Coca-Cola's insights are not visible).
 
 ---
 
@@ -359,16 +384,16 @@ With the backend running: [http://localhost:8000/docs](http://localhost:8000/doc
 
 ## Suggested demo questions (Swedish)
 
-Ask these in the Analytics Copilot panel as Arla Sverige:
+Ask these in the Analytics Copilot panel as Coca-Cola Europacific Partners Sverige:
 
 ```
 Vad är vår totala omsättning de senaste 90 dagarna?
 Vilka är våra bästsäljande produkter?
 Vilka produkter tappar mest i försäljning just nu?
-Hur stor är vår marknadsandel i kategorin Mejeri?
+Hur stor är vår marknadsandel i kategorin Läsk?
 Hur ser vår försäljningstrend ut den senaste månaden?
 Vilka är våra bästsäljande produkter i Stockholm?
-Hur presterar vi i Göteborg jämfört med Stockholm?
+Jämför vår omsättning de senaste 30 dagarna med föregående 30 dagar.
 ```
 
 ---
@@ -393,14 +418,14 @@ Hur presterar vi i Göteborg jämfört med Stockholm?
 
 | Area | Current approach | Alternative |
 |---|---|---|
-| Auth | None (demo only) | Auth0 / Supabase Auth per supplier |
+| Auth | Email + password with a signed JWT session cookie; supplier derived server-side from the session | Managed IdP (Auth0 / Supabase) with SSO per supplier |
 | MCP transport | stdio subprocess per chat request | HTTP/SSE transport for lower latency |
 | LLM context | Single-turn with tool results | Multi-turn conversation history |
 | Competitor scope | Enforced in SQL | Could also be enforced at MCP layer |
 | Date handling | Tool default window when no dates passed | Explicit date required from frontend |
 | Seed data | Synthetic, deterministic | Real anonymised retailer export |
 
-**Out of scope for MVP:** authentication, background jobs, multi-turn chat memory, admin panels.
+**Out of scope for MVP:** background jobs, cross-session chat history, admin panels.
 
 ---
 
