@@ -17,7 +17,11 @@ import type {
   TopProductsResponse,
 } from './types'
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+// In production the Vercel rewrite proxies /api/* to the Railway backend on the
+// same origin, so BASE is empty and all paths resolve same-origin (no cross-site
+// cookies). In local dev, VITE_API_BASE_URL=http://localhost:8000 points directly
+// at the backend.
+const BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
 function handleHttpError(status: number): never {
   if (status === 401) {
