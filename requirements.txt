@@ -1,1 +1,14 @@
--r backend/requirements.txt
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+psycopg[binary]
+pydantic-settings
+python-dotenv
+mcp[cli]
+httpx
+openai
+python-jose[cryptography]
+bcrypt
+reportlab
+matplotlib
