@@ -17,25 +17,32 @@ import type {
   TopProductsResponse,
 } from './types'
 
-// In production the Vercel rewrite proxies /api/* to the Railway backend on the
-// same origin, so BASE is empty and all paths resolve same-origin (no cross-site
-// cookies). In local dev, VITE_API_BASE_URL=http://localhost:8000 points directly
-// at the backend.
-const BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+// In production the Vercel rewrite proxies /api/* to the Railway backend on
+// the same origin, so BASE must be empty and all paths stay same-origin.
+// In local dev, VITE_API_BASE_URL=http://localhost:8000 targets the backend.
+//
+// Treat any absent, empty, or non-http(s) value as empty so that a stale
+// Vercel env var (e.g. the string "undefined") can never produce an invalid
+// cross-origin base that breaks the proxy.
+const _rawBase = import.meta.env.VITE_API_BASE_URL ?? ''
+const BASE = /^https?:\/\//.test(_rawBase) ? _rawBase : ''
 
 /**
- * Build a fetch-safe URL for every API call.
+ * Build a fetch-safe URL for every API call — the single source of truth for
+ * all API path construction (dashboard, auth, chat, insights).
  *
  * - Local dev (VITE_API_BASE_URL=http://localhost:8000):
  *     buildApiUrl('/api/dashboard/overview') → 'http://localhost:8000/api/dashboard/overview'
- * - Production (no env var set, BASE = ''):
+ *     buildApiUrl('/api/dashboard/sales-over-time', { granularity:'week' })
+ *       → 'http://localhost:8000/api/dashboard/sales-over-time?granularity=week'
+ * - Production (VITE_API_BASE_URL absent or empty):
  *     buildApiUrl('/api/dashboard/overview') → '/api/dashboard/overview'
+ *     buildApiUrl('/api/dashboard/top-products', { limit:50 }) → '/api/dashboard/top-products?limit=50'
  *
- * Never uses `new URL()` — that constructor requires an absolute URL when given
- * a single argument and would throw "Failed to construct 'URL': Invalid URL"
- * whenever BASE is empty. Instead, query params are built with URLSearchParams
- * and concatenated as a plain string, which fetch() accepts for both absolute
- * and relative paths.
+ * Never uses new URL() — that constructor requires an absolute URL as its sole
+ * argument and throws "Failed to construct 'URL': Invalid URL" whenever BASE
+ * is empty. Plain string concatenation is safe for both absolute and relative
+ * paths. fetch() accepts relative paths natively in all modern browsers.
  */
 export function buildApiUrl(
   path: string,
