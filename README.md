@@ -14,8 +14,6 @@ All data är syntetisk demodata – ingen verklig försäljnings-, kund- eller m
 
 Demolösenord för samtliga konton: `demo1234`.
 
-Demokonton och en rekommenderad genomgång finns i [DEMO.md](DEMO.md).
-
 ---
 
 ## Problemet som löses
@@ -166,4 +164,4 @@ Seed-skriptet skapar fyra leverantörskonton i två kategorier (Läsk samt Chips
 - **Orkla Snacks Sverige (OLW)** (`olw@demo.solvigo`) – kategori Chips & snacks
 - **Estrella AB** (`estrella@demo.solvigo`) – kategori Chips & snacks
 
-Alla demokonton använder lösenordet `demo1234`. All data är syntetisk. Fullständig genomgång finns i [DEMO.md](DEMO.md).
+Alla demokonton använder lösenordet `demo1234`. All data är syntetisk.
