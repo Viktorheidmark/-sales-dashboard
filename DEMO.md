@@ -1,122 +1,122 @@
-# Solvigo Sales Intelligence — Demo Script
+# Solvigo Sales Intelligence — Demomanus
 
-2-minute walkthrough for a live demo or screen recording.
+2-minuters genomgång för en live-demo eller skärminspelning.
 
 ---
 
-## Before you start
+## Innan du börjar
 
-1. Backend running: `cd backend && uvicorn app.main:app --reload`
-2. Frontend running: `cd frontend && npm run dev`
-3. Open [http://localhost:5173](http://localhost:5173)
-4. You land on the **login page**. Sign in with a demo account (see below) — each account is scoped to one supplier tenant.
+1. Backend igång: `cd backend && uvicorn app.main:app --reload`
+2. Frontend igång: `cd frontend && npm run dev`
+3. Öppna [http://localhost:5173](http://localhost:5173)
+4. Du landar på **inloggningssidan**. Logga in med ett demokonto (se nedan) – varje konto är avgränsat till en leverantör.
 
-### Demo accounts
+### Demokonton
 
-All demo accounts share the password **`demo1234`**. On the login page they appear under **"Demoarbetsytor"** — click one to auto-fill its email and the password, then press **Logga in**.
+Alla demokonton delar lösenordet **`demo1234`**. På inloggningssidan visas de under **"Demoarbetsytor"** – klicka på ett för att automatiskt fylla i dess e-post och lösenord, och tryck sedan på **Logga in**.
 
-| Email | Supplier tenant | Category |
+| E-post | Leverantörskonto | Kategori |
 |---|---|---|
 | `cocacola@demo.solvigo` | Coca-Cola Europacific Partners Sverige | Läsk |
 | `pepsico@demo.solvigo` | PepsiCo Northern Europe | Läsk |
 | `olw@demo.solvigo` | Orkla Snacks Sverige | Chips & snacks |
 | `estrella@demo.solvigo` | Estrella AB | Chips & snacks |
 
-This walkthrough uses **Coca-Cola Europacific Partners Sverige** (`cocacola@demo.solvigo`).
+Den här genomgången använder **Coca-Cola Europacific Partners Sverige** (`cocacola@demo.solvigo`).
 
 ---
 
-## 2-minute flow
+## 2-minutersflöde
 
-### Step 1 — Log in (15 s)
+### Steg 1 — Logga in (15 s)
 
-> "The app is authenticated. I'll sign in as Coca-Cola Europacific Partners Sverige. The supplier scope is tied to the account — the backend derives the supplier from the authenticated session, not from anything the browser sends."
+> "Appen är autentiserad. Jag loggar in som Coca-Cola Europacific Partners Sverige. Leverantörsavgränsningen är knuten till kontot – backend härleder leverantören från den autentiserade sessionen, inte från något som webbläsaren skickar."
 
-Click the **Coca-Cola Europacific Partners Sverige** demo workspace, then **Logga in**.
+Klicka på demoarbetsytan **Coca-Cola Europacific Partners Sverige** och sedan på **Logga in**.
 
-### Step 2 — Dashboard overview (30 s)
+### Steg 2 — Översikt av dashboarden (30 s)
 
-> "This is a supplier-facing sales dashboard. Coca-Cola Europacific Partners Sverige can see their own KPIs in real time — revenue, order count, units sold, and average order value."
+> "Det här är en försäljningsdashboard riktad till leverantörer. Coca-Cola Europacific Partners Sverige kan se sina egna KPI:er i realtid – intäkt, antal ordrar, sålda enheter och genomsnittligt ordervärde."
 
-Point to the KPI cards at the top.
+Peka på KPI-korten högst upp.
 
-> "All data is live from PostgreSQL via parameterised SQL queries. The supplier scope is enforced server-side — a supplier can only ever see their own data, and the active tenant's brand colour themes the whole UI."
+> "All data hämtas live från PostgreSQL via parametriserade SQL-frågor. Leverantörsavgränsningen upprätthålls på serversidan – en leverantör kan bara någonsin se sina egna data, och det aktiva kontots varumärkesfärg sätter temat för hela gränssnittet."
 
-### Step 3 — Charts (30 s)
+### Steg 3 — Diagram (30 s)
 
-Scroll to the Sales trend chart.
+Scrolla till diagrammet för försäljningstrend.
 
-> "The trend line shows weekly revenue — we've seeded intentional patterns to make the demo meaningful."
+> "Trendlinjen visar veckovis intäkt – vi har seedat avsiktliga mönster för att göra demon meningsfull."
 
-Point to Top Products.
+Peka på Toppprodukter.
 
-> "Coca-Cola Zero Sugar 33 cl is the top product by revenue."
+> "Coca-Cola Zero Sugar 33 cl är den intäktsmässigt största produkten."
 
-Point to Market Position (Läsk category).
+Peka på Marknadsposition (kategorin Läsk).
 
-> "In the Läsk (soft drinks) category, Coca-Cola Europacific Partners Sverige holds around 55% market share versus PepsiCo's ~45%. Competitor revenue is shown aggregate-only — no product names, no order detail."
+> "I kategorin Läsk har Coca-Cola Europacific Partners Sverige omkring 55 % marknadsandel mot PepsiCos ~45 %. Konkurrenternas intäkt visas endast aggregerat – inga produktnamn, inga orderdetaljer."
 
-### Step 4 — Declining products (15 s)
+### Steg 4 — Minskande produkter (15 s)
 
-Scroll to Declining Products.
+Scrolla till Minskande produkter.
 
-> "Coca-Cola Zero Sugar Lemon is flagged as declining — its revenue in the most recent 30 days is materially lower than the prior period. This is a seeded pattern to demonstrate the alert capability."
+> "Coca-Cola Zero Sugar Lemon flaggas som minskande – dess intäkt under de senaste 30 dagarna är väsentligt lägre än under föregående period. Detta är ett inseedat mönster för att visa varningsfunktionen."
 
-### Step 5 — AI Copilot grounding (45 s)
+### Steg 5 — Förankring i AI-assistenten (45 s)
 
-Scroll to the Analytics Copilot panel.
+Scrolla till panelen Analytics Copilot.
 
-Type (or click the example prompt):
+Skriv (eller klicka på exempelfrågan):
 
 ```
 Vad är vår totala omsättning de senaste 90 dagarna?
 ```
 
-While it loads:
+Medan det laddar:
 
-> "The model is calling `get_supplier_kpis` via MCP stdio transport. It doesn't have database access — it calls a typed tool that runs a supplier-scoped SQL query and returns structured JSON. The answer is grounded in that result."
+> "Modellen anropar `get_supplier_kpis` via MCP:s stdio-transport. Den har ingen databasåtkomst – den anropar ett typat verktyg som kör en leverantörsavgränsad SQL-fråga och returnerar strukturerad JSON. Svaret förankras i det resultatet."
 
-When the answer appears:
+När svaret visas:
 
-> "The supplier_id was injected by the backend from the session — the LLM never chose or saw it."
+> "supplier_id injicerades av backend från sessionen – LLM:en valde aldrig och såg det aldrig."
 
-Ask a follow-up:
+Ställ en följdfråga:
 
 ```
 Vilka produkter tappar mest i försäljning just nu?
 ```
 
-> "The model calls `get_declining_products`. Every quantitative claim in this answer maps back to a real tool result. You can also save an answer as an insight and export it as a branded PDF."
+> "Modellen anropar `get_declining_products`. Varje kvantitativt påstående i det här svaret kan spåras tillbaka till ett verkligt verktygsresultat. Du kan också spara ett svar som en insikt och exportera det som en varumärkt PDF."
 
 ---
 
-## What to say about MCP grounding
+## Vad du kan säga om MCP-förankring
 
-> "Traditional LLM analytics tools give the model database credentials and let it generate SQL. That creates risks: the model can query any supplier's data, generate expensive or incorrect queries, and produce answers not grounded in reality.
+> "Traditionella LLM-analysverktyg ger modellen databasuppgifter och låter den generera SQL. Det skapar risker: modellen kan fråga vilken leverantörs data som helst, generera dyra eller felaktiga frågor och producera svar som inte är förankrade i verkligheten.
 >
-> Here, the model calls named tools with typed schemas. The backend injects the supplier scope after the model decides which tool to call — supplier_id is derived from the authenticated session and stripped from the schema the model sees entirely. Competitor data is aggregate-only at the SQL level, not just filtered in the prompt."
+> Här anropar modellen namngivna verktyg med typade scheman. Backend injicerar leverantörsavgränsningen efter att modellen bestämt vilket verktyg som ska anropas – supplier_id härleds från den autentiserade sessionen och tas helt bort från det schema modellen ser. Konkurrentdata är enbart aggregerad på SQL-nivå, inte bara filtrerad i prompten."
 
 ---
 
-## What to say about current scope
+## Vad du kan säga om nuvarande omfattning
 
-| Question | Honest answer |
+| Fråga | Ärligt svar |
 |---|---|
-| Is there authentication? | Yes — email + password login backed by a signed JWT session cookie. The backend derives `supplier_id` from the session on every request, never from the request body. (Demo accounts use synthetic credentials.) |
-| Can the model see multiple suppliers? | No — every tool call is scoped to the authenticated supplier by the backend, regardless of what the model sends. |
-| Can suppliers save insights? | Yes — answers can be saved as insights, listed on the Insights page, and exported as a tenant-branded PDF. |
-| Can it explain its reasoning? | The tool badges and source metadata show which tools were called and which date range was covered. Full chain-of-thought is not surfaced. |
-| Does chat history persist? | Follow-up questions keep context within an active session (e.g. "and the previous period?"), but conversations are not persisted across logins or reloads. |
+| Finns det autentisering? | Ja – inloggning med e-post + lösenord som backas upp av en signerad JWT-sessionscookie. Backend härleder `supplier_id` från sessionen vid varje förfrågan, aldrig från förfrågans innehåll. (Demokonton använder syntetiska uppgifter.) |
+| Kan modellen se flera leverantörer? | Nej – varje verktygsanrop avgränsas av backend till den autentiserade leverantören, oavsett vad modellen skickar. |
+| Kan leverantörer spara insikter? | Ja – svar kan sparas som insikter, listas på insiktssidan och exporteras som en PDF med leverantörens varumärke. |
+| Kan den förklara sitt resonemang? | Verktygsmärkningarna och källmetadatan visar vilka verktyg som anropades och vilket datumintervall som täcktes. Hela tankekedjan visas inte. |
+| Sparas chatthistoriken? | Följdfrågor behåller kontext inom en aktiv session (t.ex. "och föregående period?"), men konversationer sparas inte mellan inloggningar eller omladdningar. |
 
 ---
 
-## Switch supplier
+## Byt leverantör
 
-Each demo account is scoped to a single supplier, so to view another tenant you **log out and log in as a different demo account** (e.g. `estrella@demo.solvigo` for Estrella AB in the Chips & snacks category).
+Varje demokonto är avgränsat till en enda leverantör, så för att se ett annat konto **loggar du ut och loggar in som ett annat demokonto** (t.ex. `estrella@demo.solvigo` för Estrella AB i kategorin Chips & snacks).
 
-> "Every dashboard section and every chat answer re-scopes automatically to whichever supplier is signed in, and the UI re-themes to that brand's colours."
+> "Varje del av dashboarden och varje chattsvar omavgränsas automatiskt till den leverantör som är inloggad, och gränssnittet byter tema till det varumärkets färger."
 
-After signing in as another supplier, ask:
+Efter att du loggat in som en annan leverantör, fråga:
 
 ```
 Hur ser vår regionala försäljning ut?

@@ -1,20 +1,20 @@
 # Solvigo Sales Intelligence
 
-A supplier-facing AI sales dashboard. Suppliers log in and see how their products perform across regions, time periods, and categories — and can ask natural-language questions answered by a grounded AI copilot.
+En AI-driven försäljningsdashboard riktad till leverantörer. Leverantörer loggar in och ser hur deras produkter presterar över regioner, tidsperioder och kategorier – och kan ställa frågor på naturligt språk som besvaras av en AI-assistent som bygger sina svar på verkliga data.
 
-Built as a developer-case MVP demonstrating MCP-based LLM grounding, supplier scope isolation, and controlled competitor data exposure.
-
----
-
-## Problem solved
-
-Retailers own all sales data. Suppliers historically had no self-serve analytics — they relied on slow, expensive reporting cycles. This dashboard gives each supplier a live window into their own performance without exposing competitor order-level detail or other suppliers' data.
-
-The AI copilot is grounded through the Model Context Protocol (MCP): the LLM calls structured analytics tools rather than generating SQL or reasoning from memory. Every quantitative claim in a chat answer is backed by a real tool result.
+Byggd som en MVP för ett utvecklarcase som visar MCP-baserad förankring av LLM-svar, separering mellan leverantörskonton och kontrollerad exponering av konkurrentdata.
 
 ---
 
-## Architecture
+## Problemet som löses
+
+Detaljisterna äger all försäljningsdata. Leverantörer har historiskt saknat självbetjänad analys – de har varit beroende av långsamma och kostsamma rapporteringscykler. Den här dashboarden ger varje leverantör ett levande fönster mot sin egen prestanda utan att exponera konkurrenternas data på ordernivå eller andra leverantörers data.
+
+AI-assistenten förankras genom Model Context Protocol (MCP): LLM:en anropar strukturerade analysverktyg i stället för att generera SQL eller resonera utifrån minnet. Varje kvantitativt påstående i ett chattsvar backas upp av ett verkligt verktygsresultat.
+
+---
+
+## Arkitektur
 
 ```mermaid
 graph LR
@@ -26,7 +26,7 @@ graph LR
     B -->|direct import<br/>dashboard endpoints only| D
 ```
 
-**Request flow for the AI copilot:**
+**Anropsflöde för AI-assistenten:**
 
 ```
 ChatPanel (React)
@@ -42,22 +42,22 @@ ChatPanel (React)
 
 ---
 
-## Why MCP
+## Varför MCP
 
-The Model Context Protocol lets the backend expose typed, supplier-scoped analytics tools that the LLM calls by name — `get_supplier_kpis`, `get_top_products`, etc. This means:
+Model Context Protocol låter backend exponera typade, leverantörsavgränsade analysverktyg som LLM:en anropar via namn – `get_supplier_kpis`, `get_top_products`, osv. Det innebär:
 
-- The LLM never generates SQL or touches the database directly.
-- The backend injects `supplier_id` into every tool call after the LLM decides which tool to call. The model cannot choose or override it.
-- Tool schemas presented to the LLM have `supplier_id` stripped — the model never even sees the field.
-- Competitor data is enforced aggregate-only inside each tool query, regardless of what the LLM requests.
+- LLM:en genererar aldrig SQL och rör aldrig databasen direkt.
+- Backend injicerar `supplier_id` i varje verktygsanrop efter att LLM:en har bestämt vilket verktyg som ska anropas. Modellen kan varken välja eller åsidosätta det.
+- De verktygsscheman som presenteras för LLM:en har `supplier_id` borttaget – modellen ser aldrig ens fältet.
+- Konkurrentdata tvingas vara enbart aggregerad inuti varje verktygsfråga, oavsett vad LLM:en begär.
 
-Dashboard endpoints (non-chat) call the same `query_helpers` functions directly for performance — only the chat flow uses MCP stdio transport.
+Dashboardens endpoints (utanför chatten) anropar samma `query_helpers`-funktioner direkt av prestandaskäl – endast chattflödet använder MCP:s stdio-transport.
 
 ---
 
-## AI-native analytics architecture
+## AI-nativ analysarkitektur
 
-Analytics requests flow through a canonical orchestration pipeline:
+Analysförfrågningar löper genom en kanonisk orkestreringspipeline:
 
 ```
 Question
@@ -68,72 +68,72 @@ Question
 → grounded response and chart
 ```
 
-- **Explicit period comparison** (e.g. *"jämför de senaste 30 dagarna med föregående 30"*) is migrated to this orchestrated pipeline in `backend/app/analytics/`, gated behind the `AI_ORCHESTRATED_ANALYTICS_ENABLED` flag.
-- **All other intents** retain the stable legacy chat path (`backend/app/services/chat.py`) while the migration continues — nothing else is forced through the new pipeline yet.
-- **Tenant scope is derived server-side** from the authenticated session at every stage; the planner and executor never trust a client-supplied `supplier_id`.
-- **No silent guessing:** when a comparison request has missing or ambiguous dates, validation returns a structured clarification (an in-chat period picker) instead of inventing a date range.
+- **Explicit periodjämförelse** (t.ex. *"jämför de senaste 30 dagarna med föregående 30"*) är migrerad till denna orkestrerade pipeline i `backend/app/analytics/`, styrd av funktionsflaggan `AI_ORCHESTRATED_ANALYTICS_ENABLED`.
+- **Alla övriga avsikter** behåller det stabila äldre chattflödet (`backend/app/services/chat.py`) medan migreringen pågår – inget annat tvingas genom den nya pipelinen ännu.
+- **Leverantörsavgränsningen härleds på serversidan** från den autentiserade sessionen i varje steg; planeraren och exekveraren litar aldrig på ett `supplier_id` som skickats från klienten.
+- **Inga tysta gissningar:** när en jämförelseförfrågan saknar datum eller har tvetydiga datum returnerar valideringen ett strukturerat förtydligande (en periodväljare direkt i chatten) i stället för att hitta på ett datumintervall.
 
-The pipeline is intentionally incremental: each stage is independently testable, and the feature flag allows instant rollback to the legacy path.
-
----
-
-## Saved insights and PDF reports
-
-Authenticated supplier users can save any grounded chat answer (one backed by MCP tool data) and later retrieve or export it as a polished PDF report.
-
-**Behaviour:**
-- Insights are supplier-scoped — the backend derives `supplier_id` from the session cookie; the frontend never sends it.
-- Cross-tenant reads, exports, or deletes always return 404 (never 403).
-- Only grounded responses (those with `tool_calls.length > 0`) can be saved — guardrail, unsupported, or clarification responses have no "Save insight" button.
-- The chart payload is stored as JSONB and reproduced faithfully on export; chart values always come from MCP results, never from AI prose.
-- PDF is the only user-facing export format — no public sharing links or bulk operations in this MVP.
-
-**PDF report format (A4):**
-- Header band: slate-900 background, "◈ Solvigo Sales Intelligence" (brand blue), supplier name (right), "Analysrapport" sub-label.
-- Body: fråga (question), analys (answer text, line-by-line), chart rendered as PNG via matplotlib (line/bar/pie), datakällor (source tools as human-readable Swedish labels), begränsningar (limitations in amber).
-- Footer: "Solvigo Sales Intelligence · Grundat i MCP-analyserad syntetisk demodata" + generation timestamp.
-- Chart render uses brand palette (`#4169e1`, `#a5b4fc`, `#c7d2fe`). Negative bar values (e.g. declining %) get `#ef4444`. Chart block is silently omitted if no chart was saved.
-- No `supplier_id`, JWT, database URLs, or internal paths appear in the output.
-
-**Endpoints (all require session cookie):**
-
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/api/insights` | Save a grounded insight |
-| `GET` | `/api/insights` | List own insights (newest first, max 100) |
-| `GET` | `/api/insights/{id}` | Full detail including chart |
-| `DELETE` | `/api/insights/{id}` | Delete own insight |
-| `GET` | `/api/insights/{id}/export.pdf` | Download polished A4 PDF report |
-
-PDF generation: `backend/app/services/pdf_builder.py` — `reportlab` (Platypus, A4) + `matplotlib` (Agg backend, in-memory PNG). No browser or system-level dependencies.
-
-Smoke test: `python -m scripts.pdf_smoke_test` (8 cases, requires running backend).
+Pipelinen är medvetet inkrementell: varje steg går att testa fristående, och funktionsflaggan möjliggör omedelbar återgång till det äldre flödet.
 
 ---
 
-## Chat charts
+## Sparade insikter och PDF-rapporter
 
-Each grounded chat answer can include a deterministic chart payload rendered directly in the chat UI.
+Autentiserade leverantörsanvändare kan spara vilket förankrat chattsvar som helst (ett som backas upp av MCP-verktygsdata) och senare hämta eller exportera det som en polerad PDF-rapport.
 
-| Tool / intent | Chart type | Notes |
+**Beteende:**
+- Insikter är leverantörsavgränsade – backend härleder `supplier_id` från sessionscookien; frontend skickar det aldrig.
+- Läsningar, exporter eller raderingar mellan olika leverantörskonton returnerar alltid 404 (aldrig 403).
+- Endast förankrade svar (de med `tool_calls.length > 0`) kan sparas – svar från skyddsregler, svar som inte stöds eller förtydligandesvar saknar knappen "Spara insikt".
+- Diagramdatan lagras som JSONB och återges troget vid export; diagramvärden kommer alltid från MCP-resultat, aldrig från AI-genererad text.
+- PDF är det enda exportformatet för användaren – inga publika delningslänkar eller massoperationer i denna MVP.
+
+**PDF-rapportens format (A4):**
+- Sidhuvudsband: bakgrund i slate-900, "◈ Solvigo Sales Intelligence" (varumärkesblå), leverantörsnamn (till höger), underrubriken "Analysrapport".
+- Brödtext: fråga, analys (svarstext, rad för rad), diagram renderat som PNG via matplotlib (linje/stapel/cirkel), datakällor (källverktyg som läsbara svenska etiketter), begränsningar (i bärnstensgult).
+- Sidfot: "Solvigo Sales Intelligence · Grundat i MCP-analyserad syntetisk demodata" + tidsstämpel för genereringen.
+- Diagramrenderingen använder varumärkespaletten (`#4169e1`, `#a5b4fc`, `#c7d2fe`). Negativa stapelvärden (t.ex. minskande %) får `#ef4444`. Diagramblocket utelämnas tyst om inget diagram sparades.
+- Inget `supplier_id`, ingen JWT, inga databas-URL:er och inga interna sökvägar förekommer i resultatet.
+
+**Endpoints (alla kräver sessionscookie):**
+
+| Metod | Sökväg | Syfte |
 |---|---|---|
-| `get_sales_over_time` | line chart | revenue over the period (day / week / month) |
-| `get_top_products` | horizontal bar chart | product ranking by revenue |
-| `get_sales_by_region` | horizontal bar chart | revenue by region |
-| `get_market_share` | donut (pie) chart | "Oss" vs aggregate "Konkurrenter" |
-| `get_declining_products` | bar chart | % change vs prior period (negative bars styled red) |
-| `get_supplier_kpis` | KPI totals — or comparison bars when a period comparison is requested | revenue, orders, units, AOV |
-| Explicit period comparison | comparison bar chart | analyzed period vs baseline, tenant-coloured |
+| `POST` | `/api/insights` | Spara en förankrad insikt |
+| `GET` | `/api/insights` | Lista egna insikter (nyaste först, max 100) |
+| `GET` | `/api/insights/{id}` | Fullständig detalj inklusive diagram |
+| `DELETE` | `/api/insights/{id}` | Radera egen insikt |
+| `GET` | `/api/insights/{id}/export.pdf` | Ladda ner polerad PDF-rapport i A4 |
 
-**Key properties:**
-- Charts are built by `backend/app/services/chart_builder.py` from raw MCP output — the LLM response text is never parsed for numbers.
-- At most one chart is returned per answer. When multiple MCP tools are called, the chart comes from the highest-priority visual tool (trend → market share → top products → region → declining).
-- A chart is suppressed when the MCP result has fewer than two usable rows.
-- All guardrail responses (`prompt_injection`, `restricted`, `insufficient_data`, `unsupported`, `clarification_needed`) always return `chart = null`.
-- Chart data inherits the authenticated supplier's scope — supplier\_id is injected by the backend before every MCP call.
-- The frontend renders charts with Recharts, reusing the same library as the dashboard.
+PDF-generering: `backend/app/services/pdf_builder.py` – `reportlab` (Platypus, A4) + `matplotlib` (Agg-backend, PNG i minnet). Inga beroenden till webbläsare eller systemnivå.
 
-Chart payload structure:
+Smoke-test: `python -m scripts.pdf_smoke_test` (8 fall, kräver att backend körs).
+
+---
+
+## Chattdiagram
+
+Varje förankrat chattsvar kan inkludera en deterministisk diagramdata som renderas direkt i chattgränssnittet.
+
+| Verktyg / avsikt | Diagramtyp | Anmärkningar |
+|---|---|---|
+| `get_sales_over_time` | linjediagram | intäkt över perioden (dag / vecka / månad) |
+| `get_top_products` | horisontellt stapeldiagram | produktrankning efter intäkt |
+| `get_sales_by_region` | horisontellt stapeldiagram | intäkt per region |
+| `get_market_share` | ringdiagram (cirkeldiagram) | "Oss" mot aggregerade "Konkurrenter" |
+| `get_declining_products` | stapeldiagram | %-förändring mot föregående period (negativa staplar i rött) |
+| `get_supplier_kpis` | KPI-summor – eller jämförelsestaplar när en periodjämförelse begärs | intäkt, ordrar, enheter, AOV |
+| Explicit periodjämförelse | jämförelsestapeldiagram | analyserad period mot baslinje, färgsatt per leverantör |
+
+**Viktiga egenskaper:**
+- Diagram byggs av `backend/app/services/chart_builder.py` från rå MCP-utdata – LLM:ens svarstext tolkas aldrig för att utvinna siffror.
+- Som mest returneras ett diagram per svar. När flera MCP-verktyg anropas kommer diagrammet från det visuella verktyget med högst prioritet (trend → marknadsandel → toppprodukter → region → minskande).
+- Ett diagram undertrycks när MCP-resultatet har färre än två användbara rader.
+- Alla svar från skyddsreglerna (`prompt_injection`, `restricted`, `insufficient_data`, `unsupported`, `clarification_needed`) returnerar alltid `chart = null`.
+- Diagramdatan ärver den autentiserade leverantörens avgränsning – supplier\_id injiceras av backend före varje MCP-anrop.
+- Frontend renderar diagram med Recharts och återanvänder samma bibliotek som dashboarden.
+
+Diagramdatans struktur:
 
 ```json
 {
@@ -148,48 +148,48 @@ Chart payload structure:
 }
 ```
 
-Smoke test: `python -m scripts.chart_smoke_test` (9 cases, requires running backend).
+Smoke-test: `python -m scripts.chart_smoke_test` (9 fall, kräver att backend körs).
 
 ---
 
-## Guardrails and safety
+## Skyddsregler och säkerhet
 
-Every chat message is classified **deterministically** before any OpenAI or MCP call is made. The guardrail layer in `backend/app/services/guardrails.py` uses regex pattern matching — no LLM involved — and returns immediately for non-analytics inputs.
+Varje chattmeddelande klassificeras **deterministiskt** innan något OpenAI- eller MCP-anrop görs. Skyddsregellagret i `backend/app/services/guardrails.py` använder regex-mönstermatchning – ingen LLM inblandad – och returnerar omedelbart för indata som inte rör analys.
 
-| Classification | Trigger examples | Action |
+| Klassificering | Exempel på utlösare | Åtgärd |
 |---|---|---|
-| `prompt_injection` | "ignore previous instructions", "reveal the system prompt", "run SQL", "what is the JWT secret" | Refuse; return Swedish error; no LLM/MCP |
-| `restricted` | "which customers do competitors have?", "show competitor orders" | Explain aggregate-only policy; no LLM/MCP |
-| `insufficient_data` | margin, profit, inventory, returns, forecasts, ad spend | Explain what data is available; no LLM/MCP |
-| `unsupported` | weather, sports, coding, news, stock prices | Redirect to analytics; no LLM/MCP |
-| `clarification_needed` | vague questions with no analytics signal ("how's it going?") | Ask follow-up with 4 suggested directions |
-| `supported` | sales, revenue, products, trends, regions, market share | Pass through to full LLM + MCP flow |
+| `prompt_injection` | "ignorera tidigare instruktioner", "visa systemprompten", "kör SQL", "vad är JWT-hemligheten" | Neka; returnera svenskt felmeddelande; ingen LLM/MCP |
+| `restricted` | "vilka kunder har konkurrenterna?", "visa konkurrenternas ordrar" | Förklara policyn om enbart aggregerade data; ingen LLM/MCP |
+| `insufficient_data` | marginal, vinst, lager, returer, prognoser, annonsbudget | Förklara vilka data som finns tillgängliga; ingen LLM/MCP |
+| `unsupported` | väder, sport, kodning, nyheter, aktiekurser | Styr om till analys; ingen LLM/MCP |
+| `clarification_needed` | vaga frågor utan analyssignal ("hur går det?") | Ställ en följdfråga med 4 föreslagna inriktningar |
+| `supported` | försäljning, intäkt, produkter, trender, regioner, marknadsandel | Släpp igenom till fullt LLM + MCP-flöde |
 
-**Security invariants (enforced in layers):**
-- The guardrail never exposes: JWT contents, JWT secret, environment variables, database URLs, raw SQL, internal system prompts, MCP implementation details, server paths, or source code.
-- `supplier_id` is derived exclusively from the authenticated session — not from the message, not from the LLM.
-- The MCP tool list is whitelisted in `ALLOWED_TOOLS`; the LLM cannot add or modify tools.
-- Tool arguments are schema-validated; `supplier_id` is overwritten by the backend immediately before every MCP call.
-- Competitor data remains aggregate-only at both the guardrail layer (pattern match) and the MCP query layer (SQL enforced).
+**Säkerhetsinvarianter (upprätthålls i lager):**
+- Skyddsreglerna exponerar aldrig: JWT-innehåll, JWT-hemlighet, miljövariabler, databas-URL:er, rå SQL, interna systemprompter, MCP-implementationsdetaljer, serversökvägar eller källkod.
+- `supplier_id` härleds uteslutande från den autentiserade sessionen – inte från meddelandet och inte från LLM:en.
+- MCP-verktygslistan är vitlistad i `ALLOWED_TOOLS`; LLM:en kan inte lägga till eller ändra verktyg.
+- Verktygsargument schemavalideras; `supplier_id` skrivs över av backend omedelbart före varje MCP-anrop.
+- Konkurrentdata förblir enbart aggregerad både i skyddsregellagret (mönstermatchning) och i MCP-frågelagret (upprätthålls i SQL).
 
-Smoke test: `python backend/scripts/guardrail_smoke_test.py` (13 cases, requires running backend).
+Smoke-test: `python backend/scripts/guardrail_smoke_test.py` (13 fall, kräver att backend körs).
 
 ---
 
-## Supplier scope and competitor guardrails
+## Leverantörsavgränsning och skyddsregler mot konkurrentdata
 
-| Concern | Enforcement point |
+| Risk | Var den upprätthålls |
 |---|---|
-| LLM choosing wrong supplier | `supplier_id` stripped from OpenAI schema; backend always overwrites |
-| Cross-supplier data leakage | All queries join through `brands.supplier_id` |
-| Competitor product/order detail | `query_market_share` returns aggregate revenue only; no product names or order rows |
-| SQL injection | All queries use SQLAlchemy `text()` with named bind params |
+| LLM väljer fel leverantör | `supplier_id` borttaget från OpenAI-schemat; backend skriver alltid över |
+| Dataläckage mellan leverantörer | Alla frågor joinar via `brands.supplier_id` |
+| Konkurrenters produkt-/orderdetaljer | `query_market_share` returnerar endast aggregerad intäkt; inga produktnamn eller orderrader |
+| SQL-injektion | Alla frågor använder SQLAlchemy `text()` med namngivna bind-parametrar |
 
 ---
 
-## Grounding and source metadata
+## Förankring och källmetadata
 
-Every chat response includes:
+Varje chattsvar innehåller:
 
 ```json
 {
@@ -209,11 +209,11 @@ Every chat response includes:
 }
 ```
 
-The system prompt injects today's date at call time and instructs the model to quote the `date_range` returned by the tool — not to infer calendar periods from its training data.
+Systemprompten injicerar dagens datum vid anropstillfället och instruerar modellen att citera det `date_range` som verktyget returnerar – inte att härleda kalenderperioder från sin träningsdata.
 
 ---
 
-## Data model
+## Datamodell
 
 ```
 Supplier → Brand → Product ← Category
@@ -225,37 +225,37 @@ Customer ← Region   OrderItem
 Supplier → SavedInsight
 ```
 
-UUID primary keys throughout. `OrderItem` stores `quantity`, `unit_price`, and pre-computed `revenue`. `SavedInsight` backs the saved-insights and PDF-export features (see "Saved insights and PDF reports" above).
+UUID-primärnycklar genomgående. `OrderItem` lagrar `quantity`, `unit_price` och förberäknad `revenue`. `SavedInsight` ligger till grund för funktionerna för sparade insikter och PDF-export (se "Sparade insikter och PDF-rapporter" ovan).
 
 ---
 
-## Demo suppliers
+## Demoleverantörer
 
 > **Synthetic demo data.** Företags- och produktnamn används endast i syntetisk demodata. Försäljningsdata, marknadsandelar och kunddata är inte verkliga.
 
-The seed script creates four supplier tenants across two categories (Läsk and Chips & snacks), each competing head-to-head with one rival. Every demo account is scoped to a single supplier.
+Seed-skriptet skapar fyra leverantörskonton i två kategorier (Läsk samt Chips & snacks), där varje konto konkurrerar direkt med en rival. Varje demokonto är avgränsat till en enda leverantör.
 
-| Supplier | Login | Category | Brands | Key seeded pattern |
+| Leverantör | Inloggning | Kategori | Varumärken | Viktigt inseedat mönster |
 |---|---|---|---|---|
-| **Coca-Cola Europacific Partners Sverige** (primary demo) | `cocacola@demo.solvigo` | Läsk | Coca-Cola, Fanta, Sprite | Top product *Coca-Cola Zero Sugar 33 cl*; *Coca-Cola Zero Sugar Lemon* declining over the last 30 days; ≈55 % share of Läsk vs PepsiCo |
-| **PepsiCo Northern Europe** | `pepsico@demo.solvigo` | Läsk | Pepsi, 7UP, Mountain Dew | Top product *Pepsi Max 33 cl*; *Pepsi Max Lime* ramping +50 % over the final 90 days; ≈45 % share of Läsk |
-| **Orkla Snacks Sverige (OLW)** | `olw@demo.solvigo` | Chips & snacks | OLW | ≈52 % share of Chips & snacks vs Estrella |
-| **Estrella AB** | `estrella@demo.solvigo` | Chips & snacks | Estrella | Top product *Estrella Grillchips 275 g*; *Estrella Cheddar 180 g* dips over the last 30 days; *Estrella Linschips* growing +50 % |
+| **Coca-Cola Europacific Partners Sverige** (primär demo) | `cocacola@demo.solvigo` | Läsk | Coca-Cola, Fanta, Sprite | Toppprodukt *Coca-Cola Zero Sugar 33 cl*; *Coca-Cola Zero Sugar Lemon* minskar de senaste 30 dagarna; ≈55 % andel av Läsk mot PepsiCo |
+| **PepsiCo Northern Europe** | `pepsico@demo.solvigo` | Läsk | Pepsi, 7UP, Mountain Dew | Toppprodukt *Pepsi Max 33 cl*; *Pepsi Max Lime* ökar +50 % under de sista 90 dagarna; ≈45 % andel av Läsk |
+| **Orkla Snacks Sverige (OLW)** | `olw@demo.solvigo` | Chips & snacks | OLW | ≈52 % andel av Chips & snacks mot Estrella |
+| **Estrella AB** | `estrella@demo.solvigo` | Chips & snacks | Estrella | Toppprodukt *Estrella Grillchips 275 g*; *Estrella Cheddar 180 g* dippar de senaste 30 dagarna; *Estrella Linschips* växer +50 % |
 
-All demo accounts use the password `demo1234`. Competitors appear only as aggregate revenue in each other's market-share view — never product- or order-level detail. Regions seeded: Stockholm, Göteborg, Malmö.
+Alla demokonton använder lösenordet `demo1234`. Konkurrenter visas endast som aggregerad intäkt i varandras marknadsandelsvy – aldrig på produkt- eller ordernivå. Inseedade regioner: Stockholm, Göteborg, Malmö.
 
 ---
 
-## Local setup
+## Lokal installation
 
-### Prerequisites
+### Förutsättningar
 
 - Python 3.11+
 - Node 18+
-- A Neon PostgreSQL database (or any PostgreSQL 14+)
-- An OpenAI API key with access to `gpt-4o`
+- En Neon PostgreSQL-databas (eller valfri PostgreSQL 14+)
+- En OpenAI API-nyckel med åtkomst till `gpt-4o`
 
-### 1 — Environment
+### 1 — Miljö
 
 ```bash
 # Copy and fill in root .env (used by backend and MCP server)
@@ -263,7 +263,7 @@ cp .env.example .env
 # Edit DATABASE_URL and OPENAI_API_KEY
 ```
 
-Root `.env` format:
+Format för rot-`.env`:
 
 ```
 DATABASE_URL=postgresql+psycopg://user:password@host:5432/dbname
@@ -271,7 +271,7 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o
 ```
 
-> **Note:** Use the `postgresql+psycopg://` scheme (sync psycopg driver). `asyncpg` is not used.
+> **Obs:** Använd schemat `postgresql+psycopg://` (synkron psycopg-drivrutin). `asyncpg` används inte.
 
 ```bash
 # Frontend environment (defaults work for local dev)
@@ -304,9 +304,9 @@ npm install
 npm run dev                        # http://localhost:5173
 ```
 
-### 4 — MCP server (standalone, optional)
+### 4 — MCP-server (fristående, valfritt)
 
-The MCP server runs as a subprocess of the FastAPI backend automatically. To inspect it standalone:
+MCP-servern körs automatiskt som en subprocess till FastAPI-backenden. För att inspektera den fristående:
 
 ```bash
 # From project root, with backend/.venv active
@@ -316,33 +316,33 @@ fastmcp dev mcp_server/server.py   # browser inspector (requires fastmcp CLI)
 
 ---
 
-## Demo flow
+## Demoflöde
 
-A suggested walkthrough for a live evaluator demo. Takes approximately 5 minutes.
+En föreslagen genomgång för en live-demo inför en utvärderare. Tar cirka 5 minuter.
 
-1. **Log in as Coca-Cola Europacific Partners Sverige** — open `http://localhost:5173`, click the "Coca-Cola Europacific Partners Sverige" demo account card (password is pre-filled), then click "Logga in". The dashboard loads with KPIs, trend, top products, regions, market share, and declining products for the last 90 days.
+1. **Logga in som Coca-Cola Europacific Partners Sverige** – öppna `http://localhost:5173`, klicka på demokontokortet "Coca-Cola Europacific Partners Sverige" (lösenordet är förifyllt) och klicka sedan på "Logga in". Dashboarden laddas med KPI:er, trend, toppprodukter, regioner, marknadsandel och minskande produkter för de senaste 90 dagarna.
 
-2. **Inspect the dashboard** — note that "Omsättning" (revenue), region rankings, and "Marknadsandel" (market share) panels all update from MCP-queried synthetic demo data. Change the date range to "30 dagar" and observe all panels refresh.
+2. **Granska dashboarden** – notera att panelerna "Omsättning", regionrankningar och "Marknadsandel" alla uppdateras från syntetisk demodata som hämtats via MCP. Ändra datumintervallet till "30 dagar" och se hur alla paneler uppdateras.
 
-3. **Ask a grounded trend question** — scroll to "Analytics Copilot" and type or click:
+3. **Ställ en förankrad trendfråga** – scrolla till "Analytics Copilot" och skriv eller klicka:
    > *Hur ser vår försäljningstrend ut den senaste månaden?*
-   The copilot calls `get_sales_over_time` via MCP (the "Hämtar data via MCP…" indicator appears), then returns a Swedish answer with a deterministic line chart. The chart is built from raw tool output — never from AI prose.
+   Assistenten anropar `get_sales_over_time` via MCP (indikatorn "Hämtar data via MCP…" visas) och returnerar sedan ett svar på svenska med ett deterministiskt linjediagram. Diagrammet byggs från rå verktygsutdata – aldrig från AI-genererad text.
 
-4. **Ask a guarded competitor question** — type:
+4. **Ställ en skyddad konkurrentfråga** – skriv:
    > *Vilka produkter säljer våra konkurrenter?*
-   The guardrail intercepts this deterministically (no OpenAI call is made) and returns a Swedish explanation of the aggregate-only competitor policy.
+   Skyddsregeln fångar upp detta deterministiskt (inget OpenAI-anrop görs) och returnerar en förklaring på svenska av policyn om enbart aggregerade konkurrentdata.
 
-5. **Save a chart insight** — on the grounded trend answer (which has the "via" source badges), click "Spara insikt". The button shows "✓ Sparad" when saved. Click "☆ Insikter" in the header to open the insights drawer and confirm the saved entry appears.
+5. **Spara en diagraminsikt** – på det förankrade trendsvaret (som har källmärkningarna "via"), klicka på "Spara insikt". Knappen visar "✓ Sparad" när den sparats. Klicka på "☆ Insikter" i sidhuvudet för att öppna insiktspanelen och bekräfta att den sparade posten visas.
 
-6. **Export a PDF report** — open the saved insight and click "↓ Exportera rapport som PDF". A polished A4 PDF downloads with the branded header, answer text, embedded chart, and data sources. The PDF is generated server-side from the saved chart payload — not from AI text.
+6. **Exportera en PDF-rapport** – öppna den sparade insikten och klicka på "↓ Exportera rapport som PDF". En polerad PDF i A4 laddas ner med varumärkt sidhuvud, svarstext, inbäddat diagram och datakällor. PDF:en genereras på serversidan från den sparade diagramdatan – inte från AI-text.
 
-7. **Demonstrate tenant isolation** — click "Logga ut", then log in as "Estrella AB" (`estrella@demo.solvigo`, a Chips & snacks supplier). Confirm that the dashboard shows different KPIs in a different category and that the "☆ Insikter" drawer is empty (Coca-Cola's insights are not visible).
+7. **Visa separeringen mellan leverantörskonton** – klicka på "Logga ut" och logga sedan in som "Estrella AB" (`estrella@demo.solvigo`, en leverantör i Chips & snacks). Bekräfta att dashboarden visar andra KPI:er i en annan kategori och att panelen "☆ Insikter" är tom (Coca-Colas insikter syns inte).
 
 ---
 
-## Verification commands
+## Verifieringskommandon
 
-All smoke tests require the backend to be running (`uvicorn app.main:app --reload`) unless noted.
+Alla smoke-tester kräver att backend körs (`uvicorn app.main:app --reload`) om inget annat anges.
 
 ```bash
 # MCP query layer — no server needed, runs against DB directly
@@ -359,7 +359,7 @@ cd backend
 python -m scripts.chat_smoke_test
 ```
 
-Expected results when demo data is seeded:
+Förväntade resultat när demodata har seedats:
 
 ```
 MCP smoke test:   6/6 passed
@@ -367,7 +367,7 @@ API smoke test:  16/16 passed
 Chat smoke test:  7/7 passed
 ```
 
-### Frontend build
+### Frontend-bygge
 
 ```bash
 cd frontend
@@ -376,15 +376,15 @@ npm run build
 
 ---
 
-## Interactive API docs
+## Interaktiv API-dokumentation
 
-With the backend running: [http://localhost:8000/docs](http://localhost:8000/docs)
+Med backend igång: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-## Suggested demo questions (Swedish)
+## Föreslagna demofrågor (på svenska)
 
-Ask these in the Analytics Copilot panel as Coca-Cola Europacific Partners Sverige:
+Ställ dessa i panelen Analytics Copilot som Coca-Cola Europacific Partners Sverige:
 
 ```
 Vad är vår totala omsättning de senaste 90 dagarna?
@@ -398,42 +398,42 @@ Jämför vår omsättning de senaste 30 dagarna med föregående 30 dagar.
 
 ---
 
-## API endpoints
+## API-endpoints
 
-| Method | Path | Description |
+| Metod | Sökväg | Beskrivning |
 |---|---|---|
-| `GET` | `/health` | Service health |
-| `GET` | `/api/suppliers` | List suppliers (id + name) |
-| `GET` | `/api/dashboard/overview` | KPIs: revenue, orders, units, AOV |
-| `GET` | `/api/dashboard/sales-over-time` | Time series (day / week / month) |
-| `GET` | `/api/dashboard/top-products` | Top products by revenue, optional region filter |
-| `GET` | `/api/dashboard/regions` | Revenue by region |
-| `GET` | `/api/dashboard/market-share` | Supplier share within a category |
-| `GET` | `/api/dashboard/declining-products` | Products declining vs prior period |
-| `POST` | `/api/chat` | Grounded AI chat |
+| `GET` | `/health` | Tjänstens hälsa |
+| `GET` | `/api/suppliers` | Lista leverantörer (id + namn) |
+| `GET` | `/api/dashboard/overview` | KPI:er: intäkt, ordrar, enheter, AOV |
+| `GET` | `/api/dashboard/sales-over-time` | Tidsserie (dag / vecka / månad) |
+| `GET` | `/api/dashboard/top-products` | Toppprodukter efter intäkt, valfritt regionfilter |
+| `GET` | `/api/dashboard/regions` | Intäkt per region |
+| `GET` | `/api/dashboard/market-share` | Leverantörens andel inom en kategori |
+| `GET` | `/api/dashboard/declining-products` | Produkter som minskar mot föregående period |
+| `POST` | `/api/chat` | Förankrad AI-chatt |
 
 ---
 
-## Tradeoffs and known limitations
+## Avvägningar och kända begränsningar
 
-| Area | Current approach | Alternative |
+| Område | Nuvarande lösning | Alternativ |
 |---|---|---|
-| Auth | Email + password with a signed JWT session cookie; supplier derived server-side from the session | Managed IdP (Auth0 / Supabase) with SSO per supplier |
-| MCP transport | stdio subprocess per chat request | HTTP/SSE transport for lower latency |
-| LLM context | Single-turn with tool results | Multi-turn conversation history |
-| Competitor scope | Enforced in SQL | Could also be enforced at MCP layer |
-| Date handling | Tool default window when no dates passed | Explicit date required from frontend |
-| Seed data | Synthetic, deterministic | Real anonymised retailer export |
+| Autentisering | E-post + lösenord med en signerad JWT-sessionscookie; leverantören härleds på serversidan från sessionen | Hanterad IdP (Auth0 / Supabase) med SSO per leverantör |
+| MCP-transport | stdio-subprocess per chattförfrågan | HTTP/SSE-transport för lägre latens |
+| LLM-kontext | En tur med verktygsresultat | Konversationshistorik över flera turer |
+| Konkurrentavgränsning | Upprätthålls i SQL | Skulle även kunna upprätthållas i MCP-lagret |
+| Datumhantering | Verktygets standardfönster när inga datum anges | Explicit datum krävs från frontend |
+| Seed-data | Syntetisk, deterministisk | Verklig anonymiserad export från detaljist |
 
-**Out of scope for MVP:** background jobs, cross-session chat history, admin panels.
+**Utanför ramen för MVP:n:** bakgrundsjobb, chatthistorik mellan sessioner, adminpaneler.
 
 ---
 
-## Streaming chat (Phase 15)
+## Strömmade chattsvar (Fas 15)
 
-The Analytics Assistant uses Server-Sent Events (`POST /api/chat/stream`) to give truthful, live progress before the final answer appears.
+Analysassistenten använder Server-Sent Events (`POST /api/chat/stream`) för att ge sanningsenlig, live-uppdaterad förloppsinformation innan det slutliga svaret visas.
 
-### Event flow
+### Händelseflöde
 
 ```
 event: status   {"text": "Tolkar frågan…"}
@@ -446,48 +446,48 @@ event: delta    {"text": " perioden uppgick…"}
 event: complete {answer, chart, sources, tool_calls, limitations, supplier_id, generated_at}
 ```
 
-### Design principles
+### Designprinciper
 
-- **Progress events are truthful stages, not simulated reasoning.** Each status label corresponds to a real step: guardrail check, MCP connection + tool execution, final LLM synthesis.
-- **No numbers are emitted before MCP data is available.** Status and delta events carry only labels or answer text — never invented figures. The `complete` event is the only place where chart data and source metadata appear.
-- **Answer text streams only after all tool results are collected.** OpenAI streaming is enabled only for the final synthesis call, after the tool-calling loop has fully completed.
-- **Charts remain deterministic from MCP results.** The `chart` field in `complete` is built by `chart_builder.py` from validated MCP tool output, exactly as in the non-streaming endpoint. The LLM response text is never parsed for numbers.
-- **Guardrail-blocked questions return a single `complete` event immediately** — no MCP subprocess is opened, no status/delta events are emitted.
+- **Förloppshändelser är sanningsenliga steg, inte simulerat resonemang.** Varje statusetikett motsvarar ett verkligt steg: skyddsregelkontroll, MCP-anslutning + verktygsexekvering, slutlig LLM-syntes.
+- **Inga siffror skickas ut innan MCP-data finns tillgänglig.** Status- och delta-händelser bär endast etiketter eller svarstext – aldrig påhittade siffror. Händelsen `complete` är det enda ställe där diagramdata och källmetadata förekommer.
+- **Svarstext strömmas först efter att alla verktygsresultat har samlats in.** OpenAI-strömning aktiveras endast för det slutliga syntesanropet, efter att verktygsanropsloopen har slutförts helt.
+- **Diagram förblir deterministiska utifrån MCP-resultat.** Fältet `chart` i `complete` byggs av `chart_builder.py` från validerad MCP-verktygsutdata, precis som i den icke-strömmande endpointen. LLM:ens svarstext tolkas aldrig för att utvinna siffror.
+- **Frågor som blockeras av skyddsreglerna returnerar omedelbart en enda `complete`-händelse** – ingen MCP-subprocess öppnas och inga status/delta-händelser skickas.
 
-### Smoke test
+### Smoke-test
 
 ```bash
 cd backend
 python -m scripts.stream_smoke_test
 ```
 
-The non-streaming endpoint (`POST /api/chat`) is preserved unchanged for backwards compatibility.
+Den icke-strömmande endpointen (`POST /api/chat`) bevaras oförändrad för bakåtkompatibilitet.
 
 ---
 
-## Data freshness and quality (Phase 16)
+## Datafärskhet och kvalitet (Fas 16)
 
-Every dashboard response includes a `generated_at` timestamp (request time) and a `source` field (e.g. `MCP:get_supplier_kpis`). The KPI overview response also includes `latest_order_date` — the most recent `order_date` value in the database for that supplier and period, derived from `MAX(order_date)` over the same supplier-scoped query used for all other KPI fields.
+Varje dashboardsvar innehåller en tidsstämpel `generated_at` (tidpunkten för förfrågan) och ett fält `source` (t.ex. `MCP:get_supplier_kpis`). KPI-översiktssvaret innehåller även `latest_order_date` – det senaste `order_date`-värdet i databasen för den leverantören och perioden, härlett från `MAX(order_date)` över samma leverantörsavgränsade fråga som används för alla andra KPI-fält.
 
-### What is displayed
+### Vad som visas
 
-Below the KPI cards, a compact metadata row shows:
+Under KPI-korten visas en kompakt metadatarad:
 
 ```
 Dataperiod: 24 mars–22 juni 2026 · 771 ordrar · 2 913 sålda enheter
 Senast transaktionsdatum: 22 juni 2026 · Beräknad: 22 juni 2026 20:10
 ```
 
-- **Dataperiod** — the selected date window (from the date-picker preset)
-- **ordrar / sålda enheter** — real counts for that supplier and period
-- **Senast transaktionsdatum** — `MAX(order_date)` from the database; tells users how recent the data actually is
-- **Beräknad** — when the backend query ran (request time)
+- **Dataperiod** – det valda datumfönstret (från datumväljarens förval)
+- **ordrar / sålda enheter** – verkliga antal för den leverantören och perioden
+- **Senast transaktionsdatum** – `MAX(order_date)` från databasen; visar användarna hur färska data faktiskt är
+- **Beräknad** – när backend-frågan kördes (tidpunkten för förfrågan)
 
-The distinction matters: if data is loaded at 20:10 but the latest transaction was yesterday, users can see that directly rather than assuming "now = latest data."
+Skillnaden är viktig: om data laddas kl. 20:10 men den senaste transaktionen var i går kan användarna se det direkt i stället för att anta att "nu = senaste data".
 
-### Data-status endpoint
+### Data-status-endpoint
 
-`GET /api/dashboard/data-status` returns a dedicated freshness summary scoped to the authenticated supplier:
+`GET /api/dashboard/data-status` returnerar en dedikerad färskhetssammanfattning avgränsad till den autentiserade leverantören:
 
 ```json
 {
@@ -502,8 +502,8 @@ The distinction matters: if data is loaded at 20:10 but the latest transaction w
 }
 ```
 
-`supplier_id` is always derived from the authenticated session — the frontend cannot supply or override it. Unauthenticated requests return 401.
+`supplier_id` härleds alltid från den autentiserade sessionen – frontend kan inte ange eller åsidosätta det. Oautentiserade förfrågningar returnerar 401.
 
 ### MetaFooter
 
-All dashboard cards show "Beräknat från försäljningsdata · {source}" in the card footer, replacing the previous "Live-data" label which implied real-time connectivity.
+Alla dashboardkort visar "Beräknat från försäljningsdata · {source}" i kortets sidfot, vilket ersätter den tidigare etiketten "Live-data" som antydde realtidsanslutning.
