@@ -23,6 +23,34 @@ import type {
 // at the backend.
 const BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
+/**
+ * Build a fetch-safe URL for every API call.
+ *
+ * - Local dev (VITE_API_BASE_URL=http://localhost:8000):
+ *     buildApiUrl('/api/dashboard/overview') → 'http://localhost:8000/api/dashboard/overview'
+ * - Production (no env var set, BASE = ''):
+ *     buildApiUrl('/api/dashboard/overview') → '/api/dashboard/overview'
+ *
+ * Never uses `new URL()` — that constructor requires an absolute URL when given
+ * a single argument and would throw "Failed to construct 'URL': Invalid URL"
+ * whenever BASE is empty. Instead, query params are built with URLSearchParams
+ * and concatenated as a plain string, which fetch() accepts for both absolute
+ * and relative paths.
+ */
+export function buildApiUrl(
+  path: string,
+  params: Record<string, string | number | undefined> = {},
+): string {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') {
+      qs.set(k, String(v))
+    }
+  }
+  const query = qs.size > 0 ? `?${qs.toString()}` : ''
+  return `${BASE}${path}${query}`
+}
+
 function handleHttpError(status: number): never {
   if (status === 401) {
     window.dispatchEvent(new CustomEvent('auth:expired'))
@@ -32,14 +60,7 @@ function handleHttpError(status: number): never {
 }
 
 async function get<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
-  const qs = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== '') {
-      qs.set(k, String(v))
-    }
-  }
-  const query = qs.size > 0 ? `?${qs.toString()}` : ''
-  const res = await fetch(`${BASE}${path}${query}`, { credentials: 'include' })
+  const res = await fetch(buildApiUrl(path, params), { credentials: 'include' })
   if (!res.ok) {
     if (res.status === 401) handleHttpError(res.status)
     const detail = await res.json().catch(() => ({}))
@@ -49,7 +70,7 @@ async function get<T>(path: string, params: Record<string, string | number | und
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -64,7 +85,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function del(path: string): Promise<void> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     method: 'DELETE',
     credentials: 'include',
   })
@@ -76,7 +97,7 @@ async function del(path: string): Promise<void> {
 }
 
 async function getBlob(path: string): Promise<Blob> {
-  const res = await fetch(`${BASE}${path}`, { credentials: 'include' })
+  const res = await fetch(buildApiUrl(path), { credentials: 'include' })
   if (!res.ok) {
     if (res.status === 401) handleHttpError(res.status)
     const detail = await res.json().catch(() => ({}))
@@ -152,7 +173,7 @@ export const api = {
     post<ChatResponse>('/api/chat', req),
 
   chatStream: async function* (req: ChatRequest, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
-    const res = await fetch(`${BASE}/api/chat/stream`, {
+    const res = await fetch(buildApiUrl('/api/chat/stream'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
