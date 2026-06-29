@@ -6,6 +6,7 @@ from app.analytics import planner as analytics_planner
 from app.services.chart_builder import build_chart
 from app.services.intent_router import plan_forced_tools
 from app.services.period_labels import apply_period_labels
+from app.services.period_utils import default_data_bounds
 from app.services.ranking_limits import (
     ASCENDING_PRODUCT_RANKING_TITLE,
     is_ascending_product_ranking_question,
@@ -39,11 +40,15 @@ class ProductRankingPresentationTests(unittest.TestCase):
 
     def test_lowest_revenue_chart_is_ascending_with_correct_title(self):
         q = "Vilka produkter har lägst omsättning?"
+        # Use live data bounds so the range always equals the full-history sentinel.
+        # _kind_from_date_span returns "full_history" only when start/end match
+        # default_data_bounds() exactly; hardcoding dates breaks as today rolls forward.
+        data_min, data_max = default_data_bounds()
         payload = apply_period_labels({
             "products": self._ascending_products(),
             "requested_limit": 5,
             "sort_order": "asc",
-            "date_range": {"start": "2024-06-28", "end": "2026-06-27"},
+            "date_range": {"start": data_min.isoformat(), "end": data_max.isoformat()},
         }, q, tool_name="get_top_products")
 
         chart = build_chart("get_top_products", payload)

@@ -271,8 +271,28 @@ class PeriodUtilsTests(unittest.TestCase):
             "limitations": [],
         }
         out = apply_sales_over_time_period_policy(result)
-        self.assertEqual(len(out["series"]), 1)
-        self.assertEqual(out["date_range"], {"start": "2026-06-15", "end": "2026-06-21"})
+
+        # Policy contract: no in-progress week may appear in the output.
+        # current_period_start returns this week's Monday (live); every output
+        # period must be strictly before it.
+        this_week_monday = current_period_start("week")
+        for row in out["series"]:
+            self.assertLess(
+                str(row["period"])[:10],
+                this_week_monday,
+                f"Week {row['period']} should have been stripped as incomplete",
+            )
+
+        # The week of 2026-06-15 is always in the past and must always be retained.
+        retained_periods = [str(r["period"])[:10] for r in out["series"]]
+        self.assertIn("2026-06-15", retained_periods)
+
+        # date_range end must be a Sunday (week-aligned to the last complete week).
+        end_date = date.fromisoformat(out["date_range"]["end"])
+        self.assertEqual(end_date.weekday(), 6, "date_range end must be a Sunday")
+        self.assertEqual(out["date_range"]["start"], "2026-06-15")
+
+        # completed_week_label must be present for any weekly result.
         self.assertIn("completed_week_label", out)
 
     def test_single_completed_week_no_false_incomplete_warning(self):
