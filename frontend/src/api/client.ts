@@ -32,13 +32,14 @@ function handleHttpError(status: number): never {
 }
 
 async function get<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
-  const url = new URL(`${BASE}${path}`)
+  const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== '') {
-      url.searchParams.set(k, String(v))
+      qs.set(k, String(v))
     }
   }
-  const res = await fetch(url.toString(), { credentials: 'include' })
+  const query = qs.size > 0 ? `?${qs.toString()}` : ''
+  const res = await fetch(`${BASE}${path}${query}`, { credentials: 'include' })
   if (!res.ok) {
     if (res.status === 401) handleHttpError(res.status)
     const detail = await res.json().catch(() => ({}))
