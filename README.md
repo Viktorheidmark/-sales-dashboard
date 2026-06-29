@@ -148,8 +148,8 @@ Detta är en MVP/arbetsprov, inte en färdig produkt.
 |---|---|---|
 | Autentisering | E-post + lösenord med signerad JWT-sessionscookie; leverantör härleds på serversidan | Hanterad IdP (Auth0/Supabase) med SSO |
 | MCP-transport | stdio-subprocess per chattförfrågan | HTTP/SSE-transport för lägre latens |
-| LLM-kontext | En tur med verktygsresultat per fråga | Konversationshistorik över flera turer |
-| Datumhantering | Verktygets standardfönster när inget datum anges | Striktare krav på explicita datum |
+| LLM-kontext | Varje fråga analyseras självständigt med färska verktygsresultat för tydlig datagrundning och förutsägbara svar | Konversationshistorik över flera turer, med fortsatt validering av tidigare valda filter och datumintervall |
+| Datumhantering | Kalenderbaserat datumval för periodjämförelser, med standardperioder för fria frågor där inget datum anges | Fler naturliga datumtolkningar och konsekvent datumval i alla analystyper |
 | Seed-data | Syntetisk och deterministisk | Verklig anonymiserad export från detaljist |
 | Omfattning | Analys, sparade insikter och PDF | Bakgrundsjobb, chatthistorik och adminpaneler |
 
