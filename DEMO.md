@@ -1,6 +1,6 @@
 # Solvigo Sales Intelligence — Demomanus
 
-2-minuters genomgång för en live-demo eller skärminspelning.
+Ett demomanus för en cirka fem minuter lång live-demo eller skärminspelning.
 
 ---
 
@@ -16,10 +16,9 @@ Använd alltid länken ovan. Den följer senaste produktionsversionen.
 
 ## Innan du börjar
 
-1. Backend igång: `cd backend && uvicorn app.main:app --reload`
-2. Frontend igång: `cd frontend && npm run dev`
-3. Öppna [http://localhost:5173](http://localhost:5173)
-4. Du landar på **inloggningssidan**. Logga in med ett demokonto (se nedan) – varje konto är avgränsat till en leverantör.
+För live-demon behöver du inte starta något lokalt. Öppna bara länken ovan och logga in med ett demokonto.
+
+För lokal utveckling och installation, se `README.md`.
 
 ### Demokonton
 
@@ -36,7 +35,7 @@ Den här genomgången använder **Coca-Cola Europacific Partners Sverige** (`coc
 
 ---
 
-## 2-minutersflöde
+## 5-minutersflöde
 
 ### Steg 1 — Logga in (15 s)
 
@@ -46,17 +45,17 @@ Klicka på demoarbetsytan **Coca-Cola Europacific Partners Sverige** och sedan p
 
 ### Steg 2 — Översikt av dashboarden (30 s)
 
-> "Det här är en försäljningsdashboard riktad till leverantörer. Coca-Cola Europacific Partners Sverige kan se sina egna KPI:er i realtid – intäkt, antal ordrar, sålda enheter och genomsnittligt ordervärde."
+> "Det här är en försäljningsdashboard riktad till leverantörer. Coca-Cola Europacific Partners Sverige ser aktuella KPI:er för den valda dataperioden – omsättning, antal ordrar och sålda enheter."
 
 Peka på KPI-korten högst upp.
 
-> "All data hämtas live från PostgreSQL via parametriserade SQL-frågor. Leverantörsavgränsningen upprätthålls på serversidan – en leverantör kan bara någonsin se sina egna data, och det aktiva kontots varumärkesfärg sätter temat för hela gränssnittet."
+> "Data hämtas från PostgreSQL via parametriserade SQL-frågor när dashboarden laddas eller perioden ändras. Leverantörsavgränsningen upprätthålls på serversidan – en leverantör kan bara någonsin se sina egna data, och det aktiva kontots varumärkesfärg sätter temat för hela gränssnittet."
 
 ### Steg 3 — Diagram (30 s)
 
 Scrolla till diagrammet för försäljningstrend.
 
-> "Trendlinjen visar veckovis intäkt – vi har seedat avsiktliga mönster för att göra demon meningsfull."
+> "Trenddiagrammet visar försäljningsutvecklingen för den valda perioden. Vi har seedat avsiktliga mönster för att göra demon meningsfull."
 
 Peka på Toppprodukter.
 
@@ -84,11 +83,13 @@ Vad är vår totala omsättning de senaste 90 dagarna?
 
 Medan det laddar:
 
-> "Modellen anropar `get_supplier_kpis` via MCP:s stdio-transport. Den har ingen databasåtkomst – den anropar ett typat verktyg som kör en leverantörsavgränsad SQL-fråga och returnerar strukturerad JSON. Svaret förankras i det resultatet."
+> "Assistenten gissar inte. Den hämtar svaret från den underliggande försäljningsdatan via ett analysverktyg och bygger sitt svar på det resultatet."
 
 När svaret visas:
 
-> "supplier_id injicerades av backend från sessionen – LLM:en valde aldrig och såg det aldrig."
+> "Svaret är avgränsat till Coca-Cola Europacific Partners Sverige – en leverantör kan aldrig se en annans data."
+
+*(Tekniska detaljer om hur detta upprätthålls finns i avsnittet «Om du får tekniska frågor» nedan.)*
 
 Ställ en följdfråga:
 
@@ -96,15 +97,26 @@ Ställ en följdfråga:
 Vilka produkter tappar mest i försäljning just nu?
 ```
 
-> "Modellen anropar `get_declining_products`. Varje kvantitativt påstående i det här svaret kan spåras tillbaka till ett verkligt verktygsresultat. Du kan också spara ett svar som en insikt och exportera det som en varumärkt PDF."
+> "Assistenten hämtar data om produkter som tappat mest i försäljning. Varje kvantitativt påstående i svaret går att spåra tillbaka till ett verkligt verktygsresultat. Du kan också spara ett svar som en insikt och exportera det som en varumärkt PDF."
 
 ---
 
-## Vad du kan säga om MCP-förankring
+## Om du får tekniska frågor
+
+Det här avsnittet är valfritt referensmaterial. Det behövs inte under själva demon, men ger underlag om en granskare ställer djupare tekniska frågor.
+
+**Varför MCP-förankringen är pålitlig**
 
 > "Traditionella LLM-analysverktyg ger modellen databasuppgifter och låter den generera SQL. Det skapar risker: modellen kan fråga vilken leverantörs data som helst, generera dyra eller felaktiga frågor och producera svar som inte är förankrade i verkligheten.
 >
 > Här anropar modellen namngivna verktyg med typade scheman. Backend injicerar leverantörsavgränsningen efter att modellen bestämt vilket verktyg som ska anropas – supplier_id härleds från den autentiserade sessionen och tas helt bort från det schema modellen ser. Konkurrentdata är enbart aggregerad på SQL-nivå, inte bara filtrerad i prompten."
+
+**Detaljer bakom verktygsanropen**
+
+- Modellen anropar typade verktyg (t.ex. `get_supplier_kpis`, `get_declining_products`) via MCP:s stdio-transport och har ingen direkt databasåtkomst.
+- Varje verktyg kör en leverantörsavgränsad SQL-fråga och returnerar strukturerad JSON som svaret förankras i.
+- `supplier_id` injiceras av backend från den autentiserade sessionen – LLM:en väljer det aldrig och ser det aldrig.
+- Konkurrentavgränsningen upprätthålls i SQL-lagret, inte bara i prompten.
 
 ---
 
@@ -124,7 +136,7 @@ Vilka produkter tappar mest i försäljning just nu?
 
 Varje demokonto är avgränsat till en enda leverantör, så för att se ett annat konto **loggar du ut och loggar in som ett annat demokonto** (t.ex. `estrella@demo.solvigo` för Estrella AB i kategorin Chips & snacks).
 
-> "Varje del av dashboarden och varje chattsvar omavgränsas automatiskt till den leverantör som är inloggad, och gränssnittet byter tema till det varumärkets färger."
+> "Varje del av dashboarden och varje chattsvar avgränsas automatiskt till den leverantör som är inloggad, och gränssnittet byter tema till det varumärkets färger."
 
 Efter att du loggat in som en annan leverantör, fråga:
 
