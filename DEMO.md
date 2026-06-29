@@ -4,6 +4,16 @@
 
 ---
 
+## Live demo
+
+[Öppna Solvigo Sales Intelligence](https://sales-dashboard-xi-hazel.vercel.app/)
+
+Öppna alltid den stabila produktionslänken ovan – inte en deploy-specifik Vercel-URL.
+
+Använd alltid länken ovan. Den följer senaste produktionsversionen.
+
+---
+
 ## Innan du börjar
 
 1. Backend igång: `cd backend && uvicorn app.main:app --reload`

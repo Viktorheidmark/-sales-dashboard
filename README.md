@@ -14,6 +14,16 @@ AI-assistenten förankras genom Model Context Protocol (MCP): LLM:en anropar str
 
 ---
 
+## Live demo
+
+[Öppna Solvigo Sales Intelligence](https://sales-dashboard-xi-hazel.vercel.app/)
+
+Applikationen använder enbart syntetisk demodata – ingen verklig försäljnings-, kund- eller marknadsdata förekommer.
+
+Inloggningsuppgifter och en rekommenderad genomgång finns i [DEMO.md](DEMO.md).
+
+---
+
 ## Arkitektur
 
 ```mermaid
