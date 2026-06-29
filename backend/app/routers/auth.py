@@ -35,16 +35,30 @@ class LoginRequest(BaseModel):
     password: str
 
 
+def _cookie_security() -> tuple[str, bool]:
+    """Resolve (samesite, secure) for the session cookie.
+
+    Cross-site auth (e.g. Vercel frontend → Railway backend) requires
+    SameSite=None + Secure=True. Localhost dev keeps SameSite=Lax + Secure=False
+    over plain HTTP. Browsers reject a SameSite=None cookie that is not Secure,
+    so Secure is forced on whenever SameSite=None to avoid a silently dropped
+    (and therefore unusable) cookie.
+    """
+    samesite = (settings.cookie_samesite or "lax").strip().lower()
+    secure = settings.cookie_secure
+    if samesite == "none":
+        secure = True
+    return samesite, secure
+
+
 def _set_session_cookie(response: Response, token: str) -> None:
+    samesite, secure = _cookie_security()
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        # Cross-site (e.g. Vercel frontend → Railway backend) requires
-        # SameSite=None + Secure=True. Configurable so localhost dev keeps
-        # SameSite=Lax + Secure=False over plain HTTP.
-        samesite=settings.cookie_samesite,
-        secure=settings.cookie_secure,
+        samesite=samesite,
+        secure=secure,
         max_age=_COOKIE_MAX_AGE,
         path="/",
     )
@@ -89,12 +103,13 @@ def login(req: LoginRequest, response: Response):
 @router.post("/logout")
 def logout(response: Response):
     """Clear the session cookie."""
+    samesite, secure = _cookie_security()
     response.delete_cookie(
         key=COOKIE_NAME,
         path="/",
         httponly=True,
-        samesite=settings.cookie_samesite,
-        secure=settings.cookie_secure,
+        samesite=samesite,
+        secure=secure,
     )
     return {"ok": True}
 
