@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me-in-production-use-a-random-32-byte-hex-string"
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 8
+    cors_origins: str = (
+        "http://localhost:5173,"
+        "http://localhost:5174,"
+        "https://sales-dashboard-xi-hazel.vercel.app"
+    )
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
 
     model_config = SettingsConfigDict(
         env_file="../.env",

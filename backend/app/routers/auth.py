@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from app.config import settings
 from app.dependencies import COOKIE_NAME, get_current_user
 from app.services.auth import create_access_token, verify_password
 
@@ -39,8 +40,11 @@ def _set_session_cookie(response: Response, token: str) -> None:
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        samesite="lax",
-        secure=False,   # localhost demo; set True behind HTTPS in production
+        # Cross-site (e.g. Vercel frontend → Railway backend) requires
+        # SameSite=None + Secure=True. Configurable so localhost dev keeps
+        # SameSite=Lax + Secure=False over plain HTTP.
+        samesite=settings.cookie_samesite,
+        secure=settings.cookie_secure,
         max_age=_COOKIE_MAX_AGE,
         path="/",
     )
@@ -85,7 +89,13 @@ def login(req: LoginRequest, response: Response):
 @router.post("/logout")
 def logout(response: Response):
     """Clear the session cookie."""
-    response.delete_cookie(key=COOKIE_NAME, path="/", samesite="lax")
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite=settings.cookie_samesite,
+        secure=settings.cookie_secure,
+    )
     return {"ok": True}
 
 
