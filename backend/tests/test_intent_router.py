@@ -10,6 +10,7 @@ from app.services.chart_policy import select_charts
 from app.services.chart_builder import LINE_CHART, BAR_CHART
 from app.services.intent_router import (
     PriorTurnContext,
+    SALES_OVERVIEW_CLARIFICATION,
     default_category_for_supplier,
     extract_category,
     extract_period_args,
@@ -22,6 +23,7 @@ from app.services.intent_router import (
     plan_forced_tools,
     plan_long_term_trend_tools,
     plan_period_followup_tools,
+    sales_overview_needs_clarification,
 )
 from app.services.period_utils import completed_week_bounds, default_data_bounds, default_decline_comparison_days, latest_completed_date
 
@@ -644,6 +646,107 @@ class SalesOverviewIntentRegressionTests(unittest.TestCase):
                 trend.args.get("_chart_intent"), "time_series",
                 msg=f"{label}: expected time_series chart intent",
             )
+
+
+class SalesOverviewTypoToleranceTests(unittest.TestCase):
+    """Narrow, deterministic typo tolerance for the noun 'försäljning'.
+
+    A small spelling slip in the domain noun must not cost the user the trend
+    chart.  High-confidence matches (mistyped noun + overview/trend cue) route to
+    the canonical overview plan; bare/ambiguous mentions ask for clarification
+    rather than guessing; genuine confusable words never trigger the intent.
+    """
+
+    SUPPLIER = "Coca-Cola Europacific Partners Sverige"
+    UI_START = "2026-03-25"
+    UI_END = "2026-06-23"
+
+    # Mistyped noun + clear cue → treat exactly like canonical sales overview.
+    HIGH_CONFIDENCE_TYPO_PHRASES = [
+        "hur går försäljningen",      # canonical (baseline)
+        "hur går försäljningne",      # transposed final "en" → "ne"
+        "hur går försäljingen",       # missing "n"
+        "hur går försäljnignen",      # transposed "ng" → "gn"
+        "visa försäljningne",         # cue: visa
+        "hur utvecklas försäljningne",
+    ]
+
+    # A sales-ish noun with no overview cue and nothing else routable → clarify.
+    AMBIGUOUS_PHRASES = [
+        "försäljningne",
+        "försäljingen",
+        "försäljnignen",
+    ]
+
+    # Genuine Swedish confusables / unrelated phrasing → must NOT be overview.
+    UNRELATED_PHRASES = [
+        "hur går försäkringen?",      # försäkring = insurance (distance 3)
+        "visa förseningen",           # försening = delay (distance 3)
+        "vilka produkter säljer bäst?",
+        "vad är vår marknadsandel?",
+    ]
+
+    def test_high_confidence_typos_are_sales_status(self):
+        for phrase in self.HIGH_CONFIDENCE_TYPO_PHRASES:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(
+                    is_sales_status_question(phrase),
+                    msg=f"Expected sales-overview match for: {phrase!r}",
+                )
+                self.assertFalse(sales_overview_needs_clarification(phrase))
+
+    def test_high_confidence_typos_plan_trend_chart(self):
+        for phrase in self.HIGH_CONFIDENCE_TYPO_PHRASES:
+            with self.subTest(phrase=phrase):
+                plans = plan_forced_tools(phrase, self.SUPPLIER, self.UI_START, self.UI_END)
+                tool_names = [p.tool_name for p in plans]
+                self.assertIn("get_supplier_kpis", tool_names, msg=f"{phrase!r} → {tool_names}")
+                self.assertIn("get_sales_over_time", tool_names, msg=f"{phrase!r} → {tool_names}")
+                trend = next(p for p in plans if p.tool_name == "get_sales_over_time")
+                self.assertEqual(trend.args.get("_chart_intent"), "time_series", msg=phrase)
+                self.assertTrue(trend.args.get("_force_time_series"), msg=phrase)
+
+    def test_typo_phrases_match_canonical_plan(self):
+        canonical = [p.tool_name for p in plan_forced_tools(
+            "hur går försäljningen", self.SUPPLIER, self.UI_START, self.UI_END,
+        )]
+        for phrase in ("hur går försäljningne", "hur går försäljingen"):
+            with self.subTest(phrase=phrase):
+                typo = [p.tool_name for p in plan_forced_tools(
+                    phrase, self.SUPPLIER, self.UI_START, self.UI_END,
+                )]
+                self.assertEqual(typo, canonical)
+
+    def test_ambiguous_mentions_request_clarification(self):
+        for phrase in self.AMBIGUOUS_PHRASES:
+            with self.subTest(phrase=phrase):
+                self.assertFalse(
+                    is_sales_status_question(phrase),
+                    msg=f"Bare mention should not be a confident match: {phrase!r}",
+                )
+                self.assertTrue(
+                    sales_overview_needs_clarification(phrase),
+                    msg=f"Expected clarification for ambiguous: {phrase!r}",
+                )
+                self.assertEqual(plan_forced_tools(phrase, self.SUPPLIER), [])
+
+    def test_clarification_wording(self):
+        self.assertEqual(
+            SALES_OVERVIEW_CLARIFICATION,
+            "Menar du hur försäljningen går eller vill du se försäljningstrenden?",
+        )
+
+    def test_unrelated_phrases_never_trigger_overview(self):
+        for phrase in self.UNRELATED_PHRASES:
+            with self.subTest(phrase=phrase):
+                self.assertFalse(
+                    is_sales_status_question(phrase),
+                    msg=f"Unrelated phrase must not match overview: {phrase!r}",
+                )
+                self.assertFalse(
+                    sales_overview_needs_clarification(phrase),
+                    msg=f"Unrelated phrase must not request overview clarification: {phrase!r}",
+                )
 
 
 if __name__ == "__main__":

@@ -179,6 +179,18 @@ def resolve_tool_plans(
             analysis_meta=meta,
         )
 
+    from app.services.intent_router import (
+        SALES_OVERVIEW_CLARIFICATION,
+        sales_overview_needs_clarification,
+    )
+    if sales_overview_needs_clarification(message):
+        meta.update({"source": "clarification", "intent": "sales_overview"})
+        return ToolResolution(
+            clarification_answer=SALES_OVERVIEW_CLARIFICATION,
+            source="clarification",
+            analysis_meta=meta,
+        )
+
     if _use_ai_planner():
         try:
             plan = injected_plan or call_planner(

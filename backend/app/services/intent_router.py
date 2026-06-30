@@ -233,6 +233,109 @@ _SALES_STATUS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ---------------------------------------------------------------------------
+# Narrow, deterministic typo tolerance for the domain noun "försäljning".
+#
+# Scope: this helps ONLY the sales-overview intent recover from small spelling
+# mistakes in the noun itself (e.g. "försäljningne", "försäljingen") so the user
+# does not lose the intended trend chart over a one-character slip.  It is NOT a
+# global fuzzy matcher — every other intent keeps its exact-match routing.
+# ---------------------------------------------------------------------------
+
+# Canonical surface forms we measure spelling distance against.
+_SALES_TERM_FORMS = ("försäljning", "försäljningen")
+
+# Maximum edit distance that still counts as "the same word".
+# On an 11–13 character domain term, ≤2 edits means ≥85% of the characters match.
+# Empirically the nearest real Swedish confusables sit at distance 3 and are
+# therefore excluded: "försäkringen" (insurance) = 3, "förseningen" (the delay) = 3,
+# "beställningen" (the order) = 5.
+_SALES_TERM_MAX_EDITS = 2
+
+# Overview / trend cues that turn a (possibly mistyped) sales noun into a
+# high-confidence sales-overview request.  Mirrors the cues called out in spec:
+# hur, går, visa, trend, utvecklas, "ser ... ut".
+_SALES_OVERVIEW_CUE_RE = re.compile(
+    r"\b(?:hur|går|gå|visa|visar|trend|utvecklas|utveckling|utvecklat)\b",
+    re.IGNORECASE,
+)
+_SALES_OVERVIEW_SER_UT_RE = re.compile(r"\bser\b.*\but\b", re.IGNORECASE | re.DOTALL)
+
+# Shown when a sales-ish term is detected but the requested analysis shape is
+# ambiguous (no overview/trend cue and no other routable signal).  We ask rather
+# than guess, per the deterministic-routing contract.
+SALES_OVERVIEW_CLARIFICATION = (
+    "Menar du hur försäljningen går eller vill du se försäljningstrenden?"
+)
+
+_PUNCT_RE = re.compile(r"[^0-9a-zåäöéü\s]+", re.IGNORECASE)
+_WS_RE = re.compile(r"\s+")
+
+
+def _normalize_for_matching(message: str) -> str:
+    """Lowercase, drop ordinary punctuation, and collapse whitespace."""
+    lowered = (message or "").lower()
+    no_punct = _PUNCT_RE.sub(" ", lowered)
+    return _WS_RE.sub(" ", no_punct).strip()
+
+
+def _damerau_levenshtein(a: str, b: str) -> int:
+    """Optimal string alignment distance (adjacent transposition counts as 1)."""
+    la, lb = len(a), len(b)
+    if not la:
+        return lb
+    if not lb:
+        return la
+    prev2: list[int] = []
+    prev = list(range(lb + 1))
+    for i in range(1, la + 1):
+        cur = [i] + [0] * lb
+        for j in range(1, lb + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            if (
+                i > 1
+                and j > 1
+                and a[i - 1] == b[j - 2]
+                and a[i - 2] == b[j - 1]
+            ):
+                cur[j] = min(cur[j], prev2[j - 2] + 1)
+        prev2, prev = prev, cur
+    return prev[lb]
+
+
+def _best_sales_term_distance(token: str) -> int:
+    return min(_damerau_levenshtein(token, form) for form in _SALES_TERM_FORMS)
+
+
+def _has_typo_sales_term(normalized: str) -> bool:
+    """True when a token is a *misspelling* of 'försäljning(en)'.
+
+    Distance 0 (correct spelling) is deliberately excluded: correctly-spelled
+    input keeps its existing routing untouched, so this stays purely additive.
+    """
+    for token in normalized.split():
+        if abs(len(token) - len(_SALES_TERM_FORMS[0])) > _SALES_TERM_MAX_EDITS + 2:
+            continue
+        if 1 <= _best_sales_term_distance(token) <= _SALES_TERM_MAX_EDITS:
+            return True
+    return False
+
+
+def _has_overview_cue(normalized: str) -> bool:
+    return bool(
+        _SALES_OVERVIEW_CUE_RE.search(normalized)
+        or _SALES_OVERVIEW_SER_UT_RE.search(normalized)
+    )
+
+
+def _is_typo_sales_overview(message: str) -> bool:
+    """High-confidence sales overview from a mistyped noun plus an overview cue."""
+    normalized = _normalize_for_matching(message)
+    if not normalized:
+        return False
+    return _has_typo_sales_term(normalized) and _has_overview_cue(normalized)
+
 
 @dataclass(frozen=True)
 class ToolPlan:
@@ -276,16 +379,71 @@ def extract_region(message: str) -> Optional[str]:
     return None
 
 
-def is_sales_status_question(message: str) -> bool:
-    """Vague sales health questions without explicit comparison or weekly scope."""
-    msg = message.strip()
+def _is_sales_overview_excluded(msg: str) -> bool:
+    """Guards shared by the overview matcher and its clarification fallback."""
     if not msg or _WEEKLY_SALES_RE.search(msg):
-        return False
+        return True
     if _MARKET_SHARE_RE.search(msg) or (_TOP_PRODUCTS_RE.search(msg) and not _ALL_PRODUCTS_COMPARE_RE.search(msg)):
-        return False
+        return True
     if _DECLINING_RE.search(msg) and re.search(r"tappat|minskat|nedgång|fallit|sjunk", msg, re.I):
+        return True
+    return False
+
+
+def is_sales_status_question(message: str) -> bool:
+    """Vague sales health questions without explicit comparison or weekly scope.
+
+    Accepts canonical phrasings via `_SALES_STATUS_RE` and, as a narrow
+    deterministic fallback, mistyped variants of the noun "försäljning" when an
+    overview/trend cue is present (e.g. "hur går försäljningne").
+    """
+    msg = message.strip()
+    if _is_sales_overview_excluded(msg):
         return False
-    return bool(_SALES_STATUS_RE.search(msg))
+    if _SALES_STATUS_RE.search(msg):
+        return True
+    return _is_typo_sales_overview(msg)
+
+
+def _has_other_routable_signal(msg: str) -> bool:
+    """True when the message clearly belongs to a non-overview intent."""
+    if (
+        _MARKET_SHARE_RE.search(msg)
+        or _TOP_PRODUCTS_RE.search(msg)
+        or _ALL_PRODUCTS_COMPARE_RE.search(msg)
+        or _DECLINING_RE.search(msg)
+        or _SALES_BY_REGION_RE.search(msg)
+        or _FOCUS_RE.search(msg)
+        or _KPI_COMPARISON_RE.search(msg)
+        or _SALES_TREND_RE.search(msg)
+        or _TIME_SERIES_INTENT_RE.search(msg)
+        or _DIAGRAM_FOLLOWUP_RE.search(msg)
+    ):
+        return True
+    if extract_category(msg) or extract_region(msg) or is_current_year_phrase(msg):
+        return True
+    period = extract_period_args(msg)
+    return bool(period.get("start_date") and period.get("end_date"))
+
+
+def sales_overview_needs_clarification(message: str) -> bool:
+    """Low-confidence sales-overview: a sales-ish noun but no clear analysis shape.
+
+    Fires only when a typo-tolerant "försäljning" token is present, the message
+    is NOT already a confident overview match, and nothing else routable applies.
+    The caller should answer with `SALES_OVERVIEW_CLARIFICATION` instead of guessing.
+    """
+    msg = message.strip()
+    if _is_sales_overview_excluded(msg):
+        return False
+    if is_sales_status_question(msg):
+        return False
+    normalized = _normalize_for_matching(msg)
+    if not _has_typo_sales_term(normalized):
+        return False
+    if _has_overview_cue(normalized):
+        return False
+    return not _has_other_routable_signal(msg)
 
 
 def _plan_sales_status_tools(

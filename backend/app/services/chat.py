@@ -369,6 +369,22 @@ def _decline_period_clarification_response(supplier_id: str) -> dict:
     })
 
 
+def _sales_overview_clarification_response(supplier_id: str, answer: str) -> dict:
+    return _prepare_client_response({
+        "answer": answer,
+        "tool_calls": [],
+        "sources": [],
+        "chart": None,
+        "charts": [],
+        "deep_dive": None,
+        "follow_up_actions": [],
+        "limitations": [],
+        "response_kind": "conversational",
+        "supplier_id": supplier_id,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+    })
+
+
 def _diagram_clarification_response(supplier_id: str) -> dict:
     return _prepare_client_response({
         "answer": (
@@ -900,6 +916,10 @@ async def run_chat(
             if resolution.clarification_answer:
                 if resolution.analysis_meta.get("intent") == "period_comparison":
                     return _comparison_composer_response(supplier_id)
+                if resolution.analysis_meta.get("intent") == "sales_overview":
+                    return _sales_overview_clarification_response(
+                        supplier_id, resolution.clarification_answer,
+                    )
                 return _decline_period_clarification_response(supplier_id)
             forced = resolution.plans
             if forced:
@@ -1036,6 +1056,10 @@ async def stream_chat(
                 if resolution.clarification_answer:
                     if resolution.analysis_meta.get("intent") == "period_comparison":
                         yield sse("complete", _comparison_composer_response(supplier_id))
+                    elif resolution.analysis_meta.get("intent") == "sales_overview":
+                        yield sse("complete", _sales_overview_clarification_response(
+                            supplier_id, resolution.clarification_answer,
+                        ))
                     else:
                         yield sse("complete", _decline_period_clarification_response(supplier_id))
                     return
