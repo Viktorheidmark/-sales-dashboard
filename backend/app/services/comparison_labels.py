@@ -131,6 +131,10 @@ COMPARISON_DIMENSION_CLARIFICATION = (
     "Vad vill du jämföra – produkter, regioner eller två tidsperioder?"
 )
 
+PRODUCT_EXTREMES_PERIOD_CLARIFICATION = (
+    "Ange en enskild månad om du vill begränsa jämförelsen av bästa och sämsta produkten."
+)
+
 ComparisonDimension = str  # product | region | period | ambiguous | none
 
 
@@ -152,6 +156,19 @@ def is_product_extremes_comparison(message: str) -> bool:
     if re.search(r"produkt", msg, re.IGNORECASE):
         return True
     return bool(re.search(r"den\s+(?:produkt\w*\s+)?som\s+går", msg, re.IGNORECASE))
+
+
+def product_extremes_period_unresolved(message: str) -> bool:
+    """Month named in a product-extremes question but not resolved to one calendar month."""
+    from app.services.period_utils import message_mentions_calendar_month, resolve_period_range
+
+    msg = (message or "").strip()
+    if not msg or not is_product_extremes_comparison(msg):
+        return False
+    if not message_mentions_calendar_month(msg):
+        return False
+    resolved = resolve_period_range(msg)
+    return not (resolved.get("start_date") and resolved.get("end_date"))
 
 
 def is_region_comparison_request(message: str) -> bool:

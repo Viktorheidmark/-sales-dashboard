@@ -9,6 +9,7 @@ history exists.
 from __future__ import annotations
 
 import re
+import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -52,6 +53,18 @@ _MONTHS_SV_SHORT = (
     "jul", "aug", "sep", "okt", "nov", "dec",
 )
 
+_MONTH_INDEX: dict[str, int] = {}
+for _i, _name in enumerate(_MONTHS_SV, start=1):
+    _MONTH_INDEX[_name] = _i
+for _i, _name in enumerate(_MONTHS_SV_SHORT, start=1):
+    _MONTH_INDEX.setdefault(_name, _i)
+
+_MONTH_TOKEN_RE = re.compile(
+    r"\b(" + "|".join(sorted(_MONTH_INDEX.keys(), key=len, reverse=True)) + r")\b"
+    r"(?:\s+(\d{4}))?",
+    re.IGNORECASE,
+)
+
 
 def completed_week_bounds(reference: Optional[date] = None) -> tuple[date, date]:
     """Monday–Sunday of the most recent fully completed ISO week."""
@@ -79,6 +92,45 @@ def default_decline_comparison_days(reference: Optional[date] = None) -> int:
     data_min, data_max = default_data_bounds(reference)
     span = (data_max - data_min).days + 1
     return min(365, max(7, span // 2))
+
+
+def message_mentions_calendar_month(message: str) -> bool:
+    """True when the message names a Swedish calendar month."""
+    return bool(_MONTH_TOKEN_RE.search((message or "").strip()))
+
+
+def resolve_calendar_month_range(
+    message: str,
+    reference: Optional[date] = None,
+    data_min: Optional[date] = None,
+    data_max: Optional[date] = None,
+) -> dict:
+    """Resolve exactly one named calendar month, or {} when zero/multiple months apply."""
+    msg = (message or "").strip().lower()
+    if not msg:
+        return {}
+
+    matches = list(_MONTH_TOKEN_RE.finditer(msg))
+    if len(matches) != 1:
+        return {}
+
+    m = matches[0]
+    month = _MONTH_INDEX[m.group(1).lower()]
+    year = int(m.group(2)) if m.group(2) else None
+
+    today = reference or datetime.now(tz=timezone.utc).date()
+    if data_min is None or data_max is None:
+        data_min, data_max = default_data_bounds(today)
+
+    y = year if year is not None else today.year
+    last_day = calendar.monthrange(y, month)[1]
+    start, end = clamp_date_range(date(y, month, 1), date(y, month, last_day), data_min, data_max)
+    return {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "days": (end - start).days + 1,
+        "period_kind": "calendar_month",
+    }
 
 
 def clamp_date_range(start: date, end: date, data_min: date, data_max: date) -> tuple[date, date]:
@@ -227,6 +279,15 @@ def resolve_period_range(
             "days": days,
             "period_kind": "rolling_365",
         }
+
+    month_range = resolve_calendar_month_range(
+        message,
+        reference=today,
+        data_min=data_min,
+        data_max=data_max,
+    )
+    if month_range:
+        return month_range
 
     return {}
 

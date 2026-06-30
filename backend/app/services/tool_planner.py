@@ -196,6 +196,19 @@ def resolve_tool_plans(
     from app.services.comparison_labels import is_product_extremes_comparison
 
     if is_product_extremes_comparison(message):
+        from app.services.comparison_labels import (
+            PRODUCT_EXTREMES_PERIOD_CLARIFICATION,
+            product_extremes_period_unresolved,
+        )
+
+        if product_extremes_period_unresolved(message):
+            meta.update({"source": "clarification", "intent": "product_extremes"})
+            return ToolResolution(
+                clarification_answer=PRODUCT_EXTREMES_PERIOD_CLARIFICATION,
+                source="clarification",
+                analysis_meta=meta,
+            )
+
         legacy = plan_forced_tools(
             message, supplier_name, start_date, end_date, prior_context=prior_context,
         )

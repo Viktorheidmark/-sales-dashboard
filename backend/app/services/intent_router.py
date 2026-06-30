@@ -1149,6 +1149,10 @@ def plan_forced_tools(
         return []
 
     if is_product_extremes_comparison(msg):
+        from app.services.comparison_labels import product_extremes_period_unresolved
+
+        if product_extremes_period_unresolved(msg):
+            return []
         args = _period_args_from_message(msg, start_date, end_date)
         region = extract_region(msg)
         if region:

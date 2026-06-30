@@ -334,6 +334,26 @@ class PeriodUtilsTests(unittest.TestCase):
             {"start": "2026-06-15", "end": "2026-06-21"},
         )
 
+    def test_named_calendar_month_with_year(self):
+        out = resolve_period_range(
+            "bara i månad mars 2026",
+            reference=self.REF,
+            data_min=self.DATA_MIN,
+            data_max=self.DATA_MAX,
+        )
+        self.assertEqual(out["start_date"], "2026-03-01")
+        self.assertEqual(out["end_date"], "2026-03-31")
+        self.assertEqual(out.get("period_kind"), "calendar_month")
+
+    def test_multiple_named_months_do_not_resolve_to_one(self):
+        out = resolve_period_range(
+            "mars 2026 och april 2026",
+            reference=self.REF,
+            data_min=self.DATA_MIN,
+            data_max=self.DATA_MAX,
+        )
+        self.assertEqual(out, {})
+
 
 if __name__ == "__main__":
     unittest.main()

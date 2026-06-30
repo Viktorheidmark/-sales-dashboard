@@ -950,6 +950,10 @@ async def run_chat(
                     return _sales_overview_clarification_response(
                         supplier_id, resolution.clarification_answer,
                     )
+                if intent == "product_extremes":
+                    return _sales_overview_clarification_response(
+                        supplier_id, resolution.clarification_answer,
+                    )
                 return _decline_period_clarification_response(supplier_id)
             forced = resolution.plans
             if forced:
@@ -1102,6 +1106,10 @@ async def stream_chat(
                             supplier_id, resolution.clarification_answer or COMPARISON_TWO_PERIODS_CLARIFICATION,
                         ))
                     elif intent == "sales_overview":
+                        yield sse("complete", _sales_overview_clarification_response(
+                            supplier_id, resolution.clarification_answer,
+                        ))
+                    elif intent == "product_extremes":
                         yield sse("complete", _sales_overview_clarification_response(
                             supplier_id, resolution.clarification_answer,
                         ))

@@ -136,6 +136,96 @@ class ComparisonDimensionRoutingTests(unittest.TestCase):
         self.assertEqual(charts[0]["chart_variant"], "product_comparison")
         self.assertNotEqual(charts[0]["title"], "Periodjämförelse")
 
+    def test_product_extremes_all_time_default(self):
+        from app.services.chart_builder import build_product_extremes_chart
+        from app.services.period_labels import apply_period_labels
+
+        message = "jämför bästa och sämsta produkten"
+        plans = plan_forced_tools(message, SUPPLIER, UI_START, UI_END)
+        self.assertEqual(plans[0].args.get("_period_kind"), "full_history")
+        self.assertFalse(plans[0].args.get("_period_explicit"))
+
+        payload = apply_period_labels({
+            "products": [
+                {"product_name": "Strong", "revenue": 5000.0},
+                {"product_name": "Weak", "revenue": 200.0},
+            ],
+            "date_range": {
+                "start": plans[0].args["start_date"],
+                "end": plans[0].args["end_date"],
+            },
+            "_period_kind": plans[0].args["_period_kind"],
+            "_period_explicit": False,
+            "_chart_intent": "product_extremes",
+        }, message, plan_args=plans[0].args, tool_name="get_top_products")
+        chart = build_product_extremes_chart(payload)
+        self.assertIsNotNone(chart)
+        assert chart is not None
+        self.assertIn("hela tillgängliga perioden", chart["description"])
+
+    def test_product_extremes_scoped_to_calendar_month(self):
+        from app.services.chart_builder import build_product_extremes_chart
+        from app.services.period_labels import apply_period_labels
+
+        message = "jämför bästa och sämsta produkten i mars 2026"
+        plans = plan_forced_tools(message, SUPPLIER, UI_START, UI_END)
+        self.assertEqual(plans[0].args["start_date"], "2026-03-01")
+        self.assertEqual(plans[0].args["end_date"], "2026-03-31")
+        self.assertEqual(plans[0].args.get("_period_kind"), "calendar_month")
+        self.assertTrue(plans[0].args.get("_period_explicit"))
+
+        payload = apply_period_labels({
+            "products": [
+                {"product_name": "Strong", "revenue": 5000.0},
+                {"product_name": "Weak", "revenue": 200.0},
+            ],
+            "date_range": {
+                "start": plans[0].args["start_date"],
+                "end": plans[0].args["end_date"],
+            },
+            "_period_kind": plans[0].args["_period_kind"],
+            "_period_explicit": True,
+            "_chart_intent": "product_extremes",
+        }, message, plan_args=plans[0].args, tool_name="get_top_products")
+        chart = build_product_extremes_chart(payload)
+        self.assertIsNotNone(chart)
+        assert chart is not None
+        self.assertIn("mars 2026", chart["description"])
+        self.assertNotIn("hela tillgängliga perioden", chart["description"])
+        self.assertEqual(payload.get("period_label_chart"), "1–31 mars 2026")
+
+    def test_product_extremes_long_phrase_with_month_scope(self):
+        from app.services.chart_builder import build_product_extremes_chart
+        from app.services.period_labels import apply_period_labels
+
+        message = (
+            "kan du visa en jämförelse mellan den produkten som går bäst "
+            "och den som går sämst bara i månad mars 2026"
+        )
+        plans = plan_forced_tools(message, SUPPLIER, UI_START, UI_END)
+        self.assertEqual(plans[0].args["start_date"], "2026-03-01")
+        self.assertEqual(plans[0].args["end_date"], "2026-03-31")
+        self.assertEqual(plans[0].args.get("_chart_intent"), "product_extremes")
+
+        payload = apply_period_labels({
+            "products": [
+                {"product_name": "Strong", "revenue": 5000.0},
+                {"product_name": "Weak", "revenue": 200.0},
+            ],
+            "date_range": {
+                "start": plans[0].args["start_date"],
+                "end": plans[0].args["end_date"],
+            },
+            "_period_kind": plans[0].args["_period_kind"],
+            "_period_explicit": True,
+            "_chart_intent": "product_extremes",
+        }, message, plan_args=plans[0].args, tool_name="get_top_products")
+        chart = build_product_extremes_chart(payload)
+        self.assertIsNotNone(chart)
+        assert chart is not None
+        self.assertIn("mars 2026", chart["description"])
+        self.assertNotIn("hela tillgängliga perioden", chart["description"])
+
     def test_explicit_month_period_comparison(self):
         message = "jämför mars med februari"
         decision = _routing_decision(message)
