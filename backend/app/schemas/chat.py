@@ -36,15 +36,30 @@ class ChatRequest(BaseModel):
         return v
 
 
+class DateRange(BaseModel):
+    start: str
+    end: str
+
+
 class SourceMeta(BaseModel):
-    tool: str
-    source: str
-    supplier_id: str
-    generated_at: str
-    row_count: Optional[int] = None
-    date_range: Optional[Any] = None
+    """Customer-facing source metadata in chat responses.
+
+    Internal execution fields (tool, source, supplier_id, generated_at, row_count)
+    are stripped by ``_prepare_client_response`` before the payload is returned.
+    When ``ANALYTICS_DEBUG_TRACE`` is enabled, full source rows appear only under
+    ``debug_diagnostics``, never in this list.
+    """
+
+    date_range: Optional[DateRange] = None
     comparison_period_label: Optional[str] = None
-    limitations: list[str] = []
+
+
+class DebugDiagnostics(BaseModel):
+    """Developer-only diagnostics; present only when ANALYTICS_DEBUG_TRACE is on."""
+
+    tool_calls: list[str] = []
+    sources: list[dict[str, Any]] = []
+    analysis_meta: Optional[dict[str, Any]] = None
 
 
 class ChatResponse(BaseModel):
@@ -60,3 +75,4 @@ class ChatResponse(BaseModel):
     supplier_id: str
     generated_at: str
     response_kind: Optional[str] = None
+    debug_diagnostics: Optional[DebugDiagnostics] = None
