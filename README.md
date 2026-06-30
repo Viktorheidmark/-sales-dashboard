@@ -62,6 +62,36 @@ graph LR
 
 ---
 
+## Project structure
+
+```
+.
+├── backend/                 # FastAPI-app, autentisering, chat och dashboard-API
+│   ├── alembic/             # Databasmigreringar
+│   ├── app/
+│   │   ├── analytics/       # AI-analyspipeline (plan → validering → svar)
+│   │   ├── models/          # SQLAlchemy-modeller
+│   │   ├── routers/         # HTTP-endpoints (auth, chat, dashboard, …)
+│   │   ├── schemas/         # Pydantic-typer för request/response
+│   │   └── services/        # Affärslogik (diagram, chat, PDF, skyddsregler)
+│   ├── scripts/             # Demoseed och smoke-tester
+│   └── tests/               # Enhetstester
+├── frontend/                # React/Vite SPA
+│   └── src/
+│       ├── api/             # API-klient och typer
+│       ├── components/      # UI (layout, sektioner, diagram)
+│       ├── pages/           # Sidor (översikt, produkter, assistent, insikter)
+│       └── context/         # React-kontext (chat, tenant-varumärke)
+├── mcp_server/              # FastMCP-server med parameteriserade SQL-frågor
+│   ├── server.py            # MCP-verktygsdefinitioner
+│   └── query_helpers.py     # Delade frågefunktioner (även för dashboard)
+├── .env.example             # Miljövariabler för backend och MCP
+├── Procfile                 # Railway-startkommando
+└── requirements.txt         # Python-beroenden (rot)
+```
+
+---
+
 ## AI och säkerhet
 
 - LLM:en skriver aldrig SQL och har ingen direkt databasåtkomst.
