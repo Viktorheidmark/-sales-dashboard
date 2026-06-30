@@ -17,6 +17,7 @@ from app.services.intent_router import (
     is_diagram_followup_request,
     is_long_term_trend_request,
     is_period_only_followup,
+    is_sales_status_question,
     plan_followup_tools,
     plan_forced_tools,
     plan_long_term_trend_tools,
@@ -530,6 +531,119 @@ class IntentRouterTests(unittest.TestCase):
     def test_extract_category_and_region(self):
         self.assertEqual(extract_category("Marknadsandel i Läsk"), "Läsk")
         self.assertEqual(extract_region("försäljning i Göteborg"), "Göteborg")
+
+
+class SalesOverviewIntentRegressionTests(unittest.TestCase):
+    """Regression tests for consistent sales-overview routing.
+
+    Each phrase must: (a) be recognised as a sales-status question by the
+    deterministic classifier, and (b) produce a plan that includes
+    get_sales_over_time with _chart_intent="time_series" so the trend chart
+    is always rendered — regardless of minor wording differences or typos.
+
+    Root cause fixed: "hur får försäljningen" (typo of "hur går försäljningen")
+    previously fell through to the AI planner which returned KPI totals only,
+    suppressing the chart.  _SALES_STATUS_RE now accepts "går/får/mår" in the
+    verb slot for this one narrow phrase pattern.
+    """
+
+    SUPPLIER = "Coca-Cola Europacific Partners Sverige"
+    UI_START = "2026-03-25"
+    UI_END = "2026-06-23"
+
+    # ------------------------------------------------------------------ #
+    # Phrases that must be recognised as sales-status questions           #
+    # ------------------------------------------------------------------ #
+
+    SALES_OVERVIEW_PHRASES = [
+        "hur går försäljningen",
+        "hur går försäljningen?",
+        "hur får försäljningen",          # typo: går → får
+        "hur mår försäljningen",          # alternative phrasing
+        "hur ser försäljningen ut",
+        "hur utvecklas försäljningen",
+        "hur går det för vår försäljning",
+        "försäljningstrenden",
+        "Visa försäljningstrenden",
+        "Visa försäljningstrenden!",
+    ]
+
+    # Phrases that should NOT be treated as sales-status questions
+    NOT_SALES_STATUS_PHRASES = [
+        "vilka produkter säljer bäst?",
+        "vad är vår marknadsandel?",
+        "hur såg försäljningen ut senaste veckan?",  # weekly-factual scope
+        "vilka produkter har tappat mest?",
+    ]
+
+    def test_classifier_accepts_all_overview_phrases(self):
+        for phrase in self.SALES_OVERVIEW_PHRASES:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(
+                    is_sales_status_question(phrase),
+                    msg=f"Expected is_sales_status_question to return True for: {phrase!r}",
+                )
+
+    def test_classifier_rejects_non_overview_phrases(self):
+        for phrase in self.NOT_SALES_STATUS_PHRASES:
+            with self.subTest(phrase=phrase):
+                self.assertFalse(
+                    is_sales_status_question(phrase),
+                    msg=f"Expected is_sales_status_question to return False for: {phrase!r}",
+                )
+
+    def _assert_trend_chart_planned(self, phrase: str) -> None:
+        """Assert plan_forced_tools produces the time-series chart plan."""
+        plans = plan_forced_tools(phrase, self.SUPPLIER, self.UI_START, self.UI_END)
+        tool_names = [p.tool_name for p in plans]
+        self.assertIn(
+            "get_sales_over_time", tool_names,
+            msg=f"Expected get_sales_over_time in plan for: {phrase!r}, got {tool_names}",
+        )
+        self.assertIn(
+            "get_supplier_kpis", tool_names,
+            msg=f"Expected get_supplier_kpis in plan for: {phrase!r}",
+        )
+        trend_plan = next(p for p in plans if p.tool_name == "get_sales_over_time")
+        self.assertEqual(
+            trend_plan.args.get("_chart_intent"), "time_series",
+            msg=f"Expected _chart_intent='time_series' for: {phrase!r}",
+        )
+        self.assertTrue(
+            trend_plan.args.get("_force_time_series"),
+            msg=f"Expected _force_time_series=True for: {phrase!r}",
+        )
+
+    def test_all_overview_phrases_plan_trend_chart(self):
+        for phrase in self.SALES_OVERVIEW_PHRASES:
+            with self.subTest(phrase=phrase):
+                self._assert_trend_chart_planned(phrase)
+
+    def test_typo_phrase_matches_canonical_tools(self):
+        """Specifically verify the reported production bug is fixed.
+
+        'hur går försäljningen' and 'hur får försäljningen' (typo) must
+        produce identical tool plans so both return a trend chart.
+        """
+        canonical = plan_forced_tools(
+            "hur går försäljningen?", self.SUPPLIER, self.UI_START, self.UI_END,
+        )
+        typo = plan_forced_tools(
+            "hur får försäljningen?", self.SUPPLIER, self.UI_START, self.UI_END,
+        )
+        canonical_tools = [p.tool_name for p in canonical]
+        typo_tools = [p.tool_name for p in typo]
+        self.assertEqual(
+            canonical_tools, typo_tools,
+            msg="Typo phrase must route to same tools as canonical phrase",
+        )
+        # Both must include the trend chart intent
+        for plans, label in [(canonical, "canonical"), (typo, "typo")]:
+            trend = next(p for p in plans if p.tool_name == "get_sales_over_time")
+            self.assertEqual(
+                trend.args.get("_chart_intent"), "time_series",
+                msg=f"{label}: expected time_series chart intent",
+            )
 
 
 if __name__ == "__main__":

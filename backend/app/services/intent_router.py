@@ -215,11 +215,21 @@ _YTD_OVERVIEW_RE = re.compile(
 )
 
 _SALES_STATUS_RE = re.compile(
-    r"(hur\s+går\s+försäljningen|"
+    r"("
+    # Core sales-overview question — narrow typo tolerance for the verb slot:
+    # "går", "får" (common single-char swap), "mår" cover the most frequent phrasings
+    # and typos without opening up a broad fuzzy matcher for all queries.
+    r"hur\s+(?:går|får|mår)\s+försäljningen|"
     r"hur\s+ser\s+försäljningen\s+ut|"
     r"hur\s+går\s+det|"
     r"hur\s+har\s+försäljningen\s+(?:gått|varit|sett\s+ut)|"
-    r"hur\s+har\s+det\s+gått\s+för\s+försäljningen)",
+    r"hur\s+har\s+det\s+gått\s+för\s+försäljningen|"
+    # Additional common Swedish phrasings for "show me how sales are going"
+    r"hur\s+utvecklas\s+försäljningen|"
+    r"hur\s+går\s+det\s+för\s+(?:vår\s+)?försäljning(?:en)?|"
+    r"försäljningstrenden|"
+    r"visa\s+försäljningstrenden"
+    r")",
     re.IGNORECASE,
 )
 
