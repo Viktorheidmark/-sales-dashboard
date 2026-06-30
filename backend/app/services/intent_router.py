@@ -308,16 +308,46 @@ def _best_sales_term_distance(token: str) -> int:
     return min(_damerau_levenshtein(token, form) for form in _SALES_TERM_FORMS)
 
 
+def _sales_term_length_ok(token: str) -> bool:
+    return abs(len(token) - len(_SALES_TERM_FORMS[0])) <= _SALES_TERM_MAX_EDITS + 2
+
+
+def _is_single_token_typo_sales_term(token: str) -> bool:
+    """Single-token misspelling of 'försäljning(en)' (distance 1–2, not exact)."""
+    if not _sales_term_length_ok(token):
+        return False
+    dist = _best_sales_term_distance(token)
+    return 1 <= dist <= _SALES_TERM_MAX_EDITS
+
+
+def _is_adjacent_join_typo_sales_term(left: str, right: str) -> bool:
+    """Two tokens that concatenate to a typo or split form of 'försäljning(en)'.
+
+    Allows distance 0 on the join when an accidental space split the domain word
+    (e.g. ``förs`` + ``äljningen`` → ``försäljningen``).  Only adjacent pairs are
+    considered — no broad phrase joining.
+    """
+    joined = left + right
+    if not _sales_term_length_ok(joined):
+        return False
+    return _best_sales_term_distance(joined) <= _SALES_TERM_MAX_EDITS
+
+
 def _has_typo_sales_term(normalized: str) -> bool:
     """True when a token is a *misspelling* of 'försäljning(en)'.
 
-    Distance 0 (correct spelling) is deliberately excluded: correctly-spelled
+    Distance 0 on a single token is deliberately excluded: correctly-spelled
     input keeps its existing routing untouched, so this stays purely additive.
+
+    Also checks whether two adjacent tokens concatenate to a high-confidence
+    typo match (accidental space inside the domain noun).
     """
-    for token in normalized.split():
-        if abs(len(token) - len(_SALES_TERM_FORMS[0])) > _SALES_TERM_MAX_EDITS + 2:
-            continue
-        if 1 <= _best_sales_term_distance(token) <= _SALES_TERM_MAX_EDITS:
+    tokens = normalized.split()
+    for token in tokens:
+        if _is_single_token_typo_sales_term(token):
+            return True
+    for i in range(len(tokens) - 1):
+        if _is_adjacent_join_typo_sales_term(tokens[i], tokens[i + 1]):
             return True
     return False
 

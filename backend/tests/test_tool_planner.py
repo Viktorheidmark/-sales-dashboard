@@ -88,11 +88,40 @@ class ToolPlannerTests(unittest.TestCase):
         trend = next(p for p in res.plans if p.tool_name == "get_sales_over_time")
         self.assertEqual(trend.args.get("_chart_intent"), "time_series")
 
+    def test_split_typo_sales_overview_routes_to_legacy_trend_plan(self):
+        with patch.dict(os.environ, {"USE_AI_PLANNER": "false"}):
+            for phrase in ("hur går försäljn inge", "hur går förs äljningen"):
+                with self.subTest(phrase=phrase):
+                    res = resolve_tool_plans(
+                        phrase,
+                        "Orkla Snacks Sverige",
+                        self.UI_START,
+                        self.UI_END,
+                    )
+                    self.assertEqual(res.source, "legacy_fallback")
+                    tools = [p.tool_name for p in res.plans]
+                    self.assertIn("get_supplier_kpis", tools)
+                    self.assertIn("get_sales_over_time", tools)
+                    trend = next(p for p in res.plans if p.tool_name == "get_sales_over_time")
+                    self.assertEqual(trend.args.get("_chart_intent"), "time_series")
+
     def test_ambiguous_sales_noun_returns_clarification(self):
         from app.services.intent_router import SALES_OVERVIEW_CLARIFICATION
 
         res = resolve_tool_plans(
             "försäljningne",
+            "Orkla Snacks Sverige",
+            self.UI_START,
+            self.UI_END,
+            injected_plan=AnalysisPlan(intent="unknown", confidence=0.0),
+        )
+        self.assertEqual(res.source, "clarification")
+        self.assertEqual(res.analysis_meta.get("intent"), "sales_overview")
+        self.assertEqual(res.clarification_answer, SALES_OVERVIEW_CLARIFICATION)
+        self.assertEqual(res.plans, [])
+
+        res = resolve_tool_plans(
+            "försäljn inge",
             "Orkla Snacks Sverige",
             self.UI_START,
             self.UI_END,

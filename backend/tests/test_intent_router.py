@@ -669,6 +669,8 @@ class SalesOverviewTypoToleranceTests(unittest.TestCase):
         "hur går försäljnignen",      # transposed "ng" → "gn"
         "visa försäljningne",         # cue: visa
         "hur utvecklas försäljningne",
+        "hur går försäljn inge",      # split typo: försäljn + inge
+        "hur går förs äljningen",     # split typo: förs + äljningen
     ]
 
     # A sales-ish noun with no overview cue and nothing else routable → clarify.
@@ -676,6 +678,7 @@ class SalesOverviewTypoToleranceTests(unittest.TestCase):
         "försäljningne",
         "försäljingen",
         "försäljnignen",
+        "försäljn inge",
     ]
 
     # Genuine Swedish confusables / unrelated phrasing → must NOT be overview.
@@ -710,7 +713,7 @@ class SalesOverviewTypoToleranceTests(unittest.TestCase):
         canonical = [p.tool_name for p in plan_forced_tools(
             "hur går försäljningen", self.SUPPLIER, self.UI_START, self.UI_END,
         )]
-        for phrase in ("hur går försäljningne", "hur går försäljingen"):
+        for phrase in ("hur går försäljningne", "hur går försäljingen", "hur går försäljn inge", "hur går förs äljningen"):
             with self.subTest(phrase=phrase):
                 typo = [p.tool_name for p in plan_forced_tools(
                     phrase, self.SUPPLIER, self.UI_START, self.UI_END,
