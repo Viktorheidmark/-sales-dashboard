@@ -34,7 +34,10 @@ from app.services.follow_up_builder import build_contextual_follow_ups
 from app.services.follow_up_context import extract_analysis_context
 from app.services.comparison_labels import (
     build_comparison_context_block,
+    comparison_needs_dimension_clarification,
     comparison_needs_period_clarification,
+    COMPARISON_DIMENSION_CLARIFICATION,
+    COMPARISON_TWO_PERIODS_CLARIFICATION,
     COMPARISON_PERIOD_CLARIFICATION,
 )
 from app.services.decline_period import DECLINE_PERIOD_ACTION, prior_awaiting_decline_period
@@ -330,10 +333,10 @@ def _comparison_clarification_response(supplier_id: str) -> dict:
     })
 
 
-def _comparison_composer_response(supplier_id: str) -> dict:
+def _comparison_composer_response(supplier_id: str, answer: str = "") -> dict:
     """Tell the frontend to show the period-picker composer card."""
     return _prepare_client_response({
-        "answer": "",
+        "answer": answer,
         "tool_calls": [],
         "sources": [],
         "chart": None,
@@ -342,6 +345,22 @@ def _comparison_composer_response(supplier_id: str) -> dict:
         "follow_up_actions": [],
         "limitations": [],
         "response_kind": "comparison_composer",
+        "supplier_id": supplier_id,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+    })
+
+
+def _comparison_dimension_clarification_response(supplier_id: str) -> dict:
+    return _prepare_client_response({
+        "answer": COMPARISON_DIMENSION_CLARIFICATION,
+        "tool_calls": [],
+        "sources": [],
+        "chart": None,
+        "charts": [],
+        "deep_dive": None,
+        "follow_up_actions": [],
+        "limitations": [],
+        "response_kind": "conversational",
         "supplier_id": supplier_id,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     })
@@ -697,8 +716,6 @@ async def _try_orchestrated_comparison(
     )
     if pre.kind != "execute":
         return pre
-
-    # Executable comparison → run the full pipeline against a live MCP session.
     params = _server_params()
     async with stdio_client(params) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
@@ -866,15 +883,23 @@ async def run_chat(
         )
         if orchestrated is not None and orchestrated.kind == "answer":
             return _apply_debug_trace(orchestrated.payload, orchestrated.trace)
+        if orchestrated is not None and orchestrated.kind == "clarify_text":
+            return _apply_debug_trace(_comparison_dimension_clarification_response(supplier_id), orchestrated.trace)
         if orchestrated is not None and orchestrated.kind == "clarify_composer":
-            return _apply_debug_trace(_comparison_composer_response(supplier_id), orchestrated.trace)
+            return _apply_debug_trace(
+                _comparison_composer_response(supplier_id, COMPARISON_TWO_PERIODS_CLARIFICATION),
+                orchestrated.trace,
+            )
         # kind == "defer" (or flag off) → fall through to the legacy pipeline.
 
     if follow_up_action and str(follow_up_action.get("action") or "") == "compare_periods":
         return await _handle_explicit_period_comparison(follow_up_action, supplier_id, supplier_name)
 
+    if comparison_needs_dimension_clarification(message, prior):
+        return _comparison_dimension_clarification_response(supplier_id)
+
     if comparison_needs_period_clarification(message, prior):
-        return _comparison_composer_response(supplier_id)
+        return _comparison_composer_response(supplier_id, COMPARISON_TWO_PERIODS_CLARIFICATION)
 
     if is_diagram_followup_request(message) and not prior:
         return _diagram_clarification_response(supplier_id)
@@ -914,9 +939,14 @@ async def run_chat(
             )
             analysis_meta = resolution.analysis_meta
             if resolution.clarification_answer:
-                if resolution.analysis_meta.get("intent") == "period_comparison":
-                    return _comparison_composer_response(supplier_id)
-                if resolution.analysis_meta.get("intent") == "sales_overview":
+                intent = resolution.analysis_meta.get("intent")
+                if intent == "comparison_dimension":
+                    return _comparison_dimension_clarification_response(supplier_id)
+                if intent == "period_comparison":
+                    return _comparison_composer_response(
+                        supplier_id, resolution.clarification_answer or COMPARISON_TWO_PERIODS_CLARIFICATION,
+                    )
+                if intent == "sales_overview":
                     return _sales_overview_clarification_response(
                         supplier_id, resolution.clarification_answer,
                     )
@@ -994,8 +1024,14 @@ async def stream_chat(
         if orchestrated is not None and orchestrated.kind == "answer":
             yield sse("complete", _apply_debug_trace(orchestrated.payload, orchestrated.trace))
             return
+        if orchestrated is not None and orchestrated.kind == "clarify_text":
+            yield sse("complete", _apply_debug_trace(_comparison_dimension_clarification_response(supplier_id), orchestrated.trace))
+            return
         if orchestrated is not None and orchestrated.kind == "clarify_composer":
-            yield sse("complete", _apply_debug_trace(_comparison_composer_response(supplier_id), orchestrated.trace))
+            yield sse("complete", _apply_debug_trace(
+                _comparison_composer_response(supplier_id, COMPARISON_TWO_PERIODS_CLARIFICATION),
+                orchestrated.trace,
+            ))
             return
         # kind == "defer" → fall through to the legacy pipeline.
 
@@ -1005,8 +1041,12 @@ async def stream_chat(
         yield sse("complete", result)
         return
 
+    if comparison_needs_dimension_clarification(message, prior):
+        yield sse("complete", _comparison_dimension_clarification_response(supplier_id))
+        return
+
     if comparison_needs_period_clarification(message, prior):
-        yield sse("complete", _comparison_composer_response(supplier_id))
+        yield sse("complete", _comparison_composer_response(supplier_id, COMPARISON_TWO_PERIODS_CLARIFICATION))
         return
 
     if is_diagram_followup_request(message) and not prior:
@@ -1054,9 +1094,14 @@ async def stream_chat(
                 )
                 analysis_meta = resolution.analysis_meta
                 if resolution.clarification_answer:
-                    if resolution.analysis_meta.get("intent") == "period_comparison":
-                        yield sse("complete", _comparison_composer_response(supplier_id))
-                    elif resolution.analysis_meta.get("intent") == "sales_overview":
+                    intent = resolution.analysis_meta.get("intent")
+                    if intent == "comparison_dimension":
+                        yield sse("complete", _comparison_dimension_clarification_response(supplier_id))
+                    elif intent == "period_comparison":
+                        yield sse("complete", _comparison_composer_response(
+                            supplier_id, resolution.clarification_answer or COMPARISON_TWO_PERIODS_CLARIFICATION,
+                        ))
+                    elif intent == "sales_overview":
                         yield sse("complete", _sales_overview_clarification_response(
                             supplier_id, resolution.clarification_answer,
                         ))

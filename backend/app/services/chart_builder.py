@@ -476,7 +476,55 @@ def _build_supplier_kpis(result: dict) -> Optional[dict]:
     return payload
 
 
+def build_product_extremes_chart(result: dict) -> Optional[dict]:
+    """Two-bar chart: strongest vs weakest product by revenue."""
+    products = result.get("products") or []
+    ranked = sorted(
+        [p for p in products if p.get("revenue") is not None and p.get("product_name")],
+        key=lambda p: float(p.get("revenue") or 0),
+        reverse=True,
+    )
+    if len(ranked) < 2:
+        return None
+    best, worst = ranked[0], ranked[-1]
+    if best["product_name"] == worst["product_name"]:
+        return None
+
+    data = [
+        {
+            "product_name": best["product_name"],
+            "display_label": _truncate_label(best["product_name"]),
+            "revenue": best["revenue"],
+            "role": "best",
+        },
+        {
+            "product_name": worst["product_name"],
+            "display_label": _truncate_label(worst["product_name"]),
+            "revenue": worst["revenue"],
+            "role": "worst",
+        },
+    ]
+    region = result.get("region_filter")
+    base = f"Bästa vs sämsta produkt · {region}" if region else "Bästa vs sämsta produkt"
+    return {
+        "chart_type": BAR_CHART,
+        "chart_variant": "product_comparison",
+        "layout": "horizontal",
+        "title": "Bästa vs sämsta produkt",
+        "description": append_chart_period(base, result),
+        "x_key": "display_label",
+        "y_key": "revenue",
+        "tooltip_key": "product_name",
+        "data": data,
+        "source_tool": "get_top_products",
+        "generated_from_row_count": 2,
+        "emphasis_index": 0,
+    }
+
+
 def _build_top_products(result: dict) -> Optional[dict]:
+    if result.get("_chart_intent") == "product_extremes":
+        return build_product_extremes_chart(result)
     products = result.get("products") or []
     requested = result.get("requested_limit")
     if requested is not None:

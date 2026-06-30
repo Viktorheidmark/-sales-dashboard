@@ -29,6 +29,7 @@ _FLAT_REVENUE_PCT_THRESHOLD = 3.0
 class ChartIntent(str, Enum):
     TIME_SERIES = "time_series"
     PERIOD_COMPARISON = "period_comparison"
+    PRODUCT_EXTREMES = "product_extremes"
     RANKING = "ranking"
     SINGLE_PRODUCT_DECLINE = "single_product_decline"
     REGION_RANKING = "region_ranking"
@@ -107,6 +108,8 @@ def _explicit_intent(tool_results: list[tuple[str, dict]]) -> Optional[ChartInte
         raw = result.get("_chart_intent")
         if not raw:
             continue
+        if raw == "product_extremes":
+            return ChartIntent.PRODUCT_EXTREMES
         try:
             found.append(ChartIntent(raw))
         except ValueError:
@@ -120,12 +123,17 @@ def resolve_chart_intent(
     question: str,
     tool_results: list[tuple[str, dict]],
 ) -> ChartIntent:
+    from app.services.comparison_labels import is_product_extremes_comparison
+
     explicit = _explicit_intent(tool_results)
     if explicit:
         return explicit
 
     tools = _tool_map(tool_results)
     q = (question or "").strip()
+
+    if is_product_extremes_comparison(q) and "get_top_products" in tools:
+        return ChartIntent.PRODUCT_EXTREMES
 
     if "get_market_share" in tools:
         return ChartIntent.MARKET_SHARE
@@ -259,6 +267,12 @@ def select_charts(
                 if chart:
                     charts.append({**chart, "chart_role": "primary"})
                 return charts
+
+    if intent == ChartIntent.PRODUCT_EXTREMES:
+        chart = build_chart("get_top_products", tools.get("get_top_products", {}))
+        if chart:
+            charts.append({**chart, "chart_role": "primary"})
+        return charts
 
     if intent == ChartIntent.REGION_RANKING:
         if "get_declining_products" in tools:

@@ -98,6 +98,7 @@ OutputSection = Literal[
 
 ClarificationType = Literal[
     "comparison_dates",
+    "comparison_dimension",
     "decline_period",
     "metric",
     "scope",

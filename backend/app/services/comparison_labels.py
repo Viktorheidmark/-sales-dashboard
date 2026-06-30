@@ -23,23 +23,58 @@ from app.services.period_labels import (
 )
 
 _COMPARISON_REQUEST_RE = re.compile(
-    r"(jämför|jämfört|bättre\s+än|sämre\s+än|skillnad|periodjämförelse|"
+    r"(\bjämför(?:a|er|t)?\b|jämfört|bättre\s+än|sämre\s+än|skillnad|periodjämförelse|"
     r"mot\s+föregående|mot\s+tidigare|föregående\s+period|tidigare\s+period|"
     r"förra\s+(året|månaden|veckan|perioden)|samma\s+period\s+förra)",
     re.IGNORECASE,
 )
 
 _COMPARE_INTENT_VAGUE_RE = re.compile(
-    r"(jämför|jämfört|bättre|sämre|skillnad|periodjämförelse|mot\s+föregående|mot\s+tidigare)",
+    r"(\bjämför(?:a|er|t)?\b|\bjämförelse\b|jämfört|bättre|sämre|skillnad|periodjämförelse|mot\s+föregående|mot\s+tidigare)",
     re.IGNORECASE,
 )
 
 _AMBIGUOUS_COMPARE_RE = re.compile(
-    r"(jämför|jämfört|skillnad|skiljer|periodjämförelse|"
+    r"(\bjämför(?:a|er|t)?\b|\bjämförelse\b|jämfört|skillnad|skiljer|periodjämförelse|"
     r"mot\s+(?:föregående|tidigare|förut)|föregående\s+period|förra\s+perioden|"
     r"ökat\s+eller\s+minskat|minskat\s+eller\s+ökat|"
     r"från\s+förut|skillnaden\s+mellan|hur\s+skiljer)",
     re.IGNORECASE,
+)
+
+_PRODUCT_EXTREMES_COMPARE_RE = re.compile(
+    r"("
+    r"(?:bäst|bästa|starkast|högst).{0,80}(?:sämst|sämsta|svagast|lägst)|"
+    r"(?:sämst|sämsta|svagast|lägst).{0,80}(?:bäst|bästa|starkast|högst)|"
+    r"den\s+(?:produkt\w*\s+)?som\s+går\s+bäst.{0,60}den\s+(?:produkt\w*\s+)?som\s+går\s+sämst"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_TIME_PERIOD_COMPARE_CUE_RE = re.compile(
+    r"("
+    r"två\s+tidsperioder|"
+    r"jämför\w*.{0,40}(?:senaste|föregående|förra)\s+\d+\s+dag|"
+    r"jämför\w*.{0,40}(?:mars|februari|april|maj|juni|juli|augusti|september|oktober|november|december)|"
+    r"(?:mars|februari|april|maj|juni|juli|augusti|september|oktober|november|december).{0,30}jämför\w*|"
+    r"jämför\w*.{0,30}(?:i\s+år|detta\s+år|förra\s+året)|"
+    r"försäljning.{0,40}(?:förra\s+perioden|föregående\s+period|tidigare\s+period)|"
+    r"(?:förra\s+perioden|föregående\s+period|tidigare\s+period).{0,40}försäljning|"
+    r"mot\s+(?:föregående|tidigare|förut)|"
+    r"med\s+(?:föregående|tidigare|förut)|"
+    r"ökat\s+eller\s+minskat|minskat\s+eller\s+ökat|"
+    r"hur\s+skiljer|skillnaden\s+mellan\s+period"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_REGION_COMPARE_RE = re.compile(
+    r"("
+    r"jämför\w*.{0,40}region|"
+    r"region\w*.{0,40}jämför\w*|"
+    r"jämför\w*.{0,40}(?:stockholm|göteborg|malmö)"
+    r")",
+    re.IGNORECASE | re.DOTALL,
 )
 
 _EXPLICIT_ROLLING_PAIR_RE = re.compile(
@@ -85,10 +120,18 @@ _REUSABLE_PRIOR_INTENTS = frozenset({
 _MEANINGFUL_PRIOR_REVENUE_RATIO = 0.05
 
 COMPARISON_PERIOD_CLARIFICATION = (
-    'Vilka perioder vill du jämföra? Du kan exempelvis skriva '
+    'Vilka två tidsperioder vill du jämföra? Du kan exempelvis skriva '
     '"senaste 30 dagarna mot föregående 30 dagar", "i år jämfört med förra året" '
     'eller "april mot maj".'
 )
+
+COMPARISON_TWO_PERIODS_CLARIFICATION = "Vilka två tidsperioder vill du jämföra?"
+
+COMPARISON_DIMENSION_CLARIFICATION = (
+    "Vad vill du jämföra – produkter, regioner eller två tidsperioder?"
+)
+
+ComparisonDimension = str  # product | region | period | ambiguous | none
 
 
 def message_specifies_analyzed_period(message: str) -> bool:
@@ -99,6 +142,80 @@ def message_specifies_analyzed_period(message: str) -> bool:
 def question_requests_comparison(question: str) -> bool:
     """True when the user explicitly asked for a period comparison."""
     return bool(_COMPARISON_REQUEST_RE.search((question or "").strip()))
+
+
+def is_product_extremes_comparison(message: str) -> bool:
+    """Best-vs-worst product comparison (not period or generic ranking)."""
+    msg = (message or "").strip()
+    if not msg or not _PRODUCT_EXTREMES_COMPARE_RE.search(msg):
+        return False
+    if re.search(r"produkt", msg, re.IGNORECASE):
+        return True
+    return bool(re.search(r"den\s+(?:produkt\w*\s+)?som\s+går", msg, re.IGNORECASE))
+
+
+def is_region_comparison_request(message: str) -> bool:
+    """Explicit region-to-region comparison intent."""
+    msg = (message or "").strip()
+    if not msg:
+        return False
+    return bool(_REGION_COMPARE_RE.search(msg))
+
+
+def wants_time_period_comparison(message: str) -> bool:
+    """User is asking to compare time periods (explicit or implied)."""
+    msg = (message or "").strip()
+    if not msg:
+        return False
+    if message_has_explicit_comparison_pair(msg):
+        return True
+    return bool(_TIME_PERIOD_COMPARE_CUE_RE.search(msg))
+
+
+def has_generic_comparison_intent(message: str) -> bool:
+    """Broad comparison cue without a resolved dimension."""
+    msg = (message or "").strip()
+    if not msg:
+        return False
+    return bool(
+        _AMBIGUOUS_COMPARE_RE.search(msg)
+        or _COMPARE_INTENT_VAGUE_RE.search(msg)
+        or question_requests_comparison(msg)
+    )
+
+
+def classify_comparison_dimension(message: str) -> ComparisonDimension:
+    """Resolve what the user wants to compare before assuming dates."""
+    msg = (message or "").strip()
+    if not msg:
+        return "none"
+
+    from app.analytics.planner import parse_explicit_comparison
+
+    if parse_explicit_comparison(msg) is not None:
+        return "period"
+
+    if not has_generic_comparison_intent(msg):
+        return "none"
+    if is_product_extremes_comparison(msg):
+        return "product"
+    if is_region_comparison_request(msg):
+        return "region"
+    if wants_time_period_comparison(msg):
+        return "period"
+    return "ambiguous"
+
+
+def comparison_needs_dimension_clarification(
+    message: str,
+    prior: Optional["PriorTurnContext"] = None,
+) -> bool:
+    """Vague comparison without a clear product/region/period dimension."""
+    from app.services.decline_period import prior_awaiting_decline_period
+
+    if prior_awaiting_decline_period(prior):
+        return False
+    return classify_comparison_dimension(message) == "ambiguous"
 
 
 def has_ambiguous_comparison_intent(message: str) -> bool:
@@ -177,7 +294,7 @@ def comparison_needs_period_clarification(
     message: str,
     prior: Optional["PriorTurnContext"] = None,
 ) -> bool:
-    """Ambiguous comparison intent without enough period detail — ask before fetching data."""
+    """Time-period comparison without enough period detail — ask before fetching data."""
     from app.services.decline_period import (
         is_decline_ranking_question,
         prior_awaiting_decline_period,
@@ -193,6 +310,17 @@ def comparison_needs_period_clarification(
         return False
     if is_rolling_change_question(msg):
         return False
+
+    dimension = classify_comparison_dimension(msg)
+    if dimension in ("none", "product", "region", "ambiguous"):
+        return False
+    if dimension == "period":
+        if message_has_explicit_comparison_pair(msg):
+            return False
+        if prior_has_reusable_period(prior):
+            return False
+        return True
+
     if not has_ambiguous_comparison_intent(msg):
         return False
     if message_has_explicit_comparison_pair(msg):

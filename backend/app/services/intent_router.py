@@ -24,6 +24,7 @@ from app.services.ranking_limits import (
     is_ascending_product_ranking_question,
     resolve_product_ranking_limit,
 )
+from app.services.comparison_labels import is_product_extremes_comparison
 from app.services.period_labels import infer_period_kind
 
 CATEGORIES = ("Läsk", "Chips & snacks")
@@ -1146,6 +1147,19 @@ def plan_forced_tools(
 
     if is_diagram_followup_request(msg):
         return []
+
+    if is_product_extremes_comparison(msg):
+        args = _period_args_from_message(msg, start_date, end_date)
+        region = extract_region(msg)
+        if region:
+            args["region"] = region
+        args["limit"] = resolve_product_ranking_limit(msg, all_products=True)
+        args["_chart_intent"] = "product_extremes"
+        return [ToolPlan(
+            tool_name="get_top_products",
+            args=args,
+            reason="best vs worst product comparison",
+        )]
 
     if is_sales_status_question(msg):
         return _plan_sales_status_tools(msg, start_date, end_date)

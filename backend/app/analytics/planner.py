@@ -42,6 +42,7 @@ from app.services.period_utils import (
 # Comparison intent / vagueness detection lives in comparison_labels; reuse it so
 # the new planner and the legacy guard agree on what "a comparison" is.
 from app.services.comparison_labels import (
+    classify_comparison_dimension,
     has_ambiguous_comparison_intent,
     question_requests_comparison,
 )
@@ -67,6 +68,13 @@ _MONTH_TOKEN_RE = re.compile(
 
 _ISO_RANGE_RE = re.compile(
     r"(\d{4}-\d{2}-\d{2})\s*(?:till|–|-|to|until)\s*(\d{4}-\d{2}-\d{2})",
+    re.IGNORECASE,
+)
+
+_DAY_MONTH_RANGE_RE = re.compile(
+    r"(\d{1,2})\s*[–\-]\s*(\d{1,2})\s+("
+    + "|".join(sorted(_MONTH_INDEX.keys(), key=len, reverse=True))
+    + r")(?:\s+(\d{4}))?",
     re.IGNORECASE,
 )
 
@@ -118,6 +126,38 @@ def _extract_month_periods(message: str) -> list[DateRange]:
         y = year if year is not None else fallback_year
         start, end = _month_range(idx, y)
         periods.append(DateRange(start=start, end=end, label=f"{_MONTHS_SV[idx - 1]} {y}"))
+    return periods
+
+
+def _extract_day_month_ranges(message: str) -> list[DateRange]:
+    """Parse intra-month day spans such as ``1–8 mars`` (requires two distinct ranges)."""
+    matches = list(_DAY_MONTH_RANGE_RE.finditer(message))
+    if len(matches) < 2:
+        return []
+
+    explicit_years = [int(m.group(4)) for m in matches if m.group(4)]
+    fallback_year = explicit_years[0] if len(explicit_years) == 1 else _reference_year()
+
+    periods: list[DateRange] = []
+    seen: set[tuple[date, date]] = set()
+    for m in matches:
+        month = _MONTH_INDEX[m.group(3).lower()]
+        year = int(m.group(4)) if m.group(4) else fallback_year
+        start_day = int(m.group(1))
+        end_day = int(m.group(2))
+        if end_day < start_day:
+            continue
+        last_day = calendar.monthrange(year, month)[1]
+        if start_day < 1 or end_day > last_day:
+            continue
+        start = date(year, month, start_day)
+        end = date(year, month, end_day)
+        key = (start, end)
+        if key in seen:
+            continue
+        seen.add(key)
+        label = f"{start_day}–{end_day} {_MONTHS_SV[month - 1]} {year}"
+        periods.append(DateRange(start=start, end=end, label=label))
     return periods
 
 
@@ -205,6 +245,13 @@ def parse_explicit_comparison(message: str) -> Optional[ComparisonSpec]:
             period_a=a, period_b=b, comparison_type="custom", source="explicit_free_text"
         )
 
+    day_month_ranges = _extract_day_month_ranges(msg)
+    if len(day_month_ranges) >= 2:
+        a, b = _order_baseline_current(day_month_ranges[0], day_month_ranges[1])
+        return ComparisonSpec(
+            period_a=a, period_b=b, comparison_type="custom", source="explicit_free_text"
+        )
+
     months = _extract_month_periods(msg)
     if len(months) == 2:
         a, b = _order_baseline_current(months[0], months[1])
@@ -256,6 +303,19 @@ def _comparison_plan(spec: ComparisonSpec, reasoning: str) -> AnalysisPlan:
     )
 
 
+def _dimension_clarification_plan(reasoning: str) -> AnalysisPlan:
+    return AnalysisPlan(
+        intent="clarification",
+        metric="revenue",
+        chart_intent="none",
+        output_sections=[],
+        needs_clarification=True,
+        clarification_type="comparison_dimension",
+        confidence=0.5,
+        reasoning_summary=reasoning,
+    )
+
+
 def _clarification_plan(reasoning: str) -> AnalysisPlan:
     return AnalysisPlan(
         intent="clarification",
@@ -297,7 +357,17 @@ def plan_comparison(
             spec, f"Parsed explicit {spec.comparison_type} comparison from free text."
         )
 
-    # 3. Comparison intent present but no resolvable pair → open composer.
+    dimension = classify_comparison_dimension(msg)
+    if dimension in ("product", "region"):
+        return None
+    if dimension == "ambiguous":
+        return _dimension_clarification_plan(
+            "Comparison intent without a clear product, region, or period dimension."
+        )
+    if dimension == "period":
+        return _clarification_plan("Period comparison without two resolvable periods.")
+
+    # Legacy fallback for period cues not captured by classify_comparison_dimension.
     if question_requests_comparison(msg) or has_ambiguous_comparison_intent(msg):
         return _clarification_plan("Comparison intent without two resolvable periods.")
 

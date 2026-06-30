@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from app.services.comparison_labels import (
     COMPARISON_PERIOD_CLARIFICATION,
+    COMPARISON_TWO_PERIODS_CLARIFICATION,
     comparison_needs_period_clarification,
     message_has_explicit_comparison_pair,
     revenue_drivers_comparison_label,
@@ -79,7 +80,7 @@ class ComparisonSafetyPolicyTests(unittest.TestCase):
                 self.assertTrue(comparison_needs_period_clarification(message))
                 self.assertEqual(plan_forced_tools(message, SUPPLIER), [])
                 resolution = resolve_tool_plans(message, SUPPLIER)
-                self.assertEqual(resolution.clarification_answer, COMPARISON_PERIOD_CLARIFICATION)
+                self.assertEqual(resolution.clarification_answer, COMPARISON_TWO_PERIODS_CLARIFICATION)
                 self.assertEqual(resolution.plans, [])
 
     def test_2_explicit_rolling_30_vs_30_comparison(self):

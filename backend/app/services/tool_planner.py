@@ -154,15 +154,24 @@ def resolve_tool_plans(
         return ToolResolution(plans=det, source="deterministic", analysis_meta=meta)
 
     from app.services.comparison_labels import (
-        COMPARISON_PERIOD_CLARIFICATION,
+        COMPARISON_DIMENSION_CLARIFICATION,
+        COMPARISON_TWO_PERIODS_CLARIFICATION,
+        comparison_needs_dimension_clarification,
         comparison_needs_period_clarification,
     )
     from app.services.decline_period import prior_awaiting_decline_period
     if not prior_awaiting_decline_period(prior_context):
+        if comparison_needs_dimension_clarification(message, prior_context):
+            meta.update({"source": "clarification", "intent": "comparison_dimension"})
+            return ToolResolution(
+                clarification_answer=COMPARISON_DIMENSION_CLARIFICATION,
+                source="clarification",
+                analysis_meta=meta,
+            )
         if comparison_needs_period_clarification(message, prior_context):
             meta.update({"source": "clarification", "intent": "period_comparison"})
             return ToolResolution(
-                clarification_answer=COMPARISON_PERIOD_CLARIFICATION,
+                clarification_answer=COMPARISON_TWO_PERIODS_CLARIFICATION,
                 source="clarification",
                 analysis_meta=meta,
             )
@@ -181,8 +190,23 @@ def resolve_tool_plans(
 
     from app.services.intent_router import (
         SALES_OVERVIEW_CLARIFICATION,
+        plan_forced_tools,
         sales_overview_needs_clarification,
     )
+    from app.services.comparison_labels import is_product_extremes_comparison
+
+    if is_product_extremes_comparison(message):
+        legacy = plan_forced_tools(
+            message, supplier_name, start_date, end_date, prior_context=prior_context,
+        )
+        if legacy:
+            meta.update({
+                "source": "legacy_fallback",
+                "intent": "product_extremes",
+                "tools": [p.tool_name for p in legacy],
+            })
+            return ToolResolution(plans=legacy, source="legacy_fallback", analysis_meta=meta)
+
     if sales_overview_needs_clarification(message):
         meta.update({"source": "clarification", "intent": "sales_overview"})
         return ToolResolution(

@@ -6,6 +6,7 @@ from app.services.comparison_labels import (
     analyzed_period_label,
     build_comparison_context_block,
     comparison_metadata,
+    comparison_needs_dimension_clarification,
     comparison_needs_period_clarification,
     kpi_comparison_is_meaningful,
     kpi_comparison_label,
@@ -111,7 +112,8 @@ class ComparisonLabelTests(unittest.TestCase):
         self.assertFalse(kpi_comparison_is_meaningful(kpi))
 
     def test_vague_compare_intent_needs_clarification(self):
-        self.assertTrue(comparison_needs_period_clarification("Är försäljningen bättre nu?"))
+        self.assertTrue(comparison_needs_dimension_clarification("Är försäljningen bättre nu?"))
+        self.assertFalse(comparison_needs_period_clarification("Är försäljningen bättre nu?"))
         self.assertFalse(comparison_needs_period_clarification("hur ser försäljningen ut?"))
         self.assertTrue(
             comparison_needs_period_clarification(

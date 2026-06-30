@@ -24,7 +24,7 @@ from app.analytics.executor import ToolRunner
 from app.analytics.registry import is_migrated
 from app.analytics.validator import validate_plan
 
-OutcomeKind = Literal["answer", "clarify_composer", "defer", "blocked", "execute"]
+OutcomeKind = Literal["answer", "clarify_composer", "clarify_text", "defer", "blocked", "execute"]
 
 
 @dataclass
@@ -83,10 +83,14 @@ def comparison_precheck(
         trace["validation_issues"] = list(outcome.issues)
 
     if not outcome.approved:
+        clarification_type = outcome.clarification_type or plan.clarification_type or "comparison_dates"
+        if clarification_type == "comparison_dimension":
+            trace["result"] = "clarify_dimension"
+            return OrchestratorOutcome(kind="clarify_text", trace=trace), plan
         # Comparison-date clarification (or any block) → open the composer; no tools.
         trace["result"] = (
             "clarify_composer"
-            if (outcome.clarification_type or "comparison_dates") == "comparison_dates"
+            if clarification_type == "comparison_dates"
             else "blocked_validation"
         )
         return OrchestratorOutcome(kind="clarify_composer", trace=trace), plan
